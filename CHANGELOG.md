@@ -1,3 +1,50 @@
+## v0.8.2-alpha — 2026-07-08
+
+### Features
+- feat: strengthen config versioning flow
+- Add runtime site reload endpoint
+- fix: stop auto-adding request host as tenant domain on site creation
+- feat: durable site registry for console-created sites
+- fix: add tzdata to Docker runtime image for Zygomys timezone support
+- feat: wire DiffSExpr for change_list + LispAutocomplete for predicates
+- fix: add site column to _kora_field INSERT to match DELETE's site filter
+- fix: add reserved field name validation — prevent conflicts with system columns
+- feat: UX gap closure — real-time Lisp preview, predicate UI, conflict diff, autocomplete
+- feat: phase 3 cleanup — remove expr-lang, cut over to Lisp
+- feat: phase 3 — validation predicates, PostgreSQL dialect, documentation, cutover to Lisp
+- feat: phase 2 — full snapshot s-expression IR and structural diff
+- feat: phase 1 — embedded Lisp runtime (Zygomys) for computed fields
+- fix: add site column to LibSQL system tables for multi-tenant isolation
+
+### Fixes
+- Fix registry-only site discovery
+- fix: reuse DB_DSN for site database creation instead of manual env vars
+- fix: stop auto-adding request host as tenant domain on site creation
+- fix: workflow conditions, table field validation, and integration tests
+- fix: add tzdata to Docker runtime image for Zygomys timezone support
+- fix: LibSQL-compatible DDL ordering in activation and rollback
+- fix: make activation deactivation atomic within transaction
+- fix: mark Draft as Superseded after activation
+- fix: add site column to _kora_field INSERT to match DELETE's site filter
+- fix: HandleConfigDiff uses stored change_list, not yaml.Unmarshal
+- fix: add reserved field name validation — prevent conflicts with system columns
+- fix: change config column from JSON to LONGTEXT for s-expression storage
+- fix: update AI chat tool descriptions for s-expression syntax
+- fix: robust isIdempotentSQLError — catch MySQL 1064 syntax errors for duplicate columns
+- perf: batch DDL execution, batch config save, fix registry-migration ordering
+- fix: unified idempotent SQL error handling in bootstrap
+- fix: bootstrap skip 'no such column' errors, reorder ALTER TABLE before indexes
+- fix: use go:embed all:dist to include files starting with _
+- fix: add site column to LibSQL system tables for multi-tenant isolation
+
+### Improvements
+- feat: phase 3 cleanup — remove expr-lang, cut over to Lisp
+
+### Documentation
+- Document backend architecture
+- feat: phase 3 — validation predicates, PostgreSQL dialect, documentation, cutover to Lisp
+
+
 ## v0.6.1-alpha — 2026-06-20
 
 ### Features
