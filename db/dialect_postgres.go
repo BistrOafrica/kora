@@ -174,9 +174,7 @@ func (d *PostgresDialect) CreateTable(dt *doctype.DocType) []string {
 		} else {
 			col += " DEFAULT NULL"
 		}
-		if f.Default != "" && f.Fieldtype != "Check" {
-			col += fmt.Sprintf(" DEFAULT '%s'", f.Default)
-		}
+		col += sqlDefaultClause("postgres", f.Fieldtype, f.Default)
 		cols = append(cols, col)
 	}
 
@@ -211,9 +209,7 @@ func (d *PostgresDialect) AddColumn(tableName string, f *doctype.Field) string {
 	} else {
 		col += " DEFAULT NULL"
 	}
-	if f.Default != "" && f.Fieldtype != "Check" {
-		col += fmt.Sprintf(" DEFAULT '%s'", f.Default)
-	}
+	col += sqlDefaultClause("postgres", f.Fieldtype, f.Default)
 	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", d.QuoteIdent(tableName), col)
 }
 

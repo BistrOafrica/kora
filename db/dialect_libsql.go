@@ -166,9 +166,7 @@ func (d *LibSQLDialect) CreateTable(dt *doctype.DocType) []string {
 		if f.Reqd {
 			col += " NOT NULL"
 		}
-		if f.Default != "" && f.Fieldtype != "Check" {
-			col += fmt.Sprintf(" DEFAULT '%s'", f.Default)
-		}
+		col += sqlDefaultClause("libsql", f.Fieldtype, f.Default)
 		cols = append(cols, col)
 	}
 
@@ -208,9 +206,7 @@ func (d *LibSQLDialect) AddColumn(tableName string, f *doctype.Field) string {
 	if f.Reqd {
 		col += " NOT NULL"
 	}
-	if f.Default != "" && f.Fieldtype != "Check" {
-		col += fmt.Sprintf(" DEFAULT '%s'", f.Default)
-	}
+	col += sqlDefaultClause("libsql", f.Fieldtype, f.Default)
 	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", d.QuoteIdent(tableName), col)
 }
 

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/asenawritescode/kora/analytics"
 	"github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/doctype"
 	"github.com/asenawritescode/kora/script"
+	"github.com/go-sql-driver/mysql"
 )
 
 // generateName creates a unique document name based on the DocType.
@@ -87,8 +87,6 @@ type TxManager struct {
 	CurrentUser     string
 	CurrentUserRole string
 }
-
-
 
 // Insert creates a new document in the database.
 // modifiedBy is stored in the modified_by column — use the actor responsible (e.g., user or "ai-assistant").
@@ -274,7 +272,6 @@ func updateComputedFieldsExec(ex db.Queryer, dt *doctype.DocType, doc *doctype.D
 	return err
 }
 
-
 // Save updates an existing document.
 // If owner is non-empty, only updates if the document is owned by that user.
 // All operations run in a database transaction to ensure atomicity.
@@ -427,7 +424,7 @@ func (tx *TxManager) Save(dt *doctype.DocType, doc *doctype.Document, modifiedBy
 	if tx.EventBus != nil {
 		var oldData map[string]any
 		if oldDoc != nil {
-			
+
 			oldData = copyFieldsWithStatus(oldDoc.Fields, oldDoc.DocStatus)
 		}
 		tx.EventBus.Publish(analytics.ChangeEvent{
@@ -522,7 +519,6 @@ func (tx *TxManager) GetDoc(dt *doctype.DocType, name string, owner string) (*do
 
 	return doc, nil
 }
-
 
 // GetList returns a paginated list of documents with optional filtering.
 // If owner is non-empty, only returns documents owned by that user.
@@ -915,9 +911,22 @@ func convertDefault(def string, fieldtype string) any {
 		return f
 	case "Check":
 		return def == "1" || def == "true"
+	case "Date":
+		if strings.EqualFold(def, "today") {
+			return time.Now().Format("2006-01-02")
+		}
+	case "Datetime":
+		if strings.EqualFold(def, "now") || strings.EqualFold(def, "today") {
+			return time.Now()
+		}
+	case "Time":
+		if strings.EqualFold(def, "now") {
+			return time.Now().Format("15:04:05.000000")
+		}
 	default:
 		return def
 	}
+	return def
 }
 
 // copyFieldsWithStatus creates a copy of fields with doc_status injected for analytics.

@@ -1,6 +1,7 @@
 package doctype
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -12,12 +13,12 @@ func TestParseFieldworkConfigs(t *testing.T) {
 	}
 
 	expected := map[string]int{
-		"Customer":       9,
-		"Equipment":      7,
-		"Technician":     7,
-		"Work Order":     11,
+		"Customer":        9,
+		"Equipment":       7,
+		"Technician":      7,
+		"Work Order":      11,
 		"Work Order Item": 5,
-		"Service Report": 10,
+		"Service Report":  10,
 	}
 
 	for _, dt := range doctypes {
@@ -150,4 +151,35 @@ func TestFieldValidation(t *testing.T) {
 		t.Error("expected validation error for Table field without options")
 	}
 	t.Logf("validation error (expected): %v", err)
+}
+
+func TestFieldValidationRejectsInvalidTemporalDefaults(t *testing.T) {
+	tests := []struct {
+		name      string
+		fieldtype string
+		def       string
+	}{
+		{name: "today on data", fieldtype: "Data", def: "Today"},
+		{name: "now on date", fieldtype: "Date", def: "Now"},
+		{name: "now on int", fieldtype: "Int", def: "Now"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dt := &DocType{
+				Name:   "TemporalTest",
+				Module: "Test",
+				Fields: []Field{
+					{Fieldname: "value", Fieldtype: tt.fieldtype, Default: tt.def},
+				},
+			}
+			err := dt.Validate()
+			if err == nil {
+				t.Fatalf("expected validation error for %s default on %s", tt.def, tt.fieldtype)
+			}
+			if !strings.Contains(strings.ToLower(err.Error()), "default") {
+				t.Fatalf("expected default validation error, got: %v", err)
+			}
+		})
+	}
 }

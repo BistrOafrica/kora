@@ -94,6 +94,40 @@ export interface ConfigVersion {
   status: 'Draft' | 'Active' | 'Superseded'
 }
 
+export interface ConfigVersionPreview {
+  version_id: string
+  status: string
+  doctypes_in_snapshot: number
+  roles_in_snapshot: number
+  permissions_in_snapshot: number
+  workflows_in_snapshot: number
+  diff_summary: string
+  is_breaking: boolean
+  newer_active_versions: number
+  section_changes?: unknown
+  change_list_version: string
+  warning?: string
+}
+
+export interface RollbackVersionPreview {
+  version_id: string
+  status: string
+  doctypes_in_snapshot: number
+  diff_summary: string
+  is_breaking: boolean
+  would_remove_doctypes: string[]
+  changes: number
+  warning?: string
+}
+
+export async function fetchConfigVersionPreview(id: string): Promise<ConfigVersionPreview> {
+  return api.get(`/api/v1/system/config/versions/${id}/preview`)
+}
+
+export async function fetchRollbackVersionPreview(id: string): Promise<RollbackVersionPreview> {
+  return api.get(`/api/v1/system/config/versions/${id}/rollback-preview`)
+}
+
 export async function activateVersion(id: string): Promise<{ message: string; status: string }> {
   return api.post(`/api/v1/system/config/versions/${id}/activate`)
 }

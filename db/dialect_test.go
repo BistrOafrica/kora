@@ -3,10 +3,11 @@ package db
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/asenawritescode/kora/doctype"
+	"github.com/go-sql-driver/mysql"
 )
 
 func TestResolve(t *testing.T) {
@@ -144,6 +145,32 @@ func TestMySQL_CreateTable(t *testing.T) {
 	}
 }
 
+func TestMySQL_CreateTableTemporalDefaults(t *testing.T) {
+	d := &MySQLDialect{}
+	dt := &doctype.DocType{
+		Name: "Temporal DocType",
+		Fields: []doctype.Field{
+			{Fieldname: "sale_date", Fieldtype: "Date", Default: "Today"},
+			{Fieldname: "sale_time", Fieldtype: "Time", Default: "Now"},
+			{Fieldname: "created_at", Fieldtype: "Datetime", Default: "Now"},
+		},
+	}
+
+	stmt := d.CreateTable(dt)[0]
+	if !contains(stmt, "`sale_date` DATE DEFAULT NULL DEFAULT CURRENT_DATE") {
+		t.Fatalf("expected CURRENT_DATE default, got: %s", stmt)
+	}
+	if !contains(stmt, "`sale_time` TIME(6) DEFAULT NULL DEFAULT CURRENT_TIME(6)") {
+		t.Fatalf("expected CURRENT_TIME(6) default, got: %s", stmt)
+	}
+	if !contains(stmt, "`created_at` DATETIME(6) DEFAULT NULL DEFAULT CURRENT_TIMESTAMP(6)") {
+		t.Fatalf("expected CURRENT_TIMESTAMP(6) default, got: %s", stmt)
+	}
+	if strings.Contains(stmt, "DEFAULT 'Today'") || strings.Contains(stmt, "DEFAULT 'Now'") {
+		t.Fatalf("temporal defaults should not be quoted literals: %s", stmt)
+	}
+}
+
 func TestLibSQL_CreateTable(t *testing.T) {
 	d := &LibSQLDialect{}
 	dt := &doctype.DocType{
@@ -212,27 +239,60 @@ func TestMySQL_AddColumn(t *testing.T) {
 	}
 }
 
+func TestMySQL_AddColumnEscapesAndFormatsDefaults(t *testing.T) {
+	d := &MySQLDialect{}
+
+	dateStmt := d.AddColumn("tabTest", &doctype.Field{Fieldname: "sale_date", Fieldtype: "Date", Default: "Today"})
+	if !contains(dateStmt, "DEFAULT CURRENT_DATE") {
+		t.Fatalf("expected CURRENT_DATE in add column, got: %s", dateStmt)
+	}
+
+	textStmt := d.AddColumn("tabTest", &doctype.Field{Fieldname: "title", Fieldtype: "Data", Default: "O'Reilly"})
+	if !contains(textStmt, "DEFAULT 'O''Reilly'") {
+		t.Fatalf("expected escaped string default, got: %s", textStmt)
+	}
+}
+
+func TestLibSQL_TemporalDefaults(t *testing.T) {
+	d := &LibSQLDialect{}
+	dt := &doctype.DocType{
+		Name: "Temporal DocType",
+		Fields: []doctype.Field{
+			{Fieldname: "sale_date", Fieldtype: "Date", Default: "Today"},
+			{Fieldname: "created_at", Fieldtype: "Datetime", Default: "Now"},
+		},
+	}
+
+	stmt := d.CreateTable(dt)[0]
+	if !contains(stmt, `"sale_date" TEXT DEFAULT (DATE('now'))`) {
+		t.Fatalf("expected libsql date expression, got: %s", stmt)
+	}
+	if !contains(stmt, `"created_at" TEXT DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))`) {
+		t.Fatalf("expected libsql datetime expression, got: %s", stmt)
+	}
+}
+
 func TestUpsertClause(t *testing.T) {
 	tests := []struct {
-		name    string
-		dialect Dialect
+		name     string
+		dialect  Dialect
 		conflict []string
-		update  []string
-		want    string
+		update   []string
+		want     string
 	}{
 		{
-			name:    "mysql upsert",
-			dialect: &MySQLDialect{},
+			name:     "mysql upsert",
+			dialect:  &MySQLDialect{},
 			conflict: []string{"name"},
-			update:  []string{"email", "status"},
-			want:    "ON DUPLICATE KEY UPDATE `email` = VALUES(`email`), `status` = VALUES(`status`)",
+			update:   []string{"email", "status"},
+			want:     "ON DUPLICATE KEY UPDATE `email` = VALUES(`email`), `status` = VALUES(`status`)",
 		},
 		{
-			name:    "libsql upsert",
-			dialect: &LibSQLDialect{},
+			name:     "libsql upsert",
+			dialect:  &LibSQLDialect{},
 			conflict: []string{"name"},
-			update:  []string{"email", "status"},
-			want:    `ON CONFLICT("name") DO UPDATE SET "email" = excluded."email", "status" = excluded."status"`,
+			update:   []string{"email", "status"},
+			want:     `ON CONFLICT("name") DO UPDATE SET "email" = excluded."email", "status" = excluded."status"`,
 		},
 	}
 
@@ -248,25 +308,25 @@ func TestUpsertClause(t *testing.T) {
 
 func TestUpsertIncrement(t *testing.T) {
 	tests := []struct {
-		name    string
-		dialect Dialect
+		name     string
+		dialect  Dialect
 		conflict []string
-		incCols []string
-		want    string
+		incCols  []string
+		want     string
 	}{
 		{
-			name:    "mysql upsert increment",
-			dialect: &MySQLDialect{},
+			name:     "mysql upsert increment",
+			dialect:  &MySQLDialect{},
 			conflict: []string{"site", "date"},
-			incCols: []string{"count"},
-			want:    "ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`)",
+			incCols:  []string{"count"},
+			want:     "ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`)",
 		},
 		{
-			name:    "libsql upsert increment",
-			dialect: &LibSQLDialect{},
+			name:     "libsql upsert increment",
+			dialect:  &LibSQLDialect{},
 			conflict: []string{"site", "date"},
-			incCols: []string{"count"},
-			want:    `ON CONFLICT("site", "date") DO UPDATE SET "count" = "count" + excluded."count"`,
+			incCols:  []string{"count"},
+			want:     `ON CONFLICT("site", "date") DO UPDATE SET "count" = "count" + excluded."count"`,
 		},
 	}
 

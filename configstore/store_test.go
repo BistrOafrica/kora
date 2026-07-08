@@ -130,7 +130,7 @@ func TestSaveRoles_RoundTrip(t *testing.T) {
 	}
 
 	for _, role := range roles {
-expectUpsert := `INSERT INTO _kora_role`
+		expectUpsert := `INSERT INTO _kora_role`
 		mock.ExpectExec(expectUpsert).
 			WithArgs(role.Name, 1, role.Description, "").
 			WillReturnResult(sqlmock.NewResult(1, 1))
@@ -366,6 +366,84 @@ func TestBoolToInt(t *testing.T) {
 				t.Errorf("boolToInt(%v) = %d, want %d", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadDraftHeadSnapshot_PrefersLatestDraft(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	s := newStore(db)
+	rows := sqlmock.NewRows([]string{"id", "config"}).
+		AddRow("cv-test-3", `{"doctypes":[{"name":"Invoice","module":"Accounts","fields":[{"fieldname":"total","fieldtype":"Currency"}]}]}`)
+
+	mock.ExpectQuery("SELECT id, config FROM _kora_config_version").
+		WithArgs("test").
+		WillReturnRows(rows)
+
+	snapshot, versionID, err := s.LoadDraftHeadSnapshot("test")
+	if err != nil {
+		t.Fatalf("LoadDraftHeadSnapshot error = %v", err)
+	}
+	if versionID != "cv-test-3" {
+		t.Fatalf("versionID = %q, want cv-test-3", versionID)
+	}
+	if len(snapshot.DocTypes) != 1 || snapshot.DocTypes[0].Name != "Invoice" {
+		t.Fatalf("unexpected snapshot doctypes: %+v", snapshot.DocTypes)
+	}
+}
+
+func TestCreateConfigVersionWithBase_UsesExplicitBaseVersionID(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	s := newStore(db)
+	snapshot := &doctype.ConfigSnapshot{
+		DocTypes: []*doctype.DocType{{Name: "Invoice", Module: "Accounts", Fields: []doctype.Field{{Fieldname: "total", Fieldtype: "Currency"}}}},
+	}
+
+	mock.ExpectQuery("SELECT COALESCE\\(MAX\\(version\\), 0\\) FROM _kora_config_version WHERE site = \\?").
+		WithArgs("test").
+		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(3))
+	mock.ExpectQuery("SELECT config FROM _kora_config_version WHERE site = \\? AND version = \\?").
+		WithArgs("test", 3).
+		WillReturnRows(sqlmock.NewRows([]string{"config"}))
+	mock.ExpectExec("INSERT INTO _kora_config_version").
+		WithArgs(
+			"cv-test-4", "test", 4, "system", "Draft invoice", nil, "Draft", sqlmock.AnyArg(),
+			nil, sqlmock.AnyArg(), "cv-test-2", "",
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	versionID, versionNum, err := s.CreateConfigVersionWithBase("test", "system", "Draft invoice", "Draft", snapshot, "cv-test-2")
+	if err != nil {
+		t.Fatalf("CreateConfigVersionWithBase error = %v", err)
+	}
+	if versionID != "cv-test-4" || versionNum != 4 {
+		t.Fatalf("unexpected version result: id=%s version=%d", versionID, versionNum)
+	}
+}
+
+func TestSupersedeSiblingDrafts(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	s := newStore(db)
+	mock.ExpectExec("UPDATE _kora_config_version SET status = 'Superseded'").
+		WithArgs("test", "cv-test-5", "cv-test-2").
+		WillReturnResult(sqlmock.NewResult(0, 2))
+
+	if err := s.SupersedeSiblingDrafts("test", "cv-test-5", "cv-test-2"); err != nil {
+		t.Fatalf("SupersedeSiblingDrafts error = %v", err)
 	}
 }
 

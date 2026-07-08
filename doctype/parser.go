@@ -523,9 +523,9 @@ func (d *DocType) Validate() error {
 
 		if f.Fieldname == "" {
 			return fmt.Errorf("doctype %s: field %d has no fieldname", d.Name, i)
-			}
-			if isReservedFieldName(f.Fieldname) {
-				return fmt.Errorf("doctype %s: field %q conflicts with a reserved system column name. Reserved names: name, owner, creation, modified, modified_by, doc_status, idx, parent, parentfield, parenttype", d.Name, f.Fieldname)
+		}
+		if isReservedFieldName(f.Fieldname) {
+			return fmt.Errorf("doctype %s: field %q conflicts with a reserved system column name. Reserved names: name, owner, creation, modified, modified_by, doc_status, idx, parent, parentfield, parenttype", d.Name, f.Fieldname)
 		}
 
 		// Validate field name format.
@@ -595,6 +595,10 @@ func (d *DocType) Validate() error {
 			}
 		}
 
+		if err := validateFieldDefault(f); err != nil {
+			return fmt.Errorf("doctype %s, field %s: %w", d.Name, f.Fieldname, err)
+		}
+
 		// Validate depends_on references real fields.
 		if f.DependsOn != "" {
 			if err := validateDependsOn(f.DependsOn, fieldnames); err != nil {
@@ -626,6 +630,26 @@ func (d *DocType) Validate() error {
 					return fmt.Errorf("doctype %s, doc_constraint %d, constraint %d: %w", d.Name, i, j, err)
 				}
 			}
+		}
+	}
+
+	return nil
+}
+
+func validateFieldDefault(f *Field) error {
+	if f.Default == "" {
+		return nil
+	}
+
+	normalized := strings.ToLower(strings.TrimSpace(f.Default))
+	switch normalized {
+	case "today":
+		if f.Fieldtype != "Date" && f.Fieldtype != "Datetime" {
+			return fmt.Errorf("default %q is only valid for Date or Datetime fields", f.Default)
+		}
+	case "now":
+		if f.Fieldtype != "Datetime" && f.Fieldtype != "Time" {
+			return fmt.Errorf("default %q is only valid for Datetime or Time fields", f.Default)
 		}
 	}
 

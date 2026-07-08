@@ -2,6 +2,7 @@ package doctype
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 )
 
@@ -22,18 +23,18 @@ type AnalyticsMetricConfig struct {
 // It captures enough information to identify and restore the script without storing the full body
 // (the full body is in _kora_script and can be looked up by name+hash).
 type ScriptSnapshot struct {
-	Name          string `json:"name"`
-	ScriptType    string `json:"script_type"`
-	DocType       string `json:"doctype,omitempty"`
-	Event         string `json:"event,omitempty"`
-	MethodPath    string `json:"method_path,omitempty"`
+	Name           string `json:"name"`
+	ScriptType     string `json:"script_type"`
+	DocType        string `json:"doctype,omitempty"`
+	Event          string `json:"event,omitempty"`
+	MethodPath     string `json:"method_path,omitempty"`
 	WorkflowAction string `json:"workflow_action,omitempty"`
-	Schedule      string `json:"schedule,omitempty"`
-	Priority      int    `json:"priority"`
-	IsActive      bool   `json:"is_active"`
-	RunAs         string `json:"run_as,omitempty"`
-	TimeoutMs     int    `json:"timeout_ms"`
-	ScriptHash    string `json:"script_hash"` // SHA-256 of script body
+	Schedule       string `json:"schedule,omitempty"`
+	Priority       int    `json:"priority"`
+	IsActive       bool   `json:"is_active"`
+	RunAs          string `json:"run_as,omitempty"`
+	TimeoutMs      int    `json:"timeout_ms"`
+	ScriptHash     string `json:"script_hash"` // SHA-256 of script body
 }
 
 // ConfigSnapshot is the complete configuration state stored in _kora_config_version.config.
@@ -108,4 +109,22 @@ func MustParseConfig(config string) *ConfigSnapshot {
 		panic(err)
 	}
 	return snapshot
+}
+
+// UpsertSnapshotDocType inserts or replaces a doctype in a config snapshot and
+// keeps the doctypes sorted for deterministic output.
+func UpsertSnapshotDocType(snapshot *ConfigSnapshot, dt *DocType) {
+	for i, existing := range snapshot.DocTypes {
+		if existing != nil && existing.Name == dt.Name {
+			snapshot.DocTypes[i] = dt
+			sort.Slice(snapshot.DocTypes, func(i, j int) bool {
+				return snapshot.DocTypes[i].Name < snapshot.DocTypes[j].Name
+			})
+			return
+		}
+	}
+	snapshot.DocTypes = append(snapshot.DocTypes, dt)
+	sort.Slice(snapshot.DocTypes, func(i, j int) bool {
+		return snapshot.DocTypes[i].Name < snapshot.DocTypes[j].Name
+	})
 }

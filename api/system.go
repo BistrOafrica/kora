@@ -349,6 +349,7 @@ func (h *Handler) HandleSystemDoctypes(c *gin.Context) {
 func (h *Handler) HandleSystemDoctypeCreate(c *gin.Context) {
 	reg := h.siteRegistry(c)
 	db := h.siteTx(c).DB
+	siteName := c.GetString("site_name")
 
 	var dt doctype.DocType
 	if err := c.ShouldBindJSON(&dt); err != nil {
@@ -381,18 +382,18 @@ func (h *Handler) HandleSystemDoctypeCreate(c *gin.Context) {
 
 	if activate {
 		// Activate immediately: save to DB, register, create permissions, run migration.
-		if err := store.SaveDocType(&dt, c.GetString("site_name")); err != nil {
+		if err := store.SaveDocType(&dt, siteName); err != nil {
 			internalError(c, "saving doctype", err)
 			return
 		}
 		reg.Register(&dt)
 
-		if err := store.AutoCreatePermissionsForDoctype(dt.Name, c.GetString("site_name")); err != nil {
+		if err := store.AutoCreatePermissionsForDoctype(dt.Name, siteName); err != nil {
 			slog.Warn("failed to auto-create permissions for new doctype", "doctype", dt.Name, "error", err)
 		} else {
-			roles, err := store.LoadRoles(c.GetString("site_name"))
+			roles, err := store.LoadRoles(siteName)
 			if err == nil {
-				perms, err2 := store.LoadPermissions(c.GetString("site_name"))
+				perms, err2 := store.LoadPermissions(siteName)
 				if err2 == nil {
 					reg.Permissions.LoadPermissionsFromDB(roles, perms)
 				}
@@ -409,19 +410,22 @@ func (h *Handler) HandleSystemDoctypeCreate(c *gin.Context) {
 			return
 		}
 		h.invalidateAnalyticsForDoctype(c, dt.Name)
-	} else {
-		// Draft: register temporarily for snapshot collection, then remove.
-		// Do NOT save to _kora_doctype. Do NOT run migration.
-		// The doctype only exists in the config version snapshot until activation.
-		reg.Register(&dt)
 	}
 
 	// Create config version.
-	snapshot, _ := store.CollectSnapshot(reg, c.GetString("site_name"))
-
-	if !activate {
-		// Remove from runtime — Draft doctypes are not live.
-		reg.Unregister(dt.Name)
+	var (
+		snapshot      *doctype.ConfigSnapshot
+		baseVersionID string
+		err           error
+	)
+	if activate {
+		snapshot, _ = store.CollectSnapshot(reg, siteName)
+	} else {
+		snapshot, baseVersionID, err = store.BuildDraftSnapshot(reg, siteName, &dt)
+		if err != nil {
+			internalError(c, "building draft snapshot", err)
+			return
+		}
 	}
 
 	createdBy := c.GetString("user")
@@ -432,9 +436,17 @@ func (h *Handler) HandleSystemDoctypeCreate(c *gin.Context) {
 	if activate {
 		status = "Active"
 	}
-	versionID, versionNum, err := store.CreateConfigVersion(
-		c.GetString("site_name"), createdBy, "Created "+dt.Name+" via web", status, snapshot,
-	)
+	var versionID string
+	var versionNum int
+	if activate {
+		versionID, versionNum, err = store.CreateConfigVersion(
+			siteName, createdBy, "Created "+dt.Name+" via web", status, snapshot,
+		)
+	} else {
+		versionID, versionNum, err = store.CreateConfigVersionWithBase(
+			siteName, createdBy, "Created "+dt.Name+" via web", status, snapshot, baseVersionID,
+		)
+	}
 	if err != nil {
 		slog.Warn("failed to create config version", "error", err)
 	}
@@ -477,6 +489,7 @@ func (h *Handler) HandleSystemDoctypeUpdate(c *gin.Context) {
 	doctypeName := c.Param("doctype")
 	reg := h.siteRegistry(c)
 	db := h.siteTx(c).DB
+	siteName := c.GetString("site_name")
 
 	oldDT := reg.Get(doctypeName)
 	if oldDT == nil {
@@ -505,20 +518,18 @@ func (h *Handler) HandleSystemDoctypeUpdate(c *gin.Context) {
 		return
 	}
 
-	// Save.
 	store := configstore.NewStore(db, h.TxManager.Dialect)
-	if err := store.SaveDocType(&newDT, c.GetString("site_name")); err != nil {
-		internalError(c, "saving doctype", err)
-		return
-	}
-
-	// Update registry (replace old with new).
-	reg.Register(&newDT)
-
 	// Activate?
 	activate := c.Query("activate") != "false"
 	status := "Draft"
 	if activate {
+		if err := store.SaveDocType(&newDT, siteName); err != nil {
+			internalError(c, "saving doctype", err)
+			return
+		}
+
+		// Update registry (replace old with new).
+		reg.Register(&newDT)
 		status = "Active"
 		// Get DB name from the connection.
 		var dbName string
@@ -531,14 +542,35 @@ func (h *Handler) HandleSystemDoctypeUpdate(c *gin.Context) {
 	}
 
 	// Create config version.
-	snapshot, _ := store.CollectSnapshot(reg, c.GetString("site_name"))
+	var (
+		snapshot      *doctype.ConfigSnapshot
+		baseVersionID string
+		err           error
+	)
+	if activate {
+		snapshot, _ = store.CollectSnapshot(reg, siteName)
+	} else {
+		snapshot, baseVersionID, err = store.BuildDraftSnapshot(reg, siteName, &newDT)
+		if err != nil {
+			internalError(c, "building draft snapshot", err)
+			return
+		}
+	}
 	createdBy := c.GetString("user")
 	if createdBy == "" {
 		createdBy = "system"
 	}
-	versionID, versionNum, err := store.CreateConfigVersion(
-		c.GetString("site_name"), createdBy, "Updated "+doctypeName+" via web", status, snapshot,
-	)
+	var versionID string
+	var versionNum int
+	if activate {
+		versionID, versionNum, err = store.CreateConfigVersion(
+			siteName, createdBy, "Updated "+doctypeName+" via web", status, snapshot,
+		)
+	} else {
+		versionID, versionNum, err = store.CreateConfigVersionWithBase(
+			siteName, createdBy, "Updated "+doctypeName+" via web", status, snapshot, baseVersionID,
+		)
+	}
 	if err != nil {
 		slog.Warn("failed to create config version", "error", err)
 	}
@@ -893,9 +925,15 @@ func (h *Handler) HandleConfigVersionActivate(c *gin.Context) {
 
 	// Staleness check via base_version_id: ensure the draft was forked from the current active version.
 	if baseVersionID != "" {
-		var activeVersionID string
-		err := db.QueryRow("SELECT id FROM _kora_config_version WHERE site = ? AND status = 'Active' LIMIT 1", siteName).Scan(&activeVersionID)
-		if err == nil && baseVersionID != activeVersionID {
+		var activeVersionID, activeConfigHash, baseConfigHash string
+		err := db.QueryRow(
+			"SELECT id, COALESCE(config_hash, '') FROM _kora_config_version WHERE site = ? AND status = 'Active' ORDER BY version DESC LIMIT 1",
+			siteName,
+		).Scan(&activeVersionID, &activeConfigHash)
+		if err == nil {
+			_ = db.QueryRow("SELECT COALESCE(config_hash, '') FROM _kora_config_version WHERE id = ?", baseVersionID).Scan(&baseConfigHash)
+		}
+		if err == nil && isStaleBaseVersion(baseVersionID, baseConfigHash, activeVersionID, activeConfigHash) {
 			slog.Warn("stale draft -- base version mismatch", "draft_id", versionID, "base", baseVersionID, "active", activeVersionID)
 			if c.Query("force") != "true" {
 				c.JSON(http.StatusConflict, ErrorResponse{
@@ -1054,8 +1092,21 @@ func (h *Handler) HandleConfigVersionActivate(c *gin.Context) {
 	if _, err := db.Exec("UPDATE _kora_config_version SET status = 'Superseded' WHERE id = ?", versionID); err != nil {
 		slog.Warn("failed to update draft status after activation", "version", versionID, "error", err)
 	}
+	if err := store.SupersedeSiblingDrafts(siteName, versionID, baseVersionID); err != nil {
+		slog.Warn("failed to supersede sibling drafts", "version", versionID, "base_version_id", baseVersionID, "error", err)
+	}
 
 	c.JSON(http.StatusOK, Response{Data: map[string]string{"message": "activated", "status": "Active"}})
+}
+
+func isStaleBaseVersion(baseVersionID, baseConfigHash, activeVersionID, activeConfigHash string) bool {
+	if baseVersionID == "" || activeVersionID == "" {
+		return false
+	}
+	if baseConfigHash != "" && activeConfigHash != "" {
+		return baseConfigHash != activeConfigHash
+	}
+	return baseVersionID != activeVersionID
 }
 
 // HandleConfigVersionDiscard discards a Draft version.

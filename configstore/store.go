@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -106,7 +107,7 @@ func (s *Store) saveDocTypeExec(ex db.Queryer, dt *doctype.DocType, site string)
 				boolToInt(field.SearchIndex), field.Description,
 				field.DependsOn, field.MandatoryDependsOn, string(constraintsJSON),
 				field.RenamedFrom, field.LinkedField, field.Computed, start+j,
-					site,
+				site,
 			)
 		}
 
@@ -178,6 +179,49 @@ func (s *Store) LoadAll(site string) ([]*doctype.DocType, error) {
 	return doctypes, nil
 }
 
+// LoadDraftHeadSnapshot returns the latest draft snapshot for a site. If no
+// drafts exist, it falls back to the latest active snapshot. If the site has
+// no version history, sql.ErrNoRows is returned.
+func (s *Store) LoadDraftHeadSnapshot(site string) (*doctype.ConfigSnapshot, string, error) {
+	var versionID, config string
+	err := s.DB.QueryRow(`
+		SELECT id, config
+		FROM _kora_config_version
+		WHERE site = ? AND status IN ('Draft', 'Active')
+		ORDER BY CASE WHEN status = 'Draft' THEN 0 ELSE 1 END, version DESC
+		LIMIT 1
+	`, site).Scan(&versionID, &config)
+	if err != nil {
+		return nil, "", err
+	}
+
+	snapshot, err := doctype.ParseConfig(config)
+	if err != nil {
+		return nil, "", fmt.Errorf("parsing draft head snapshot %s: %w", versionID, err)
+	}
+	return snapshot, versionID, nil
+}
+
+// BuildDraftSnapshot loads the current draft head (or falls back to the live
+// registry state when no version history exists), then inserts or replaces the
+// provided doctype in that snapshot.
+func (s *Store) BuildDraftSnapshot(reg *doctype.Registry, siteName string, dt *doctype.DocType) (*doctype.ConfigSnapshot, string, error) {
+	snapshot, baseVersionID, err := s.LoadDraftHeadSnapshot(siteName)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, "", err
+		}
+		snapshot, err = s.CollectSnapshot(reg, siteName)
+		if err != nil {
+			return nil, "", err
+		}
+		baseVersionID = ""
+	}
+
+	doctype.UpsertSnapshotDocType(snapshot, dt)
+	return snapshot, baseVersionID, nil
+}
+
 // loadAllFields fetches all fields for all doctypes in a single query.
 func (s *Store) loadAllFields(site string) (map[string][]doctype.Field, error) {
 	rows, err := s.DB.Query(`
@@ -227,7 +271,6 @@ func (s *Store) loadAllFields(site string) (map[string][]doctype.Field, error) {
 	return result, rows.Err()
 }
 
-
 // boolToInt converts a bool to 0/1 for MySQL TINYINT columns.
 func boolToInt(b bool) int {
 	if b {
@@ -235,7 +278,6 @@ func boolToInt(b bool) int {
 	}
 	return 0
 }
-
 
 // SaveRoles saves role definitions to _kora_role.
 func (s *Store) SaveRoles(roles []*doctype.Role, site string) error {
@@ -508,6 +550,16 @@ func (s *Store) LoadPermissions(site string) ([]*doctype.Permission, error) {
 // The snapshot includes doctypes, roles, permissions, and workflows.
 // Returns the version ID, version number, and any error.
 func (s *Store) CreateConfigVersion(siteName, createdBy, label, status string, snapshot *doctype.ConfigSnapshot) (string, int, error) {
+	var baseVersionID string
+	if status == "Draft" {
+		s.DB.QueryRow("SELECT id FROM _kora_config_version WHERE site = ? AND status = 'Active' ORDER BY version DESC LIMIT 1", siteName).Scan(&baseVersionID)
+	}
+	return s.CreateConfigVersionWithBase(siteName, createdBy, label, status, snapshot, baseVersionID)
+}
+
+// CreateConfigVersionWithBase saves a snapshot of the full config with an
+// explicit base version lineage.
+func (s *Store) CreateConfigVersionWithBase(siteName, createdBy, label, status string, snapshot *doctype.ConfigSnapshot, baseVersionID string) (string, int, error) {
 	if snapshot == nil {
 		return "", 0, fmt.Errorf("snapshot is required")
 	}
@@ -550,12 +602,6 @@ func (s *Store) CreateConfigVersion(siteName, createdBy, label, status string, s
 		}
 	}
 
-	// Look up base_version_id from the current active version (for staleness tracking).
-	var baseVersionID string
-	if status == "Draft" {
-		s.DB.QueryRow("SELECT id FROM _kora_config_version WHERE site = ? AND status = 'Active' ORDER BY version DESC LIMIT 1", siteName).Scan(&baseVersionID)
-	}
-
 	// Get min_kora_version from the snapshot, or use empty string.
 	minKoraVersion := snapshot.MinKoraVersion
 
@@ -572,6 +618,21 @@ func (s *Store) CreateConfigVersion(siteName, createdBy, label, status string, s
 
 	slog.Debug("created config version", "id", versionID, "version", newVersion, "status", status)
 	return versionID, newVersion, nil
+}
+
+// SupersedeSiblingDrafts marks draft siblings from the same base snapshot as
+// superseded after one draft from that branch has been activated.
+func (s *Store) SupersedeSiblingDrafts(siteName, activatedVersionID, baseVersionID string) error {
+	if baseVersionID == "" {
+		return nil
+	}
+	_, err := s.DB.Exec(
+		`UPDATE _kora_config_version
+		 SET status = 'Superseded'
+		 WHERE site = ? AND status = 'Draft' AND id <> ? AND base_version_id = ?`,
+		siteName, activatedVersionID, baseVersionID,
+	)
+	return err
 }
 
 // CollectSnapshot reads all live config state and builds a ConfigSnapshot for versioning.

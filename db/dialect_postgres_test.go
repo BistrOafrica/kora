@@ -87,6 +87,43 @@ func TestPostgres_CreateTable(t *testing.T) {
 	}
 }
 
+func TestPostgres_CreateTableTemporalDefaults(t *testing.T) {
+	d := &PostgresDialect{}
+	dt := &doctype.DocType{
+		Name: "Temporal DocType",
+		Fields: []doctype.Field{
+			{Fieldname: "sale_date", Fieldtype: "Date", Default: "Today"},
+			{Fieldname: "sale_time", Fieldtype: "Time", Default: "Now"},
+			{Fieldname: "created_at", Fieldtype: "Datetime", Default: "Now"},
+		},
+	}
+
+	stmt := d.CreateTable(dt)[0]
+	if !contains(stmt, `"sale_date" DATE DEFAULT NULL DEFAULT CURRENT_DATE`) {
+		t.Fatalf("expected CURRENT_DATE default, got: %s", stmt)
+	}
+	if !contains(stmt, `"sale_time" TIME DEFAULT NULL DEFAULT CURRENT_TIME`) {
+		t.Fatalf("expected CURRENT_TIME default, got: %s", stmt)
+	}
+	if !contains(stmt, `"created_at" TIMESTAMP DEFAULT NULL DEFAULT NOW()`) {
+		t.Fatalf("expected NOW() default, got: %s", stmt)
+	}
+}
+
+func TestPostgres_AddColumnEscapesAndFormatsDefaults(t *testing.T) {
+	d := &PostgresDialect{}
+
+	dateStmt := d.AddColumn("tabTest", &doctype.Field{Fieldname: "sale_date", Fieldtype: "Date", Default: "Today"})
+	if !contains(dateStmt, "DEFAULT CURRENT_DATE") {
+		t.Fatalf("expected CURRENT_DATE in add column, got: %s", dateStmt)
+	}
+
+	textStmt := d.AddColumn("tabTest", &doctype.Field{Fieldname: "title", Fieldtype: "Data", Default: "O'Reilly"})
+	if !contains(textStmt, "DEFAULT 'O''Reilly'") {
+		t.Fatalf("expected escaped string default, got: %s", textStmt)
+	}
+}
+
 func TestPostgres_CreateTableWithIndexes(t *testing.T) {
 	d := &PostgresDialect{}
 	dt := &doctype.DocType{
