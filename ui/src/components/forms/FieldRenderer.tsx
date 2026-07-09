@@ -1,4 +1,4 @@
-import type { Field, DocType } from '@/types/kora'
+import type { Field } from '@/types/kora'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
@@ -13,33 +13,53 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import {
+  getFieldConstraintHint,
+  isFieldRequired,
+  isFieldVisible,
+} from './form-runtime'
 
 interface FieldRendererProps {
   field: Field
   value: any
   onChange: (fieldname: string, value: any) => void
-  onRowsChange?: (rows: Record<string, any>[]) => void
+  onRowsChange?: (fieldname: string, rows: Record<string, any>[]) => void
   disabled: boolean
   error?: string
   compact?: boolean
+  formData?: Record<string, any>
 }
 
-export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, error, compact }: FieldRendererProps) {
+export function FieldRenderer({
+  field,
+  value,
+  onChange,
+  onRowsChange,
+  disabled,
+  error,
+  compact,
+  formData = {},
+}: FieldRendererProps) {
   const fieldname = field.fieldname
-  const label = field.label + (field.reqd ? ' *' : '')
+  const required = isFieldRequired(field, formData)
+  const label = field.label + (required ? ' *' : '')
   const id = `field-${fieldname}`
   const labelClass = cn(field.bold && 'font-semibold', compact && 'text-xs')
   const gapClass = compact ? 'space-y-0.5' : 'space-y-1.5'
+  const hint = error || getFieldConstraintHint(field, value, formData)
+
+  if (!isFieldVisible(field, formData)) {
+    return null
+  }
 
   switch (field.fieldtype) {
-    // --- Text inputs ---
     case 'Data': {
       const type =
         field.options === 'Email' ? 'email' :
         field.options === 'Phone' ? 'tel' :
         field.options === 'URL' ? 'url' : 'text'
       return (
-        <div className="space-y-1.5">
+        <div className={gapClass}>
           <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Input
             id={id}
@@ -49,14 +69,15 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             disabled={disabled || field.read_only}
             placeholder={field.description || field.label}
           />
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
     }
 
     case 'Text':
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <div className={gapClass}>
+          <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Textarea
             id={id}
             value={value ?? ''}
@@ -65,10 +86,10 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             placeholder={field.description || field.label}
             rows={4}
           />
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
 
-    // --- Numbers ---
     case 'Int':
       return (
         <div className={gapClass}>
@@ -79,10 +100,10 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             step="1"
             className="[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
             value={value ?? ''}
-            onChange={(e) => onChange(fieldname, e.target.value === '' ? null : parseInt(e.target.value))}
+            onChange={(e) => onChange(fieldname, e.target.value === '' ? null : parseInt(e.target.value, 10))}
             disabled={disabled || field.read_only}
           />
-          {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
 
@@ -102,41 +123,44 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             onChange={(e) => onChange(fieldname, e.target.value === '' ? null : parseFloat(e.target.value))}
             disabled={disabled || field.read_only}
           />
-          {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
-      )}
+      )
+    }
 
-    // --- Boolean ---
     case 'Check':
       return (
-        <div className="flex items-center gap-3 space-y-0">
-          <Switch
-            id={id}
-            checked={!!value}
-            onCheckedChange={(checked) => onChange(fieldname, checked)}
-            disabled={disabled || field.read_only}
-          />
-          <Label htmlFor={id}>{label}</Label>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-3">
+            <Switch
+              id={id}
+              checked={!!value}
+              onCheckedChange={(checked) => onChange(fieldname, checked)}
+              disabled={disabled || field.read_only}
+            />
+            <Label htmlFor={id} className={labelClass}>{label}</Label>
+          </div>
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
 
-    // --- Select ---
     case 'Select': {
       const options = field.options
         ? field.options.split('\n').filter((o) => o.trim() !== '')
         : []
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <div className={gapClass}>
+          <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Select
             value={value ?? ''}
-            onValueChange={(v) => onChange(fieldname, v)}
+            onValueChange={(v) => onChange(fieldname, v === '__empty__' ? '' : v)}
             disabled={disabled || field.read_only}
           >
             <SelectTrigger id={id}>
               <SelectValue placeholder={`Select ${field.label}...`} />
             </SelectTrigger>
             <SelectContent>
+              {!required && <SelectItem value="__empty__">None</SelectItem>}
               {options.map((opt) => (
                 <SelectItem key={opt} value={opt.trim()}>
                   {opt.trim()}
@@ -144,15 +168,15 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
               ))}
             </SelectContent>
           </Select>
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
     }
 
-    // --- Date / Time ---
     case 'Date':
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <div className={gapClass}>
+          <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Input
             id={id}
             type="date"
@@ -160,14 +184,14 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             onChange={(e) => onChange(fieldname, e.target.value)}
             disabled={disabled || field.read_only}
           />
-          {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
 
     case 'Datetime':
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <div className={gapClass}>
+          <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Input
             id={id}
             type="datetime-local"
@@ -175,14 +199,14 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             onChange={(e) => onChange(fieldname, e.target.value)}
             disabled={disabled || field.read_only}
           />
-          {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
 
     case 'Time':
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <div className={gapClass}>
+          <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Input
             id={id}
             type="time"
@@ -190,15 +214,14 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             onChange={(e) => onChange(fieldname, e.target.value)}
             disabled={disabled || field.read_only}
           />
-          {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
 
-    // --- Password ---
     case 'Password':
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <div className={gapClass}>
+          <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Input
             id={id}
             type="password"
@@ -207,29 +230,32 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             disabled={disabled || field.read_only}
             placeholder="••••••••"
           />
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
 
-    // --- JSON ---
     case 'JSON':
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <div className={gapClass}>
+          <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Textarea
             id={id}
             value={typeof value === 'string' ? value : JSON.stringify(value ?? {}, null, 2)}
             onChange={(e) => {
-              try { onChange(fieldname, JSON.parse(e.target.value)) }
-              catch { onChange(fieldname, e.target.value) }
+              try {
+                onChange(fieldname, JSON.parse(e.target.value))
+              } catch {
+                onChange(fieldname, e.target.value)
+              }
             }}
             disabled={disabled || field.read_only}
             rows={6}
             className="font-mono text-xs"
           />
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
 
-    // --- Link (searchable autocomplete) ---
     case 'Link':
     case 'Dynamic Link':
       return (
@@ -238,17 +264,16 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
           value={value}
           onChange={onChange}
           disabled={disabled || field.read_only}
-          error={error}
+          error={hint || undefined}
           compact={compact}
         />
       )
 
-    // --- Attach (placeholder) ---
     case 'Attach':
     case 'Attach Image':
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <div className={gapClass}>
+          <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Input
             id={id}
             type="text"
@@ -257,24 +282,23 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             disabled={disabled || field.read_only}
             placeholder="File path or URL"
           />
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
 
-    // --- Layout fields — not rendered as inputs ---
     case 'Section Break':
       return (
-        <div className="pt-4 pb-2">
-          <h3 className="text-lg font-semibold border-b pb-1">{field.label || 'Section'}</h3>
+        <div className="pb-2 pt-4">
+          <h3 className="border-b pb-1 text-lg font-semibold">{field.label || 'Section'}</h3>
         </div>
       )
 
     case 'Column Break':
-      return <div className="w-4" /> // handled by layout engine
+      return <div className="w-4" />
 
     case 'Heading':
-      return <h4 className="text-base font-semibold text-muted-foreground pt-3">{field.label}</h4>
+      return <h4 className="pt-3 text-base font-semibold text-muted-foreground">{field.label}</h4>
 
-    // --- Table (child table) — inline grid editor ---
     case 'Table':
       return (
         <ChildTableEditor
@@ -288,8 +312,8 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
 
     default:
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <div className={gapClass}>
+          <Label htmlFor={id} className={labelClass}>{label}</Label>
           <Input
             id={id}
             type="text"
@@ -297,6 +321,7 @@ export function FieldRenderer({ field, value, onChange, onRowsChange, disabled, 
             onChange={(e) => onChange(fieldname, e.target.value)}
             disabled={disabled || field.read_only}
           />
+          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
           <p className="text-xs text-muted-foreground">Type: {field.fieldtype}</p>
         </div>
       )

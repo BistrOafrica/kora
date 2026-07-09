@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchDoctypeSchema } from '@/lib/api/system'
 import { FieldRenderer } from './FieldRenderer'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Trash2, GripVertical } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { applyComputedFields } from '@/lib/computed-fields'
 import { cn } from '@/lib/utils'
 import type { Field } from '@/types/kora'
@@ -13,7 +13,7 @@ interface ChildTableEditorProps {
   field: Field
   value: Record<string, any>[]
   onChange: (fieldname: string, value: Record<string, any>[]) => void
-  onRowsChange?: (rows: Record<string, any>[]) => void
+  onRowsChange?: (fieldname: string, rows: Record<string, any>[]) => void
   disabled: boolean
   errors?: Record<number, Record<string, string>>
 }
@@ -37,11 +37,14 @@ export function ChildTableEditor({ field, value, onChange, onRowsChange, disable
         !['Section Break', 'Column Break', 'Heading', 'Table'].includes(f.fieldtype),
     ) ?? []
 
-  // Sync local rows with parent value.
+  useEffect(() => {
+    setLocalRows(Array.isArray(value) ? value : [])
+  }, [value])
+
   const updateRows = (newRows: Record<string, any>[]) => {
     setLocalRows(newRows)
     onChange(field.fieldname, newRows)
-    onRowsChange?.(newRows)
+    onRowsChange?.(field.fieldname, newRows)
   }
 
   const addRow = () => {
@@ -87,7 +90,7 @@ export function ChildTableEditor({ field, value, onChange, onRowsChange, disable
               })
               // Notify parent of changes (triggers computed fields on parent).
               onChange(field.fieldname, newRows)
-              onRowsChange?.(newRows)
+              onRowsChange?.(field.fieldname, newRows)
               return newRows
             })
           }).catch(() => {})
@@ -115,14 +118,22 @@ export function ChildTableEditor({ field, value, onChange, onRowsChange, disable
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold">{field.label}</h4>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-0.5">
+          <h4 className="text-sm font-semibold">{field.label}</h4>
+          <p className="text-xs text-muted-foreground">
+            {localRows.length === 0
+              ? `No ${childDoctype || 'items'} yet`
+              : `${localRows.length} ${localRows.length === 1 ? 'row' : 'rows'}`}
+          </p>
+        </div>
         <Button
           variant="outline"
           size="sm"
           onClick={addRow}
           disabled={disabled}
           type="button"
+          className="w-full sm:w-auto"
         >
           <Plus className="mr-1 h-3.5 w-3.5" />
           Add Row
@@ -130,22 +141,56 @@ export function ChildTableEditor({ field, value, onChange, onRowsChange, disable
       </div>
 
       {localRows.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            No {childDoctype || 'items'} added yet. Click "Add Row" to add one.
+        <div className="rounded-xl border border-dashed bg-muted/20 p-5 text-center sm:p-8">
+          <p className="text-sm font-medium">Start adding {childDoctype || 'items'}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Each row opens as a mobile-friendly card with the row actions kept visible.
           </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addRow}
+            disabled={disabled}
+            type="button"
+            className="mt-4 w-full sm:w-auto"
+          >
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Add first row
+          </Button>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3 sm:space-y-2">
           {localRows.map((row, idx) => (
             <div
               key={idx}
               className={cn(
-                'group relative rounded-lg border bg-muted/30 px-3 py-2',
+                'group relative rounded-xl border bg-background p-3 shadow-sm sm:rounded-lg sm:bg-muted/30 sm:px-3 sm:py-2 sm:shadow-none',
                 Object.keys(rowErrors(idx)).length > 0 && 'border-destructive',
               )}
             >
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 items-start">
+              <div className="mb-3 flex items-center justify-between gap-3 sm:mb-0">
+                <div className="min-w-0 sm:hidden">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Row {idx + 1}
+                  </p>
+                  {Object.keys(rowErrors(idx)).length > 0 && (
+                    <p className="text-xs text-destructive">Review highlighted fields</p>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 rounded-full text-muted-foreground hover:text-destructive sm:absolute sm:-right-1 sm:-top-1 sm:h-6 sm:w-6 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                  onClick={() => removeRow(idx)}
+                  disabled={disabled}
+                  type="button"
+                  aria-label={`Remove row ${idx + 1}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-2 lg:grid-cols-4 items-start">
                 {childFields.map((cf) => (
                   <FieldRenderer
                     key={cf.fieldname}
@@ -158,16 +203,6 @@ export function ChildTableEditor({ field, value, onChange, onRowsChange, disable
                   />
                 ))}
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={() => removeRow(idx)}
-                disabled={disabled}
-                type="button"
-              >
-                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-              </Button>
             </div>
           ))}
         </div>

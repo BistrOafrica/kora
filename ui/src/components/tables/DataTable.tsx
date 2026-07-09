@@ -33,9 +33,14 @@ interface DataTableProps {
   onPageChange: (page: number) => void
   onRowClick: (doc: Document) => void
   isEmpty: boolean
+  hasFilters?: boolean
   isFetching: boolean
   isError: boolean
   onRetry: () => void
+  emptyTitle?: string
+  emptyDescription?: string
+  filteredEmptyTitle?: string
+  filteredEmptyDescription?: string
 }
 
 const columnHelper = createColumnHelper<Document>()
@@ -79,9 +84,14 @@ export function DataTable({
   onPageChange,
   onRowClick,
   isEmpty,
+  hasFilters = false,
   isFetching,
   isError,
   onRetry,
+  emptyTitle = 'No records found',
+  emptyDescription = 'Create your first document to get started.',
+  filteredEmptyTitle = 'No matching records',
+  filteredEmptyDescription = 'Try clearing filters or broadening the search.',
 }: DataTableProps) {
   const tableColumns = useMemo(
     () => [
@@ -139,8 +149,12 @@ export function DataTable({
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 px-4">
         <FileX className="h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-medium text-center">No records found</h3>
-        <p className="mt-1 text-sm text-muted-foreground text-center">Create your first document to get started.</p>
+        <h3 className="mt-4 text-lg font-medium text-center">
+          {hasFilters ? filteredEmptyTitle : emptyTitle}
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground text-center">
+          {hasFilters ? filteredEmptyDescription : emptyDescription}
+        </p>
       </div>
     )
   }

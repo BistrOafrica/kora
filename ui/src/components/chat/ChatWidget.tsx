@@ -1,62 +1,74 @@
-import { useState, useMemo } from 'react'
+import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useRouterState } from '@tanstack/react-router'
+import { useUIStore } from '@/lib/ui-store'
 import { useChat } from './useChat'
-import { MessageCircle, X, Send, Loader2 } from 'lucide-react'
+import { MessageCircle, X, Send, Loader2, Sparkles, Wand2, Search, FilePlus2 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { cn } from '@/lib/utils'
 
-/** Simple markdown-to-HTML for tables, bold, and basic formatting. */
-function renderMarkdown(text: string): string {
-  let html = text
-  // Bold.
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  // Italic.
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-  // Inline code.
-  html = html.replace(/`(.+?)`/g, '<code class="bg-muted px-1 rounded text-xs">$1</code>')
-  // Tables: split into lines, detect | separator, wrap in HTML table.
-  const lines = html.split('\n')
-  let inTable = false
-  let result: string[] = []
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
-      if (!inTable) {
-        result.push('<table class="w-full text-xs border-collapse my-2"><tbody>')
-        inTable = true
-      }
-      const cells = trimmed.split('|').slice(1, -1).map(c => c.trim())
-      const isHeader = cells.every(c => c === '---' || c === ':---' || c === '---:' || c === ':---:')
-      if (isHeader) continue
-      const tag = inTable && result.filter(l => l.includes('<tr>')).length === 0 ? 'th' : 'td'
-      const cellHtml = cells.map(c => `<${tag} class="border px-2 py-1">${c}</${tag}>`).join('')
-      result.push(`<tr>${cellHtml}</tr>`)
-    } else {
-      if (inTable) {
-        result.push('</tbody></table>')
-        inTable = false
-      }
-      if (trimmed) {
-        result.push(`<p class="my-1">${trimmed}</p>`)
-      } else {
-        result.push('<br/>')
-      }
-    }
-  }
-  if (inTable) result.push('</tbody></table>')
-  return result.join('\n')
+type Suggestion = {
+  label: string
+  icon: ReactNode
+  prompt: string
 }
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const { messages, loading, error, send } = useChat()
+  const routerState = useRouterState()
+  const { shellMode } = useUIStore()
 
-  const handleSend = async () => {
-    const text = input.trim()
+  const context = useMemo(() => {
+    const pathname = routerState.location.pathname
+    const parts = pathname.split('/').filter(Boolean)
+    const doctype = parts[1] && parts[1] !== 'admin' ? decodeURIComponent(parts[1]) : undefined
+    const documentName = parts[2] && parts[2] !== 'new' && parts[1] !== 'admin' ? decodeURIComponent(parts[2]) : undefined
+    return {
+      pathname,
+      shellMode,
+      doctype: pathname.startsWith('/workspace/') && !pathname.startsWith('/workspace/admin')
+        ? doctype
+        : undefined,
+      documentName,
+    }
+  }, [routerState.location.pathname, shellMode])
+
+  const suggestions = useMemo(() => {
+    const base: Suggestion[] = [
+      { label: 'Summarize page', icon: <Sparkles className="h-3.5 w-3.5" />, prompt: 'Summarize what I should focus on here.' },
+      { label: 'Find records', icon: <Search className="h-3.5 w-3.5" />, prompt: 'Help me find the records I need.' },
+      { label: 'Draft change', icon: <FilePlus2 className="h-3.5 w-3.5" />, prompt: 'Help me draft the next change I should make.' },
+    ]
+
+    if (context.doctype) {
+      return [
+        { label: 'Review this doc', icon: <Wand2 className="h-3.5 w-3.5" />, prompt: `Review the current ${context.doctype} page and suggest the next best action.` },
+        { label: 'Create record', icon: <FilePlus2 className="h-3.5 w-3.5" />, prompt: `Help me create a new ${context.doctype} record.` },
+        { label: 'Search this type', icon: <Search className="h-3.5 w-3.5" />, prompt: `Help me find ${context.doctype} records that match my needs.` },
+      ]
+    }
+
+    if (context.pathname.startsWith('/workspace/admin')) {
+      return [
+        { label: 'Explain admin page', icon: <Sparkles className="h-3.5 w-3.5" />, prompt: 'Explain what I should do on this admin page.' },
+        { label: 'Check settings', icon: <Wand2 className="h-3.5 w-3.5" />, prompt: 'Review the current admin settings and point out anything important.' },
+        { label: 'Find config issue', icon: <Search className="h-3.5 w-3.5" />, prompt: 'Help me find a configuration issue or missing setting.' },
+      ]
+    }
+
+    return base
+  }, [context.doctype, context.pathname])
+
+  const handleSend = async (textOverride?: string) => {
+    const text = (textOverride ?? input).trim()
     if (!text || loading) return
     setInput('')
-    await send(text)
+    await send(text, context)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -65,59 +77,115 @@ export function ChatWidget() {
 
   return (
     <>
-      {/* Floating button */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all"
+          className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-all hover:bg-primary/90"
           aria-label="Open AI chat"
         >
           <MessageCircle className="h-6 w-6" />
         </button>
       )}
 
-      {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-6 right-6 z-50 flex h-[520px] w-[380px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border bg-background shadow-2xl">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <div>
-              <h3 className="font-semibold text-sm">AI Assistant</h3>
-              <p className="text-xs text-muted-foreground">Ask me anything about your data</p>
+        <div className="fixed bottom-6 right-6 z-50 flex h-[560px] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl">
+          <div className="border-b bg-gradient-to-r from-primary/10 to-transparent px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Sparkles className="h-4 w-4" />
+                  </span>
+                  <h3 className="text-sm font-semibold">AI Co-creator</h3>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Uses the current page context to help you act faster.
+                </p>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                className="rounded-md p-1 hover:bg-muted"
+                aria-label="Close chat"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              className="rounded-md p-1 hover:bg-muted"
-              aria-label="Close chat"
-            >
-              <X className="h-4 w-4" />
-            </button>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {suggestions.slice(0, 3).map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => handleSend(s.prompt)}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  {s.icon}
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
             {messages.length === 0 && !loading && (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                <p>Ask me to create, find, or update data...</p>
+              <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-5 text-sm text-muted-foreground">
+                Ask me to summarize this page, find records, or draft the next action.
               </div>
             )}
             {messages.map((msg, i) => (
               <div
                 key={i}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}
               >
                 <div
-                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                  className={cn(
+                    'max-w-[90%] rounded-2xl px-3 py-2.5 text-sm shadow-sm',
                     msg.role === 'user'
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
-                  }`}
+                      : 'border bg-muted/40 text-foreground',
+                  )}
                 >
                   {msg.role === 'assistant' ? (
-                    <div
-                      className="[&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-muted-foreground/20 [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_td]:border [&_td]:border-muted-foreground/20 [&_td]:px-2 [&_td]:py-1 [&_td]:text-xs [&_p]:my-1 [&_strong]:text-foreground"
-                      dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
-                    />
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ children }) => <p className="mb-2 last:mb-0 leading-6">{children}</p>,
+                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                        em: ({ children }) => <em className="italic">{children}</em>,
+                        ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+                        ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+                        li: ({ children }) => <li className="leading-6">{children}</li>,
+                        a: ({ href, children }) => (
+                          <a href={href} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-4">
+                            {children}
+                          </a>
+                        ),
+                        code: ({ inline, className, children, ...props }: any) =>
+                          inline ? (
+                            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em] text-foreground" {...props}>
+                              {children}
+                            </code>
+                          ) : (
+                            <code className={cn('block overflow-x-auto rounded-lg bg-slate-950 px-3 py-2 font-mono text-xs text-slate-50', className)} {...props}>
+                              {children}
+                            </code>
+                          ),
+                        pre: ({ children }) => <pre className="my-2 overflow-x-auto rounded-lg bg-slate-950 p-0 text-slate-50">{children}</pre>,
+                        blockquote: ({ children }) => <blockquote className="my-2 border-l-2 border-primary/40 pl-4 italic text-muted-foreground">{children}</blockquote>,
+                        table: ({ children }) => (
+                          <div className="my-3 overflow-x-auto rounded-lg border">
+                            <table className="w-full border-collapse text-sm">{children}</table>
+                          </div>
+                        ),
+                        thead: ({ children }) => <thead className="bg-muted/50">{children}</thead>,
+                        th: ({ children }) => <th className="border-b px-3 py-2 text-left font-semibold">{children}</th>,
+                        td: ({ children }) => <td className="border-b px-3 py-2 align-top">{children}</td>,
+                        hr: () => <hr className="my-3 border-border" />,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
                   ) : (
                     msg.content
                   )}
@@ -126,35 +194,42 @@ export function ChatWidget() {
             ))}
             {loading && (
               <div className="flex justify-start">
-                <div className="rounded-lg bg-muted px-3 py-2 text-sm flex items-center gap-2">
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                <div className="flex items-center gap-2 rounded-2xl border bg-muted/40 px-3 py-2 text-sm">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Thinking...
                 </div>
               </div>
             )}
             {error && (
-              <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
               </div>
             )}
           </div>
 
-          {/* Input */}
-          <div className="border-t px-4 py-3">
+          <div className="border-t bg-background px-4 py-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Context-aware
+              </span>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                {context.pathname}
+              </span>
+            </div>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask something..."
+                placeholder={context.doctype ? `Ask about ${context.doctype}...` : 'Ask something...'}
                 disabled={loading}
-                className="flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="flex-1 rounded-xl border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={loading || !input.trim()}
-                className="rounded-md bg-primary px-3 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                className="inline-flex items-center justify-center rounded-xl bg-primary px-3.5 py-2.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 <Send className="h-4 w-4" />
               </button>

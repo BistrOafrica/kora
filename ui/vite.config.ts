@@ -26,11 +26,11 @@ function compressionPlugin() {
       }
       walk(outDir)
       for (const file of files) {
-        const content = readFileSync(file)
-        if (content.byteLength < 1024) continue
-        const brPath = file + '.br'
-        const gzPath = file + '.gz'
         try {
+          const content = readFileSync(file)
+          if (content.byteLength < 1024) continue
+          const brPath = file + '.br'
+          const gzPath = file + '.gz'
           writeFileSync(brPath, brotliCompressSync(content))
           writeFileSync(gzPath, gzipSync(content))
         } catch {

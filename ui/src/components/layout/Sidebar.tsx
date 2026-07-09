@@ -4,7 +4,7 @@ import { fetchNavigation } from '@/lib/api/system'
 import { useAuthStore } from '@/lib/auth-store'
 import { useUIStore } from '@/lib/ui-store'
 import { cn } from '@/lib/utils'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   LayoutDashboard,
   LogOut,
@@ -16,13 +16,18 @@ import {
   ChevronRight,
   Star,
   Clock,
+  Boxes,
+  Search,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getFavorites, getRecentDoctypes, recordDoctypeVisit, toggleFavorite, isFavorite } from '@/lib/recent-doctypes'
 import { LogoMark } from '@/components/ui/LogoMark'
+import type { ModuleGroup } from '@/types/api'
 
 function NavItem({
   to,
@@ -130,7 +135,7 @@ function FlyoutMenu({ label, items, collapsed, icon: Icon, isOpen, onOpen, onClo
   )
 }
 
-export function Sidebar() {
+export function Sidebar({ mobile = false }: { mobile?: boolean }) {
   const { data, isLoading } = useQuery({
     queryKey: ['navigation'],
     queryFn: fetchNavigation,
@@ -138,7 +143,11 @@ export function Sidebar() {
   })
 
   const { user, logout } = useAuthStore()
-  const { theme, toggleTheme, sidebarCollapsed, setSidebarCollapsed, setSidebarOpen } = useUIStore()
+  const { theme, toggleTheme, sidebarCollapsed, setSidebarCollapsed, setSidebarOpen, activeModule, setActiveModule } = useUIStore()
+  const [navQuery, setNavQuery] = useState('')
+  const [favorites, setFavorites] = useState(getFavorites())
+  const [recent, setRecent] = useState(getRecentDoctypes())
+  const collapsed = mobile ? false : sidebarCollapsed
 
   // Accordion: only one menu open at a time — opening a menu closes others.
   const [openMenu, setOpenMenu] = useState<string | null>(null)
@@ -146,6 +155,73 @@ export function Sidebar() {
   const handleMenuClose = (label: string) => {
     setOpenMenu(prev => prev === label ? null : prev)
   }
+
+  useEffect(() => {
+    if (activeModule && (!openMenu || openMenu.startsWith('module:'))) {
+      setOpenMenu(`module:${activeModule}`)
+    }
+  }, [activeModule, openMenu])
+
+  useEffect(() => {
+    const onStorage = () => {
+      setFavorites(getFavorites())
+      setRecent(getRecentDoctypes())
+    }
+    window.addEventListener('storage', onStorage)
+    const interval = setInterval(onStorage, 5000)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      clearInterval(interval)
+    }
+  }, [])
+
+  const normalizedQuery = navQuery.trim().toLowerCase()
+  const adminItems = useMemo(() => ([
+    { name: 'doctypes', label: 'DocTypes', to: '/workspace/admin/doctypes' },
+    { name: 'permissions', label: 'Permissions', to: '/workspace/admin/permissions' },
+    { name: 'workflows', label: 'Workflows', to: '/workspace/admin/workflows' },
+    { name: 'versions', label: 'Versions', to: '/workspace/admin/versions' },
+    { name: 'users', label: 'Users', to: '/workspace/admin/users' },
+    { name: 'scripts', label: 'Scripts', to: '/workspace/admin/scripts' },
+    { name: 'extensions', label: 'Extensions', to: '/workspace/admin/extensions' },
+    { name: 'secrets', label: 'Secrets', to: '/workspace/admin/secrets' },
+    { name: 'analytics', label: 'Analytics', to: '/workspace/admin/analytics' },
+  ]), [])
+  const filteredAdminItems = useMemo(() => {
+    if (!normalizedQuery) return adminItems
+    return adminItems.filter((item) =>
+      item.label.toLowerCase().includes(normalizedQuery) ||
+      item.name.toLowerCase().includes(normalizedQuery),
+    )
+  }, [adminItems, normalizedQuery])
+  const filteredModules = useMemo(() => {
+    if (!normalizedQuery) return data?.modules ?? []
+    return (data?.modules ?? [])
+      .map((module) => {
+        const matchesModule = module.label.toLowerCase().includes(normalizedQuery) || module.module.toLowerCase().includes(normalizedQuery)
+        const doctypes = module.doctypes.filter((doctype) =>
+          doctype.label.toLowerCase().includes(normalizedQuery) ||
+          doctype.name.toLowerCase().includes(normalizedQuery),
+        )
+        if (!matchesModule && doctypes.length === 0) return null
+        return { ...module, doctypes: matchesModule ? module.doctypes : doctypes }
+      })
+      .filter(Boolean) as ModuleGroup[]
+  }, [data?.modules, normalizedQuery])
+  const filteredFavorites = useMemo(() => {
+    if (!normalizedQuery) return favorites
+    return favorites.filter((item) =>
+      item.label.toLowerCase().includes(normalizedQuery) ||
+      item.name.toLowerCase().includes(normalizedQuery),
+    )
+  }, [favorites, normalizedQuery])
+  const filteredRecent = useMemo(() => {
+    if (!normalizedQuery) return recent
+    return recent.filter((item) =>
+      item.label.toLowerCase().includes(normalizedQuery) ||
+      item.name.toLowerCase().includes(normalizedQuery),
+    )
+  }, [recent, normalizedQuery])
 
   const NavSkeleton = () => (
     <div className="space-y-2 p-4">
@@ -160,73 +236,138 @@ export function Sidebar() {
     <aside
       className={cn(
         'flex h-full flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-200',
-        sidebarCollapsed ? 'w-16' : 'w-52',
+        mobile ? 'w-full border-r-0' : sidebarCollapsed ? 'w-16' : 'w-52',
       )}
     >
       {/* Header */}
       <div className="flex h-14 items-center justify-between px-4">
-        {!sidebarCollapsed && (
+        {!collapsed && (
           <span className="text-lg font-bold tracking-tight truncate flex items-center gap-2">
             <LogoMark size={20} />
             {data?.branding?.app_name || 'Kora'}
           </span>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="h-8 w-8 shrink-0"
-        >
-          {sidebarCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-        </Button>
+        {mobile ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(false)}
+            className="h-8 w-8 shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="h-8 w-8 shrink-0"
+          >
+            {sidebarCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </Button>
+        )}
       </div>
       <Separator />
 
       {/* Navigation + Admin — both scrollable */}
       <ScrollArea className="flex-1">
         <nav className="space-y-0.5 p-2">
-          <NavItem to="/workspace" collapsed={sidebarCollapsed}>
+          <NavItem to="/workspace" collapsed={collapsed}>
             <LayoutDashboard className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && 'Home'}
+            {!collapsed && 'Home'}
           </NavItem>
+
+          {!collapsed && (
+            <div className="px-1 pb-2 pt-1">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={navQuery}
+                  onChange={(e) => setNavQuery(e.target.value)}
+                  placeholder="Search navigation..."
+                  className="h-9 border-sidebar-border bg-sidebar pl-9 pr-9 text-sm text-sidebar-foreground placeholder:text-muted-foreground"
+                />
+                {navQuery.trim() && (
+                  <button
+                    type="button"
+                    className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    onClick={() => setNavQuery('')}
+                    aria-label="Clear navigation search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              {normalizedQuery && (
+                <p className="mt-1 px-1 text-[11px] text-muted-foreground">
+                  Filtering modules, favorites, recent items, and admin links.
+                </p>
+              )}
+            </div>
+          )}
 
           {isLoading && <NavSkeleton />}
 
           {/* Favorites */}
-          <FavoritesFlyout collapsed={sidebarCollapsed} isOpen={openMenu === 'Favorites'} onOpen={() => handleMenuOpen('Favorites')} onClose={() => handleMenuClose('Favorites')} />
+          {filteredFavorites.length > 0 && (
+            <FavoritesFlyout
+              collapsed={collapsed}
+              items={filteredFavorites}
+              isOpen={openMenu === 'Favorites'}
+              onOpen={() => handleMenuOpen('Favorites')}
+              onClose={() => handleMenuClose('Favorites')}
+            />
+          )}
 
           {/* Recently Accessed */}
-          <RecentFlyout collapsed={sidebarCollapsed} isOpen={openMenu === 'Recent'} onOpen={() => handleMenuOpen('Recent')} onClose={() => handleMenuClose('Recent')} />
-
-          {data?.modules && data.modules.length > 0 && (
-            <FlyoutMenu
-              label="Modules"
-              items={data.modules.flatMap(m => m.doctypes)}
-              collapsed={sidebarCollapsed}
-              isOpen={openMenu === 'Modules'}
-              onOpen={() => handleMenuOpen('Modules')}
-              onClose={() => handleMenuClose('Modules')}
-              onItemClick={(item) => recordDoctypeVisit(item)}
+          {filteredRecent.length > 0 && (
+            <RecentFlyout
+              collapsed={collapsed}
+              items={filteredRecent}
+              isOpen={openMenu === 'Recent'}
+              onOpen={() => handleMenuOpen('Recent')}
+              onClose={() => handleMenuClose('Recent')}
             />
+          )}
+
+          {filteredModules.length > 0 && (
+            <div className="space-y-0.5">
+              {!collapsed && (
+                <div className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Modules
+                </div>
+              )}
+              {filteredModules.map((module) => (
+                <ModuleSection
+                  key={module.module}
+                  module={module}
+                  collapsed={collapsed}
+                  isOpen={openMenu === `module:${module.module}`}
+                  isActive={activeModule === module.module}
+                  onOpen={() => handleMenuOpen(`module:${module.module}`)}
+                  onClose={() => handleMenuClose(`module:${module.module}`)}
+                  onItemClick={(item) => {
+                    setActiveModule(module.module)
+                    recordDoctypeVisit(item)
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {normalizedQuery && !filteredModules.length && !filteredFavorites.length && !filteredRecent.length && !filteredAdminItems.length && (
+            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+              No navigation matches.
+            </div>
           )}
 
           <Separator className="my-2" />
 
           {/* Administrator flyout */}
-          <FlyoutMenu
+            <FlyoutMenu
             label="Administrator"
-            items={[
-              { name: 'doctypes', label: 'DocTypes', to: '/workspace/admin/doctypes' },
-              { name: 'permissions', label: 'Permissions', to: '/workspace/admin/permissions' },
-              { name: 'workflows', label: 'Workflows', to: '/workspace/admin/workflows' },
-              { name: 'versions', label: 'Versions', to: '/workspace/admin/versions' },
-              { name: 'users', label: 'Users', to: '/workspace/admin/users' },
-              { name: 'scripts', label: 'Scripts', to: '/workspace/admin/scripts' },
-              { name: 'extensions', label: 'Extensions', to: '/workspace/admin/extensions' },
-              { name: 'secrets', label: 'Secrets', to: '/workspace/admin/secrets' },
-              { name: 'analytics', label: 'Analytics', to: '/workspace/admin/analytics' },
-            ]}
-            collapsed={sidebarCollapsed}
+            items={filteredAdminItems}
+            collapsed={collapsed}
             isOpen={openMenu === 'Administrator'}
             onOpen={() => handleMenuOpen('Administrator')}
             onClose={() => handleMenuClose('Administrator')}
@@ -239,11 +380,11 @@ export function Sidebar() {
             onClick={() => setSidebarOpen(false)}
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-              sidebarCollapsed && 'justify-center px-2',
+              collapsed && 'justify-center px-2',
             )}
           >
             <BookOpen className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && 'API Docs'}
+            {!collapsed && 'API Docs'}
           </a>
         </nav>
       </ScrollArea>
@@ -258,14 +399,14 @@ export function Sidebar() {
           onClick={toggleTheme}
           className={cn(
             'w-full justify-start gap-2 text-xs',
-            sidebarCollapsed && 'justify-center',
+            collapsed && 'justify-center',
           )}
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          {!sidebarCollapsed && (theme === 'dark' ? 'Light mode' : 'Dark mode')}
+          {!collapsed && (theme === 'dark' ? 'Light mode' : 'Dark mode')}
         </Button>
 
-        {!sidebarCollapsed && user && (
+        {!collapsed && user && (
           <p className="px-3 text-xs text-muted-foreground truncate" title={user.email}>
             {user.full_name || user.name}
           </p>
@@ -277,11 +418,11 @@ export function Sidebar() {
           onClick={logout}
           className={cn(
             'w-full justify-start gap-2 text-xs text-muted-foreground',
-            sidebarCollapsed && 'justify-center',
+            collapsed && 'justify-center',
           )}
         >
           <LogOut className="h-4 w-4" />
-          {!sidebarCollapsed && 'Logout'}
+          {!collapsed && 'Logout'}
         </Button>
       </div>
     </aside>
@@ -322,21 +463,81 @@ function FlyoutRow({ item, onItemClick }: { item: FlyoutItem; onItemClick?: (ite
   )
 }
 
-function FavoritesFlyout({ collapsed, isOpen, onOpen, onClose }: { collapsed: boolean; isOpen: boolean; onOpen: () => void; onClose: () => void }) {
-  const [favs, setFavs] = useState(getFavorites())
+function ModuleSection({
+  module,
+  collapsed,
+  isOpen,
+  isActive,
+  onOpen,
+  onClose,
+  onItemClick,
+}: {
+  module: ModuleGroup
+  collapsed: boolean
+  isOpen: boolean
+  isActive: boolean
+  onOpen: () => void
+  onClose: () => void
+  onItemClick: (item: FlyoutItem) => void
+}) {
+  const items = module.doctypes.map((doctype) => ({
+    name: doctype.name,
+    label: doctype.label,
+    icon: doctype.icon,
+  }))
 
-  // Re-render when localStorage changes (e.g., from another component)
-  useEffect(() => {
-    const onStorage = () => setFavs(getFavorites())
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [])
+  if (collapsed) {
+    return (
+      <FlyoutMenu
+        label={module.label}
+        icon={Boxes}
+        items={items}
+        collapsed={collapsed}
+        isOpen={isOpen}
+        onOpen={onOpen}
+        onClose={onClose}
+        onItemClick={onItemClick}
+      />
+    )
+  }
 
+  return (
+    <div className="rounded-lg">
+      <button
+        onClick={() => isOpen ? onClose() : onOpen()}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+          isActive && 'bg-sidebar-accent/70 text-sidebar-accent-foreground',
+        )}
+      >
+        <Boxes className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-left">{module.label}</span>
+        <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {items.length}
+        </span>
+        <ChevronRight className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-90')} />
+      </button>
+
+      {isOpen && (
+        <div className="mt-1 space-y-0.5 border-l border-sidebar-border/70 pl-3 ml-5">
+          {items.length === 0 && (
+            <div className="px-3 py-2 text-xs italic text-muted-foreground">No doctypes yet</div>
+          )}
+          {items.map((item) => (
+            <FlyoutRow key={item.name} item={item} onItemClick={onItemClick} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FavoritesFlyout({ collapsed, items, isOpen, onOpen, onClose }: { collapsed: boolean; items: FlyoutItem[]; isOpen: boolean; onOpen: () => void; onClose: () => void }) {
   return (
     <FlyoutMenu
       label="Favorites"
       icon={Star}
-      items={favs}
+      items={items}
       collapsed={collapsed}
       isOpen={isOpen}
       onOpen={onOpen}
@@ -346,25 +547,12 @@ function FavoritesFlyout({ collapsed, isOpen, onOpen, onClose }: { collapsed: bo
   )
 }
 
-function RecentFlyout({ collapsed, isOpen, onOpen, onClose }: { collapsed: boolean; isOpen: boolean; onOpen: () => void; onClose: () => void }) {
-  const [recent, setRecent] = useState(getRecentDoctypes())
-
-  useEffect(() => {
-    const onStorage = () => setRecent(getRecentDoctypes())
-    window.addEventListener('storage', onStorage)
-    // Poll every 5s since storage events don't fire in same tab
-    const interval = setInterval(() => setRecent(getRecentDoctypes()), 5000)
-    return () => {
-      window.removeEventListener('storage', onStorage)
-      clearInterval(interval)
-    }
-  }, [])
-
+function RecentFlyout({ collapsed, items, isOpen, onOpen, onClose }: { collapsed: boolean; items: FlyoutItem[]; isOpen: boolean; onOpen: () => void; onClose: () => void }) {
   return (
     <FlyoutMenu
       label="Recent"
       icon={Clock}
-      items={recent}
+      items={items}
       collapsed={collapsed}
       isOpen={isOpen}
       onOpen={onOpen}

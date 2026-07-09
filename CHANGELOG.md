@@ -1,3 +1,17 @@
+## v0.8.3-alpha — 2026-07-09
+
+### Features
+- feat: context-aware AI co-creator with route-aware suggestions
+- feat: mobile-first workspace shell with sheet-based navigation
+- feat: sectioned create/edit forms with sticky progress and draft recovery
+- feat: IndexedDB-backed draft autosave with local fallback metadata
+- feat: markdown-rich assistant responses with GitHub Flavored Markdown
+
+### Fixes
+- fix: child table row updates now preserve the actual field name
+- fix: draft autosave no longer depends on synchronous localStorage for large payloads
+- fix: restore tables, code, links, and emphasis in assistant replies
+
 ## v0.8.2-alpha — 2026-07-08
 
 ### Features

@@ -457,7 +457,7 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 	case "validate_doctype_yaml":
 		yamlStr, _ := args["yaml"].(string)
 		return executeValidateYAML(yamlStr)
-	case "analytics_insights":
+	case "get_analytics_insights", "analytics_insights":
 		doctypeName, _ := args["doctype"].(string)
 		return executeAnalyticsInsights(tx, reg, doctypeName, siteName)
 	case "create_doctype_draft":

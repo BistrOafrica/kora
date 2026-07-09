@@ -17,6 +17,15 @@ type ChatRequest struct {
 	Message string        `json:"message"`
 	History []ChatMessage `json:"history,omitempty"`
 	Model   string        `json:"model,omitempty"` // override default model
+	Context ChatContext   `json:"context,omitempty"`
+}
+
+// ChatContext carries lightweight UI context from the workspace shell.
+type ChatContext struct {
+	Pathname     string `json:"pathname,omitempty"`
+	ShellMode    string `json:"shellMode,omitempty"`
+	Doctype      string `json:"doctype,omitempty"`
+	DocumentName string `json:"documentName,omitempty"`
 }
 
 // ChatMessage is a single turn in the conversation.
@@ -64,9 +73,25 @@ func HandleChat(c *gin.Context, tx *orm.TxManager, reg *doctype.Registry, siteNa
 	sanitizedHistory := sanitizeHistory(req.History, cfg.HistoryLimit)
 
 	// Build messages array with system instructions.
+	contextBlurb := ""
+	if req.Context.Pathname != "" || req.Context.Doctype != "" || req.Context.DocumentName != "" {
+		contextBlurb = fmt.Sprintf(`
+
+CURRENT PAGE CONTEXT:
+- pathname: %s
+- shell mode: %s
+- doctype: %s
+- document: %s
+Use this context to stay grounded in the current screen and avoid asking the user to repeat what is already visible.`,
+			req.Context.Pathname,
+			req.Context.ShellMode,
+			req.Context.Doctype,
+			req.Context.DocumentName,
+		)
+	}
 	messages := []map[string]any{{
 		"role": "system",
-		"content": `You are a helpful AI assistant for a business application called Kora. Help users manage their data — create, find, update, and analyze business records.
+		"content": `You are a helpful AI assistant for a business application called Kora. Help users manage their data — create, find, update, and analyze business records.` + contextBlurb + `
 
 RULES (follow strictly):
 - Be CONCISE. One sentence when possible. No markdown tables unless showing actual data results.
@@ -433,5 +458,4 @@ func findLastAssistantContent(messages []map[string]any) string {
 	}
 	return ""
 }
-
 

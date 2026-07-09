@@ -7,13 +7,15 @@ interface FormSectionProps {
   children: React.ReactNode
   defaultOpen?: boolean
   badge?: string
+  id?: string
+  className?: string
 }
 
-export function FormSection({ title, children, defaultOpen = true, badge }: FormSectionProps) {
+export function FormSection({ title, children, defaultOpen = true, badge, id, className }: FormSectionProps) {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div id={id} className={cn('border rounded-lg overflow-hidden', className)}>
       <button
         type="button"
         onClick={() => setOpen(!open)}

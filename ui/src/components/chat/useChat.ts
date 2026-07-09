@@ -10,13 +10,20 @@ export interface ChatMessage {
   content: string
 }
 
+export interface ChatContext {
+  pathname?: string
+  shellMode?: string
+  doctype?: string
+  documentName?: string
+}
+
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const historyRef = useRef<ChatMessage[]>([])
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, context?: ChatContext) => {
     const userMsg: ChatMessage = { role: 'user', content: text }
     const updated = [...historyRef.current, userMsg]
     historyRef.current = updated
@@ -35,6 +42,7 @@ export function useChat() {
         body: JSON.stringify({
           message: text,
           history: historyRef.current.slice(0, -1), // exclude the just-added user message
+          context,
         }),
       })
 
