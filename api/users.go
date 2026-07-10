@@ -159,7 +159,7 @@ func (h *Handler) HandleUserCreate(c *gin.Context) {
 	}
 
 	_, err = db.Exec(
-		"INSERT INTO _kora_user (name, site, email, password_hash, full_name, enabled, roles) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO _kora_user (name, site, email, password_hash, full_name, enabled, email_verified_at, roles) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
 		name, site, req.Email, passwordHash, req.FullName, enabled, rolesStr,
 	)
 	if err != nil {
@@ -268,7 +268,7 @@ func (h *Handler) HandleUserUpdate(c *gin.Context) {
 			internalError(c, "hashing password", err)
 			return
 		}
-		db.Exec("UPDATE _kora_user SET password_hash = ?, modified = CURRENT_TIMESTAMP WHERE site = ? AND name = ?", passwordHash, site, name)
+		db.Exec("UPDATE _kora_user SET password_hash = ?, email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP), modified = CURRENT_TIMESTAMP WHERE site = ? AND name = ?", passwordHash, site, name)
 	}
 
 	// Fetch updated user.
@@ -380,7 +380,7 @@ func (h *Handler) HandleUserResetPassword(c *gin.Context) {
 		return
 	}
 
-	if _, err := db.Exec("UPDATE _kora_user SET password_hash = ?, modified = CURRENT_TIMESTAMP WHERE site = ? AND name = ?", passwordHash, site, name); err != nil {
+	if _, err := db.Exec("UPDATE _kora_user SET password_hash = ?, email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP), modified = CURRENT_TIMESTAMP WHERE site = ? AND name = ?", passwordHash, site, name); err != nil {
 		internalError(c, "updating password", err)
 		return
 	}

@@ -566,11 +566,13 @@ func (d *PostgresDialect) SystemTableSQL() []string {
 			"password_hash" VARCHAR(255) NOT NULL,
 			"full_name" VARCHAR(255) NOT NULL DEFAULT '',
 			"enabled" SMALLINT NOT NULL DEFAULT 1,
+			"email_verified_at" TIMESTAMP,
 			"roles" TEXT,
 			"creation" TIMESTAMP NOT NULL DEFAULT NOW(),
 			"modified" TIMESTAMP NOT NULL DEFAULT NOW()
 		)`,
 		`ALTER TABLE "_kora_user" ADD COLUMN "site" VARCHAR(140) NOT NULL DEFAULT ''`,
+		`ALTER TABLE "_kora_user" ADD COLUMN "email_verified_at" TIMESTAMP`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS "idx_site_email" ON "_kora_user" ("site", "email")`,
 
 		// _kora_session
@@ -585,6 +587,21 @@ func (d *PostgresDialect) SystemTableSQL() []string {
 		`ALTER TABLE "_kora_session" ADD COLUMN "site" VARCHAR(140) NOT NULL DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS "idx_user" ON "_kora_session" ("user")`,
 		`CREATE INDEX IF NOT EXISTS "idx_expires" ON "_kora_session" ("expires_at")`,
+
+		// _kora_magic_link
+		`CREATE TABLE IF NOT EXISTS "_kora_magic_link" (
+			"id" VARCHAR(255) PRIMARY KEY,
+			"site" VARCHAR(140) NOT NULL DEFAULT '',
+			"email" VARCHAR(255) NOT NULL DEFAULT '',
+			"token_hash" VARCHAR(64) NOT NULL,
+			"expires_at" TIMESTAMP NOT NULL,
+			"used_at" TIMESTAMP,
+			"revoked_at" TIMESTAMP,
+			"created_at" TIMESTAMP NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS "idx_magic_token_hash" ON "_kora_magic_link" ("token_hash")`,
+		`CREATE INDEX IF NOT EXISTS "idx_magic_site_email" ON "_kora_magic_link" ("site", "email")`,
+		`CREATE INDEX IF NOT EXISTS "idx_magic_expires" ON "_kora_magic_link" ("expires_at")`,
 
 		// _kora_workflow
 		`CREATE TABLE IF NOT EXISTS "_kora_workflow" (

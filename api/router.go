@@ -106,11 +106,11 @@ func (h *Handler) siteTx(c *gin.Context) *orm.TxManager {
 	userRole, _ := c.Get("user_role")
 	if db != nil && reg != nil {
 		if sqlDB, ok := db.(*sql.DB); ok {
-				if r, ok := reg.(*doctype.Registry); ok {
+			if r, ok := reg.(*doctype.Registry); ok {
 				tm := &orm.TxManager{DB: sqlDB, Registry: r, Dialect: h.TxManager.Dialect}
 				tm.Context = c.Request.Context()
 				if siteNameStr, ok := siteName.(string); ok {
-				tm.SiteName = siteNameStr
+					tm.SiteName = siteNameStr
 				}
 				if h.SiteEventBuses != nil {
 					if siteNameStr, ok := siteName.(string); ok {
@@ -163,8 +163,12 @@ var APIMaxLimit = 500
 
 // SetAPILimits sets pagination limits from config.
 func SetAPILimits(def, max int) {
-	if def > 0 { APIDefaultLimit = def }
-	if max > 0 { APIMaxLimit = max }
+	if def > 0 {
+		APIDefaultLimit = def
+	}
+	if max > 0 {
+		APIMaxLimit = max
+	}
 }
 
 // internalError logs the real error server-side and returns a generic 500 response.
@@ -185,8 +189,8 @@ type Meta struct {
 
 // Response is the standard API response envelope.
 type Response struct {
-	Data any    `json:"data,omitempty"`
-	Meta *Meta  `json:"meta,omitempty"`
+	Data any   `json:"data,omitempty"`
+	Meta *Meta `json:"meta,omitempty"`
 }
 
 // ErrorResponse is the standard error response envelope.
@@ -201,13 +205,18 @@ type ErrorResponse struct {
 // whether the operation is owner-scoped. Returns true if forbidden (and writes response).
 func checkPerm(c *gin.Context, registry *doctype.Registry, docType, operation string) (ownerOnly bool, forbidden bool) {
 	// Extension auth: check scoped api_permissions.
-	if c.GetString("auth_type") == "extension" {
-		permsVal, exists := c.Get("extension_permissions")
+	authType := c.GetString("auth_type")
+	if authType == "extension" || authType == "channel_session" {
+		permsKey := "extension_permissions"
+		if authType == "channel_session" {
+			permsKey = "channel_permissions"
+		}
+		permsVal, exists := c.Get(permsKey)
 		perms, ok := permsVal.([]doctype.Permission)
 		if !exists || !ok || !auth.HasExtensionPermission(perms, docType, operation) {
 			c.JSON(http.StatusForbidden, ErrorResponse{
 				Error: map[string]string{
-					"message": fmt.Sprintf("Extension does not have %s permission on %s", operation, docType),
+					"message": fmt.Sprintf("Token does not have %s permission on %s", operation, docType),
 				},
 			})
 			return false, true
@@ -288,7 +297,7 @@ func (h *Handler) HandleList(c *gin.Context) {
 	// Filter fields if requested.
 	var result []map[string]any
 	for _, doc := range docs {
-		item := docToMap(doc, dt, h.siteRegistry(c),requestedFields)
+		item := docToMap(doc, dt, h.siteRegistry(c), requestedFields)
 		result = append(result, item)
 	}
 
@@ -342,7 +351,7 @@ func (h *Handler) HandleGet(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, Response{
-		Data: docToMap(doc, dt, h.siteRegistry(c),nil),
+		Data: docToMap(doc, dt, h.siteRegistry(c), nil),
 		Meta: &Meta{DocType: doctypeName},
 	})
 }
@@ -439,7 +448,7 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, Response{
-		Data: docToMap(doc, dt, h.siteRegistry(c),nil),
+		Data: docToMap(doc, dt, h.siteRegistry(c), nil),
 		Meta: &Meta{DocType: doctypeName},
 	})
 }
@@ -558,7 +567,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, Response{
-		Data: docToMap(doc, dt, h.siteRegistry(c),nil),
+		Data: docToMap(doc, dt, h.siteRegistry(c), nil),
 		Meta: &Meta{DocType: doctypeName},
 	})
 }
@@ -782,6 +791,15 @@ func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doc
 	// AI Chat.
 	apiGroup.POST("/chat", handler.HandleChat)
 
+	channel := apiGroup.Group("/internal/channel")
+	{
+		channel.POST("/sessions/issue", handler.HandleChannelSessionIssue)
+		channel.POST("/sessions/revoke", handler.HandleChannelSessionRevoke)
+		channel.GET("/tools", handler.HandleChannelTools)
+		channel.POST("/query", handler.HandleChannelQuery)
+		channel.POST("/mutate", handler.HandleChannelMutate)
+	}
+
 	// Custom API methods (user-defined scripts).
 	// Scripts are registered as api_method in _kora_script, accessible at /api/method/{name}.
 	method := apiGroup.Group("/method")
@@ -826,8 +844,8 @@ func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doc
 		ext.POST("/:name/rotate-secret", handler.HandleExtensionRotateSecret)
 	}
 
-		// Analytics endpoints (no-op if siteBuses is empty).
-		RegisterAnalyticsRoutes(apiGroup, registry, txManager.DB, siteBuses, txManager.Dialect)
+	// Analytics endpoints (no-op if siteBuses is empty).
+	RegisterAnalyticsRoutes(apiGroup, registry, txManager.DB, siteBuses, txManager.Dialect)
 }
 
 // HandleWorkflowAction handles POST /api/resource/{doctype}/{name}/workflow_action
@@ -986,7 +1004,7 @@ func (h *Handler) HandleWorkflowAction(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, Response{
-		Data: docToMap(doc, dt, h.siteRegistry(c),nil),
+		Data: docToMap(doc, dt, h.siteRegistry(c), nil),
 		Meta: &Meta{DocType: doctypeName},
 	})
 }
@@ -1392,8 +1410,18 @@ func (h *Handler) HandleMethod(c *gin.Context) {
 	// Log execution.
 	if store != nil {
 		_ = store.LogExecution(siteNameStr, *rec, "", "", "", userStr, durationMs,
-			func() string { if err != nil { return "error" }; return "success" }(),
-			func() string { if err != nil { return err.Error() }; return "" }())
+			func() string {
+				if err != nil {
+					return "error"
+				}
+				return "success"
+			}(),
+			func() string {
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}())
 	}
 
 	if err != nil {
@@ -1416,4 +1444,3 @@ func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
-

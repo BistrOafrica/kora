@@ -1,7 +1,12 @@
 package email
 
 import (
+	"bufio"
+	"fmt"
+	"net"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewSender(t *testing.T) {
@@ -150,5 +155,104 @@ func TestInterpolate(t *testing.T) {
 				t.Errorf("interpolate(%q, %v) = %q, want %q", tt.tmpl, tt.data, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestSend_WithPlainSMTPServer(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	done := make(chan string, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			done <- ""
+			return
+		}
+		defer conn.Close()
+
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+		r := bufio.NewReader(conn)
+		w := func(s string) {
+			_, _ = fmt.Fprint(conn, s)
+		}
+
+		w("220 localhost ESMTP\r\n")
+		var data strings.Builder
+		inData := false
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				break
+			}
+			line = strings.TrimRight(line, "\r\n")
+			switch {
+			case strings.HasPrefix(line, "EHLO ") || strings.HasPrefix(line, "HELO "):
+				w("250-localhost\r\n250 OK\r\n")
+			case strings.HasPrefix(line, "MAIL FROM:"):
+				w("250 OK\r\n")
+			case strings.HasPrefix(line, "RCPT TO:"):
+				w("250 OK\r\n")
+			case line == "DATA":
+				w("354 End data with <CR><LF>.<CR><LF>\r\n")
+				inData = true
+			case inData && line == ".":
+				w("250 OK\r\n")
+				done <- data.String()
+			case inData:
+				data.WriteString(line)
+				data.WriteString("\n")
+			case line == "QUIT":
+				w("221 Bye\r\n")
+				return
+			default:
+				w("250 OK\r\n")
+			}
+		}
+		done <- data.String()
+	}()
+
+	port := ln.Addr().(*net.TCPAddr).Port
+	s := NewSender(&Config{
+		Host:    "127.0.0.1",
+		Port:    port,
+		From:    "noreply@example.com",
+		TLSMode: "plain",
+	})
+	err = s.Send(&Message{
+		To:      []string{"recipient@example.com"},
+		Subject: "Hello",
+		Body:    "Magic link body",
+	})
+	if err != nil {
+		t.Fatalf("Send returned error: %v", err)
+	}
+
+	select {
+	case got := <-done:
+		if !strings.Contains(got, "Subject: Hello") {
+			t.Fatalf("expected message to contain subject, got %q", got)
+		}
+		if !strings.Contains(got, "Magic link body") {
+			t.Fatalf("expected message body, got %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for smtp server")
+	}
+}
+
+func TestMagicLinkTemplate(t *testing.T) {
+	subject, textBody, htmlBody := MagicLinkTemplate("Kora", "https://example.com/link", 15)
+	if !strings.Contains(subject, "Kora") {
+		t.Fatalf("expected subject to mention app name, got %q", subject)
+	}
+	if !strings.Contains(textBody, "https://example.com/link") {
+		t.Fatalf("expected text body to contain link, got %q", textBody)
+	}
+	if !strings.Contains(htmlBody, "Sign in to Kora") {
+		t.Fatalf("expected html body to contain heading, got %q", htmlBody)
 	}
 }

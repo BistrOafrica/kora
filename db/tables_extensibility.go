@@ -74,6 +74,45 @@ func ExtensibilityTablesMySQL() []string {
 			INDEX idx_ext_access_token (access_token)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
+		`CREATE TABLE IF NOT EXISTS _kora_channel_session (
+			id VARCHAR(64) PRIMARY KEY,
+			site VARCHAR(140) NOT NULL DEFAULT '',
+			client_name VARCHAR(140) NOT NULL DEFAULT '',
+			conversation_key VARCHAR(255) NOT NULL DEFAULT '',
+			provider VARCHAR(80) NOT NULL DEFAULT '',
+			sender_address VARCHAR(255) NOT NULL DEFAULT '',
+			token_hash CHAR(64) NOT NULL,
+			api_permissions JSON,
+			trusted_until DATETIME(6) NOT NULL,
+			sensitive_until DATETIME(6),
+			revoked_at DATETIME(6),
+			revoked_reason VARCHAR(255) NOT NULL DEFAULT '',
+			created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+			last_used_at DATETIME(6),
+			UNIQUE KEY uq_channel_token_hash (token_hash),
+			KEY idx_channel_site (site),
+			KEY idx_channel_conversation (conversation_key),
+			KEY idx_channel_trusted_until (trusted_until)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+		`CREATE TABLE IF NOT EXISTS _kora_channel_audit (
+			id VARCHAR(64) PRIMARY KEY,
+			site VARCHAR(140) NOT NULL DEFAULT '',
+			channel_session_id VARCHAR(64) NOT NULL DEFAULT '',
+			conversation_key VARCHAR(255) NOT NULL DEFAULT '',
+			provider VARCHAR(80) NOT NULL DEFAULT '',
+			sender_address VARCHAR(255) NOT NULL DEFAULT '',
+			tool_name VARCHAR(255) NOT NULL DEFAULT '',
+			operation_kind VARCHAR(50) NOT NULL DEFAULT '',
+			status VARCHAR(50) NOT NULL DEFAULT '',
+			request_summary TEXT,
+			response_summary TEXT,
+			error_message TEXT,
+			created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+			KEY idx_channel_audit_site (site, created_at),
+			KEY idx_channel_audit_session (channel_session_id, created_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
 		`CREATE TABLE IF NOT EXISTS _kora_webhook_delivery (
 			id VARCHAR(26) PRIMARY KEY,
 			site VARCHAR(140) NOT NULL DEFAULT '',
@@ -172,6 +211,45 @@ func ExtensibilityTablesLibSQL() []string {
 		`CREATE INDEX IF NOT EXISTS idx_ext_site ON _kora_extension (site)`,
 		`CREATE INDEX IF NOT EXISTS idx_ext_active ON _kora_extension (is_active)`,
 		`CREATE INDEX IF NOT EXISTS idx_ext_access_token ON _kora_extension (access_token)`,
+
+		`CREATE TABLE IF NOT EXISTS _kora_channel_session (
+			id TEXT PRIMARY KEY,
+			site TEXT NOT NULL DEFAULT '',
+			client_name TEXT NOT NULL DEFAULT '',
+			conversation_key TEXT NOT NULL DEFAULT '',
+			provider TEXT NOT NULL DEFAULT '',
+			sender_address TEXT NOT NULL DEFAULT '',
+			token_hash TEXT NOT NULL,
+			api_permissions TEXT,
+			trusted_until TEXT NOT NULL,
+			sensitive_until TEXT,
+			revoked_at TEXT,
+			revoked_reason TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			last_used_at TEXT
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_token_hash ON _kora_channel_session (token_hash)`,
+		`CREATE INDEX IF NOT EXISTS idx_channel_site ON _kora_channel_session (site)`,
+		`CREATE INDEX IF NOT EXISTS idx_channel_conversation ON _kora_channel_session (conversation_key)`,
+		`CREATE INDEX IF NOT EXISTS idx_channel_trusted_until ON _kora_channel_session (trusted_until)`,
+
+		`CREATE TABLE IF NOT EXISTS _kora_channel_audit (
+			id TEXT PRIMARY KEY,
+			site TEXT NOT NULL DEFAULT '',
+			channel_session_id TEXT NOT NULL DEFAULT '',
+			conversation_key TEXT NOT NULL DEFAULT '',
+			provider TEXT NOT NULL DEFAULT '',
+			sender_address TEXT NOT NULL DEFAULT '',
+			tool_name TEXT NOT NULL DEFAULT '',
+			operation_kind TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT '',
+			request_summary TEXT,
+			response_summary TEXT,
+			error_message TEXT,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_channel_audit_site ON _kora_channel_audit (site, created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_channel_audit_session ON _kora_channel_audit (channel_session_id, created_at)`,
 
 		`CREATE TABLE IF NOT EXISTS _kora_webhook_delivery (
 			id TEXT PRIMARY KEY,

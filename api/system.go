@@ -28,6 +28,7 @@ func (h *Handler) HandleAuthProviders(c *gin.Context) {
 		Data: map[string]any{
 			"providers": []map[string]any{
 				{"name": "password", "label": "Email & Password"},
+				{"name": "magic_link", "label": "Magic Link"},
 			},
 		},
 	})

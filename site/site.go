@@ -109,6 +109,14 @@ type CommonConfig struct {
 	// TLS.
 	TLSMode  string `yaml:"tls_mode"`
 	TLSEmail string `yaml:"tls_email"`
+
+	// SMTP / email delivery.
+	SMTPHost     string `yaml:"smtp_host"`
+	SMTPPort     int    `yaml:"smtp_port"`
+	SMTPUsername string `yaml:"smtp_username"`
+	SMTPPassword string `yaml:"smtp_password"`
+	SMTPFrom     string `yaml:"smtp_from"`
+	SMTPTLSMode  string `yaml:"smtp_tls_mode"`
 }
 
 // Site represents a running site with its database connection and config.
@@ -216,6 +224,26 @@ func (c *CommonConfig) ApplyEnvOverrides() {
 	if v := os.Getenv("KORA_ADMIN_ROLE"); v != "" {
 		c.AdminRole = v
 	}
+	if v := os.Getenv("KORA_SMTP_HOST"); v != "" {
+		c.SMTPHost = v
+	}
+	if v := os.Getenv("KORA_SMTP_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.SMTPPort = n
+		}
+	}
+	if v := os.Getenv("KORA_SMTP_USERNAME"); v != "" {
+		c.SMTPUsername = v
+	}
+	if v := os.Getenv("KORA_SMTP_PASSWORD"); v != "" {
+		c.SMTPPassword = v
+	}
+	if v := os.Getenv("KORA_SMTP_FROM"); v != "" {
+		c.SMTPFrom = v
+	}
+	if v := os.Getenv("KORA_SMTP_TLS_MODE"); v != "" {
+		c.SMTPTLSMode = v
+	}
 	if v := os.Getenv("KORA_SESSION_HOURS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.SessionLifetimeHours = n
@@ -249,6 +277,12 @@ func CommonConfigFromEnv() *CommonConfig {
 		WriteTimeout:         getEnvInt("KORA_WRITE_TIMEOUT", 60),
 		IdleTimeout:          getEnvInt("KORA_IDLE_TIMEOUT", 120),
 		AdminRole:            getEnv("KORA_ADMIN_ROLE", "Administrator"),
+		SMTPHost:             getEnv("KORA_SMTP_HOST", ""),
+		SMTPPort:             getEnvInt("KORA_SMTP_PORT", 0),
+		SMTPUsername:         getEnv("KORA_SMTP_USERNAME", ""),
+		SMTPPassword:         getEnv("KORA_SMTP_PASSWORD", ""),
+		SMTPFrom:             getEnv("KORA_SMTP_FROM", ""),
+		SMTPTLSMode:          getEnv("KORA_SMTP_TLS_MODE", "auto"),
 	}
 }
 

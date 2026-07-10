@@ -1,6 +1,8 @@
 package ai
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -9,6 +11,23 @@ import (
 	"github.com/asenawritescode/kora/doctype"
 	"github.com/asenawritescode/kora/orm"
 )
+
+type ToolDescriptor struct {
+	ID                   string         `json:"id"`
+	Source               string         `json:"source"`
+	Name                 string         `json:"name"`
+	Description          string         `json:"description"`
+	InputSchema          map[string]any `json:"input_schema"`
+	SafetyLevel          string         `json:"safety_level"`
+	RequiresConfirmation bool           `json:"requires_confirmation"`
+	RequiresRecentAuth   bool           `json:"requires_recent_auth"`
+	ChannelAllowlist     []string       `json:"channel_allowlist"`
+}
+
+type ToolCatalog struct {
+	Version string           `json:"version"`
+	Tools   []ToolDescriptor `json:"tools"`
+}
 
 // ---------------------------------------------------------------------------
 // Tool function generation
@@ -109,6 +128,66 @@ func buildFunctions(reg *doctype.Registry) []map[string]any {
 		})
 	}
 	return funcs
+}
+
+func BuildToolCatalog(reg *doctype.Registry) ToolCatalog {
+	var catalog []ToolDescriptor
+	for _, raw := range append(buildFunctions(reg), buildSystemFunctions()...) {
+		fn, ok := raw["function"].(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := fn["name"].(string)
+		description, _ := fn["description"].(string)
+		params, _ := fn["parameters"].(map[string]any)
+		descriptor := ToolDescriptor{
+			ID:               "tenant." + name,
+			Source:           "tenant",
+			Name:             name,
+			Description:      description,
+			InputSchema:      params,
+			SafetyLevel:      classifyToolSafety(name),
+			ChannelAllowlist: []string{"web"},
+		}
+		switch {
+		case strings.HasSuffix(name, "_find"), strings.HasSuffix(name, "_list"), strings.HasSuffix(name, "_get"), name == "list_doctypes", strings.Contains(name, "analytics"):
+			descriptor.ChannelAllowlist = []string{"web", "whatsapp"}
+		case strings.HasSuffix(name, "_create"), name == "update_doctype_draft", name == "create_doctype_draft", name == "script_create":
+			descriptor.RequiresConfirmation = true
+			descriptor.RequiresRecentAuth = true
+		}
+		catalog = append(catalog, descriptor)
+	}
+	return ToolCatalog{
+		Version: toolCatalogVersion(catalog),
+		Tools:   catalog,
+	}
+}
+
+func toolCatalogVersion(catalog []ToolDescriptor) string {
+	data, err := json.Marshal(catalog)
+	if err != nil {
+		return "catalog-error"
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func ExecuteTool(tx *orm.TxManager, reg *doctype.Registry, toolName string, args map[string]any, owner, siteName string) string {
+	return executeSingleTool(tx, reg, toolName, args, owner, siteName)
+}
+
+func classifyToolSafety(name string) string {
+	switch {
+	case strings.HasSuffix(name, "_find"), strings.HasSuffix(name, "_list"), strings.HasSuffix(name, "_get"), name == "list_doctypes", strings.Contains(name, "analytics"):
+		return "safe"
+	case strings.HasSuffix(name, "_create"), strings.HasSuffix(name, "_update"):
+		return "guarded"
+	case strings.HasSuffix(name, "_delete"), name == "create_doctype_draft", name == "update_doctype_draft", name == "script_create":
+		return "admin"
+	default:
+		return "guarded"
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/asenawritescode/kora/doctype"
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/gin-gonic/gin"
 )
 
 // HandleOpenAPI returns the OpenAPI 3.x spec for the current site.
@@ -92,6 +92,66 @@ func addStaticPaths(spec *openapi3.T) {
 				openapi3.WithStatus(200, resp("Session created")),
 				openapi3.WithStatus(401, resp("Invalid credentials")),
 			),
+		},
+	})
+	spec.Paths.Set("/api/auth/providers", &openapi3.PathItem{
+		Get: &openapi3.Operation{
+			OperationID: "authProviders",
+			Summary:     "List supported authentication providers",
+			Responses:   openapi3.NewResponses(openapi3.WithStatus(200, resp("Provider list"))),
+		},
+	})
+	spec.Paths.Set("/api/auth/magic-link/request", &openapi3.PathItem{
+		Post: &openapi3.Operation{
+			OperationID: "magicLinkRequest",
+			Summary:     "Request a one-time magic sign-in link",
+			RequestBody: &openapi3.RequestBodyRef{
+				Value: openapi3.NewRequestBody().
+					WithRequired(true).
+					WithJSONSchema(openapi3.NewObjectSchema().
+						WithProperty("email", openapi3.NewStringSchema())),
+			},
+			Responses: openapi3.NewResponses(
+				openapi3.WithStatus(200, resp("Magic link queued")),
+				openapi3.WithStatus(400, resp("Invalid request")),
+			),
+		},
+	})
+	spec.Paths.Set("/api/auth/magic-link/verify", &openapi3.PathItem{
+		Post: &openapi3.Operation{
+			OperationID: "magicLinkVerify",
+			Summary:     "Verify a one-time magic sign-in link",
+			RequestBody: &openapi3.RequestBodyRef{
+				Value: openapi3.NewRequestBody().
+					WithRequired(true).
+					WithJSONSchema(openapi3.NewObjectSchema().
+						WithProperty("token", openapi3.NewStringSchema())),
+			},
+			Responses: openapi3.NewResponses(
+				openapi3.WithStatus(200, resp("Session created")),
+				openapi3.WithStatus(401, resp("Invalid or expired magic link")),
+			),
+		},
+	})
+	spec.Paths.Set("/api/auth/magic-links", &openapi3.PathItem{
+		Get: &openapi3.Operation{
+			OperationID: "magicLinksList",
+			Summary:     "List active magic links for the current account",
+			Responses:   openapi3.NewResponses(openapi3.WithStatus(200, resp("Magic link list"))),
+		},
+	})
+	spec.Paths.Set("/api/auth/magic-links/{id}/revoke", &openapi3.PathItem{
+		Post: &openapi3.Operation{
+			OperationID: "magicLinksRevoke",
+			Summary:     "Revoke a magic link",
+			Responses:   openapi3.NewResponses(openapi3.WithStatus(200, resp("Magic link revoked"))),
+		},
+	})
+	spec.Paths.Set("/api/auth/magic-links/revoke-all", &openapi3.PathItem{
+		Post: &openapi3.Operation{
+			OperationID: "magicLinksRevokeAll",
+			Summary:     "Revoke all active magic links for the current account",
+			Responses:   openapi3.NewResponses(openapi3.WithStatus(200, resp("Magic links revoked"))),
 		},
 	})
 	spec.Paths.Set("/api/auth/logout", &openapi3.PathItem{

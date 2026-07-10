@@ -556,12 +556,14 @@ func (d *LibSQLDialect) SystemTableSQL() []string {
 			"password_hash" TEXT NOT NULL,
 			"full_name" TEXT NOT NULL DEFAULT '',
 			"enabled" INTEGER NOT NULL DEFAULT 1,
+			"email_verified_at" TEXT,
 			"roles" TEXT,
 			"creation" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
 			"modified" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
 		)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS "idx_site_email" ON "_kora_user" ("site", "email")`,
 		`ALTER TABLE "_kora_user" ADD COLUMN "site" TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE "_kora_user" ADD COLUMN "email_verified_at" TEXT`,
 		`DROP INDEX IF EXISTS "idx_email"`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS "idx_site_email" ON "_kora_user" ("site", "email")`,
 		// _kora_session
@@ -576,6 +578,21 @@ func (d *LibSQLDialect) SystemTableSQL() []string {
 		`ALTER TABLE "_kora_session" ADD COLUMN "site" TEXT NOT NULL DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS "idx_user" ON "_kora_session" ("user")`,
 		`CREATE INDEX IF NOT EXISTS "idx_expires" ON "_kora_session" ("expires_at")`,
+
+		// _kora_magic_link
+		`CREATE TABLE IF NOT EXISTS "_kora_magic_link" (
+			"id" TEXT NOT NULL PRIMARY KEY,
+			"site" TEXT NOT NULL DEFAULT '',
+			"email" TEXT NOT NULL DEFAULT '',
+			"token_hash" TEXT NOT NULL,
+			"expires_at" TEXT NOT NULL,
+			"used_at" TEXT,
+			"revoked_at" TEXT,
+			"created_at" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS "idx_magic_token_hash" ON "_kora_magic_link" ("token_hash")`,
+		`CREATE INDEX IF NOT EXISTS "idx_magic_site_email" ON "_kora_magic_link" ("site", "email")`,
+		`CREATE INDEX IF NOT EXISTS "idx_magic_expires" ON "_kora_magic_link" ("expires_at")`,
 
 		// _kora_workflow
 		`CREATE TABLE IF NOT EXISTS "_kora_workflow" (

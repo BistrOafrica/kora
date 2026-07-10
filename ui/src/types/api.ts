@@ -34,6 +34,14 @@ export interface LoginRequest {
   password: string
 }
 
+export interface MagicLinkRequest {
+  email: string
+}
+
+export interface MagicLinkVerifyRequest {
+  token: string
+}
+
 export interface NavigationConfig {
   modules: ModuleGroup[]
   branding: Branding

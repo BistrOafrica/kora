@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
@@ -170,5 +171,50 @@ func TestAuthenticateExtension_MalformedJSON(t *testing.T) {
 	}
 	if len(p) != 0 {
 		t.Errorf("expected 0 permissions for malformed JSON, got %d", len(p))
+	}
+}
+
+func TestAuthenticateChannelSession_LoadsPermissions(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer db.Close()
+
+	token := "channel-token"
+	rows := sqlmock.NewRows([]string{
+		"id", "site", "client_name", "conversation_key", "provider", "sender_address", "token_hash", "api_permissions",
+		"trusted_until", "sensitive_until", "revoked_at", "revoked_reason", "created_at", "last_used_at",
+	}).AddRow(
+		"chs_1", "demo", "kora-cloud", "twilio:+1:+2", "twilio_whatsapp", "+254700000001", channelTokenHash(token),
+		`[{"doctype":"Customer","read":true}]`, time.Now().Add(10*time.Minute), nil, nil, "", time.Now(), nil,
+	)
+	mock.ExpectQuery("SELECT id, site, client_name, conversation_key, provider, sender_address, token_hash, api_permissions").
+		WithArgs(channelTokenHash(token)).WillReturnRows(rows)
+	mock.ExpectExec("UPDATE _kora_channel_session SET last_used_at = .*WHERE id = .*").
+		WithArgs(sqlmock.AnyArg(), "chs_1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("site_db", db)
+
+	guard := &SiteGuard{}
+	ok := guard.authenticateChannelSession(c, token)
+	if !ok {
+		t.Fatalf("expected channel session auth to succeed")
+	}
+	if c.GetString("auth_type") != "channel_session" {
+		t.Fatalf("expected auth_type channel_session, got %q", c.GetString("auth_type"))
+	}
+	permsVal, exists := c.Get("channel_permissions")
+	if !exists {
+		t.Fatalf("expected channel_permissions in context")
+	}
+	perms := permsVal.([]doctype.Permission)
+	if len(perms) != 1 || perms[0].Doctype != "Customer" || !perms[0].Read {
+		t.Fatalf("unexpected channel permissions: %#v", perms)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
 	}
 }

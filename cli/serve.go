@@ -282,7 +282,8 @@ func runServe() error {
 
 	// Always register core routes — sites can be hot-added via console.
 	sessionMgr := auth.NewSessionManager(firstDB)
-	auth.RegisterAuthRoutes(router, sessionMgr, firstDB)
+	authMailer := newMailer(common)
+	auth.RegisterAuthRoutes(router, sessionMgr, firstDB, authMailer)
 	siteGuard := auth.NewSiteGuard(firstDB)
 	auth.SetCSRFSecure(common.CSRFSecure)
 	// Canonical v1 routes
@@ -421,7 +422,7 @@ func runServe() error {
 
 	// Scheduler.
 	if len(loadedSites) > 0 {
-		startScheduler(firstDB, primaryRegistry, txManager)
+		startScheduler(firstDB, primaryRegistry, txManager, newMailer(common))
 	}
 
 	// Server.
@@ -508,13 +509,16 @@ func loadRuntimeSite(info site.DBSiteInfo, common *site.CommonConfig) (*knet.Loa
 	}, nil
 }
 
-func startScheduler(db *sql.DB, registry *doctype.Registry, txManager *orm.TxManager) {
+func startScheduler(db *sql.DB, registry *doctype.Registry, txManager *orm.TxManager, mailer *email.Sender) {
 	cfg := loadSchedulerConfig()
 	if len(cfg) == 0 {
 		slog.Info("scheduler: no jobs configured")
 		return
 	}
-	sched := scheduler.New(db, registry, txManager, email.NewSender(&email.Config{From: "kora@localhost"}))
+	if mailer == nil {
+		mailer = email.NewSender(&email.Config{From: "kora@localhost"})
+	}
+	sched := scheduler.New(db, registry, txManager, mailer)
 	for _, job := range cfg {
 		sched.RegisterJob(job)
 	}
@@ -537,6 +541,27 @@ func loadSchedulerConfig() []*scheduler.JobConfig {
 		return cfg.Jobs
 	}
 	return nil
+}
+
+func newMailer(common *site.CommonConfig) *email.Sender {
+	if common == nil {
+		return email.NewSender(&email.Config{From: "kora@localhost"})
+	}
+	from := common.SMTPFrom
+	if from == "" {
+		from = common.SMTPUsername
+	}
+	if from == "" {
+		from = "kora@localhost"
+	}
+	return email.NewSender(&email.Config{
+		Host:     common.SMTPHost,
+		Port:     common.SMTPPort,
+		Username: common.SMTPUsername,
+		Password: common.SMTPPassword,
+		From:     from,
+		TLSMode:  common.SMTPTLSMode,
+	})
 }
 
 func configureLogging(level, format string) {

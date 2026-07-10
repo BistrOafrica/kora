@@ -33,15 +33,27 @@ func (g *SiteGuard) Middleware(skipCSRF bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Skip auth for login endpoint and health check.
 		path := c.Request.URL.Path
-		if path == "/api/auth/login" || path == "/api/v1/auth/login" || path == "/api/ping" || path == "/api/v1/ping" || path == "/workspace/login" {
+		if path == "/api/auth/login" ||
+			path == "/api/auth/providers" ||
+			path == "/api/auth/magic-link/request" ||
+			path == "/api/auth/magic-link/verify" ||
+			path == "/api/v1/auth/login" ||
+			path == "/api/ping" ||
+			path == "/api/v1/ping" ||
+			path == "/workspace/login" ||
+			path == "/workspace/auth/login" {
 			c.Next()
 			return
 		}
 
-		// Check Bearer token for extension API auth.
+		// Check Bearer token for channel-session or extension API auth.
 		authHeader := c.GetHeader("Authorization")
 		if strings.HasPrefix(authHeader, "Bearer ") {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
+			if g.authenticateChannelSession(c, token) {
+				c.Next()
+				return
+			}
 			if g.authenticateExtension(c, token) {
 				// Extension-authenticated — skip session and CSRF checks.
 				c.Next()
@@ -77,6 +89,32 @@ func (g *SiteGuard) Middleware(skipCSRF bool) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// authenticateChannelSession verifies a delegated channel session Bearer token.
+// On success, it sets auth_type=channel_session and channel_permissions in context.
+func (g *SiteGuard) authenticateChannelSession(c *gin.Context, token string) bool {
+	db, exists := c.Get("site_db")
+	if !exists {
+		return false
+	}
+	sqlDB, ok := db.(*sql.DB)
+	if !ok || sqlDB == nil {
+		return false
+	}
+
+	session, err := AuthenticateChannelSession(sqlDB, token)
+	if err != nil {
+		return false
+	}
+
+	c.Set("auth_type", "channel_session")
+	c.Set("channel_session_id", session.ID)
+	c.Set("channel_client_name", session.ClientName)
+	c.Set("channel_permissions", session.Permissions)
+	c.Set("channel_conversation_key", session.ConversationKey)
+	c.Set("channel_sender_address", session.SenderAddress)
+	return true
 }
 
 // authenticateExtension verifies a Bearer access token against the _kora_extension table.
