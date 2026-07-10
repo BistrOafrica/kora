@@ -1,3 +1,12 @@
+## v0.8.4-alpha — 2026-07-10
+
+### Features
+- feat: delegated channel auth and magic links
+
+### Security
+- feat: delegated channel auth and magic links
+
+
 ## v0.8.3-alpha — 2026-07-09
 
 ### Features
