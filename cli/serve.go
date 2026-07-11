@@ -371,6 +371,7 @@ func runServe() error {
 		workspace.RegisterSPARoutes(router, siteRouter)
 	} else {
 		slog.Info("SPA not built, using HTMX templates at /workspace")
+		knet.RegisterPathSiteRoutes(router, siteRouter, nil)
 		workspaceGroup := router.Group("/workspace")
 		workspaceGroup.Use(siteGuard.Middleware(false))
 		workspaceHandler.RegisterRoutesOnGroup(workspaceGroup)

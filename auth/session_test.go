@@ -15,6 +15,41 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func TestBuildMagicLinkURL_PathBasedSite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	req := httptest.NewRequest(http.MethodPost, "https://app.kora.test/api/auth/magic-link/request", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "app.kora.test")
+	req.AddCookie(&http.Cookie{Name: "kora_site", Value: "live-demo"})
+	c.Request = req
+	c.Set("site_name", "live-demo")
+
+	got := buildMagicLinkURL(c, "abc123")
+	want := "https://app.kora.test/s/live-demo/workspace/auth/login?magic_token=abc123"
+	if got != want {
+		t.Fatalf("buildMagicLinkURL() = %q, want %q", got, want)
+	}
+}
+
+func TestBuildMagicLinkURL_HostBasedSite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	req := httptest.NewRequest(http.MethodPost, "https://live-demo.kora.test/api/auth/magic-link/request", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "live-demo.kora.test")
+	c.Request = req
+	c.Set("site_name", "live-demo")
+
+	got := buildMagicLinkURL(c, "abc123")
+	want := "https://live-demo.kora.test/workspace/auth/login?magic_token=abc123"
+	if got != want {
+		t.Fatalf("buildMagicLinkURL() = %q, want %q", got, want)
+	}
+}
+
 func TestHashPassword(t *testing.T) {
 	tests := []struct {
 		name     string

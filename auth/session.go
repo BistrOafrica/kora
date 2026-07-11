@@ -1146,7 +1146,18 @@ func buildMagicLinkURL(c *gin.Context, token string) string {
 	if host == "" {
 		host = c.Request.URL.Host
 	}
-	return fmt.Sprintf("%s://%s/workspace/auth/login?magic_token=%s", scheme, host, token)
+	return fmt.Sprintf("%s://%s%s?magic_token=%s", scheme, host, magicLinkLoginPath(c), token)
+}
+
+func magicLinkLoginPath(c *gin.Context) string {
+	site := strings.TrimSpace(c.GetString("site_name"))
+	if site == "" {
+		return "/workspace/auth/login"
+	}
+	if cookieSite, err := c.Cookie("kora_site"); err == nil && strings.TrimSpace(cookieSite) == site {
+		return "/s/" + site + "/workspace/auth/login"
+	}
+	return "/workspace/auth/login"
 }
 
 func enforceAuthRateLimit(c *gin.Context, key string, limit int, window time.Duration) bool {

@@ -1,3 +1,9 @@
+## v0.8.5-alpha — 2026-07-11
+
+### Fixes
+- fix: preserve `/s/:site` in magic-link invite URLs for path-based tenants
+- fix: keep `/s/:site/api/*` routing available even when the SPA bundle is not embedded
+
 ## v0.8.4-alpha — 2026-07-10
 
 ### Features
