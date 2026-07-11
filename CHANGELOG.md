@@ -1,3 +1,12 @@
+## v0.8.6-alpha — 2026-07-11
+
+### Fixes
+- fix: preserve site context for `/s/:site/api/*` re-dispatch during path-based routing
+- fix: keep path-based API routing working for non-browser callers during fallback execution paths
+
+### UX
+- feat: redesign auth screens for clearer mobile-first sign-in, better magic-link feedback, and stronger workspace context
+
 ## v0.8.5-alpha — 2026-07-11
 
 ### Fixes

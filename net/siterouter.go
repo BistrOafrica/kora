@@ -306,6 +306,7 @@ func RegisterPathSiteRoutes(router *gin.Engine, sr *SiteRouter, spaFS fs.FS) {
 		if strings.HasPrefix(rest, "/api/") || rest == "/api" {
 			// API requests: rewrite path and let Gin re-dispatch.
 			// We need to re-enter the router for API routes to match.
+			c.Request.AddCookie(&http.Cookie{Name: "kora_site", Value: site.Name, Path: "/"})
 			c.Request.URL.Path = rest
 			// Manually call HandleContext — but this time site context is already set
 			// and the SiteRouter middleware will skip (checks for existing site_db).

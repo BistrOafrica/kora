@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	knet "github.com/asenawritescode/kora/net"
+	"github.com/gin-gonic/gin"
 )
 
 //go:embed all:dist
@@ -92,6 +92,7 @@ func handlePathSite(c *gin.Context, sub fs.FS, sr *knet.SiteRouter, router *gin.
 
 	// API requests: re-dispatch through router so /api/* routes match.
 	if strings.HasPrefix(rest, "/api/") || rest == "/api" {
+		c.Request.AddCookie(&http.Cookie{Name: "kora_site", Value: site.Name, Path: "/"})
 		c.Request.URL.Path = rest
 		router.HandleContext(c)
 		return
