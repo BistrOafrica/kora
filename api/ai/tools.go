@@ -147,12 +147,12 @@ func BuildToolCatalog(reg *doctype.Registry) ToolCatalog {
 			Description:      description,
 			InputSchema:      params,
 			SafetyLevel:      classifyToolSafety(name),
-			ChannelAllowlist: []string{"web"},
+			ChannelAllowlist: []string{"web", "whatsapp"},
 		}
 		switch {
 		case strings.HasSuffix(name, "_find"), strings.HasSuffix(name, "_list"), strings.HasSuffix(name, "_get"), name == "list_doctypes", strings.Contains(name, "analytics"):
 			descriptor.ChannelAllowlist = []string{"web", "whatsapp"}
-		case strings.HasSuffix(name, "_create"), name == "update_doctype_draft", name == "create_doctype_draft", name == "script_create":
+		case strings.HasSuffix(name, "_create"), strings.HasSuffix(name, "_update"), strings.HasSuffix(name, "_delete"), name == "update_doctype_draft", name == "create_doctype_draft", name == "script_create":
 			descriptor.RequiresConfirmation = true
 			descriptor.RequiresRecentAuth = true
 		}

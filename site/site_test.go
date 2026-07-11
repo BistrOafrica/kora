@@ -3,6 +3,8 @@ package site
 import (
 	"os"
 	"testing"
+
+	"github.com/DATA-DOG/go-sqlmock"
 )
 
 func TestDSN_MySQL(t *testing.T) {
@@ -18,6 +20,25 @@ func TestDSN_MySQL(t *testing.T) {
 	expected := "user:pass@tcp(db.example.com:3306)/test_site?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci"
 	if dsn != expected {
 		t.Errorf("DSN() = %q, want %q", dsn, expected)
+	}
+}
+
+func TestCreateAdminUserAllowsPasswordlessBootstrap(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectExec("INSERT INTO _kora_user").
+		WithArgs(sqlmock.AnyArg(), "owner@example.com", "$kora$passwordless$disabled", "Owner", "Administrator", "live-demo").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	if err := createAdminUser(db, "owner@example.com", "", "Owner", "live-demo"); err != nil {
+		t.Fatalf("createAdminUser: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 

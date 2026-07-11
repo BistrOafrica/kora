@@ -246,13 +246,19 @@ func CreateSite(input CreateSiteInput) (*CreateSiteResult, error) {
 }
 
 // createAdminUser hashes the password and inserts a user into _kora_user.
+// An empty password intentionally creates a passwordless bootstrap account:
+// password login is disabled, but magic-link auth can still find the user.
 func createAdminUser(db *sql.DB, email, password, fullName, site string) error {
-	passwordHash, err := auth.HashPassword(password)
-	if err != nil {
-		return fmt.Errorf("hashing password: %w", err)
+	passwordHash := "$kora$passwordless$disabled"
+	if strings.TrimSpace(password) != "" {
+		var err error
+		passwordHash, err = auth.HashPassword(password)
+		if err != nil {
+			return fmt.Errorf("hashing password: %w", err)
+		}
 	}
 
-	_, err = db.Exec(
+	_, err := db.Exec(
 		`INSERT INTO _kora_user (name, email, password_hash, full_name, roles, site)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		ulid.Make().String(), email, passwordHash, fullName, "Administrator", site,
