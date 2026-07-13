@@ -7,7 +7,7 @@
 # 2. Generates CHANGELOG.md entry
 # 3. Bumps VERSION file
 # 4. Creates and pushes tag
-# 5. GitHub Actions builds binaries and creates release
+# 5. GitHub Actions builds binaries, creates release, and publishes Docker image
 
 set -euo pipefail
 
@@ -117,4 +117,7 @@ git push origin "$TAG"
 
 echo ""
 echo "=== Release $TAG complete ==="
-echo "GitHub Actions will build binaries and create the release."
+echo "GitHub Actions will build binaries, create the release, and publish Docker tags:"
+echo "  smitdockerhub/kora:$VERSION"
+echo "  smitdockerhub/kora:$TAG"
+echo "  smitdockerhub/kora:latest"
