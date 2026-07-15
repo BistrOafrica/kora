@@ -850,12 +850,12 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 			maxShow = len(docs)
 		}
 		for i := 0; i < maxShow; i++ {
-			summaries = append(summaries, fmt.Sprintf("%v", docs[i].Fields))
+			summaries = append(summaries, formatDocSummary(dt, docs[i].Fields, i+1))
 		}
 		if total > maxShow {
 			summaries = append(summaries, fmt.Sprintf("... and %d more", total-maxShow))
 		}
-		return fmt.Sprintf("Found %d matching %s: %s", total, dt.Name, strings.Join(summaries, "; "))
+		return fmt.Sprintf("Found %d matching %s:\n%s", total, dt.Name, strings.Join(summaries, "\n"))
 	case "list":
 		limit := 20
 		if v, ok := args["limit"].(float64); ok {
@@ -925,6 +925,124 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 	default:
 		return fmt.Sprintf("Unknown operation: %s", operation)
 	}
+}
+
+func formatDocSummary(dt *doctype.DocType, fields map[string]any, index int) string {
+	primary := primaryDisplayValue(dt, fields)
+	parts := []string{fmt.Sprintf("%d. %s", index, primary)}
+	for _, f := range summaryFields(dt) {
+		if f.Fieldname == dt.TitleField {
+			continue
+		}
+		value, ok := fields[f.Fieldname]
+		if !ok || isEmptyDisplayValue(value) {
+			if isDateLikeDocField(f.Fieldtype) {
+				parts = append(parts, fmt.Sprintf("%s: None", fieldDisplayLabel(f)))
+			}
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s", fieldDisplayLabel(f), formatDocValue(f.Fieldname, f.Fieldtype, value)))
+	}
+	return strings.Join(parts, " - ")
+}
+
+func primaryDisplayValue(dt *doctype.DocType, fields map[string]any) string {
+	candidates := []string{dt.TitleField, "name"}
+	for _, f := range dt.DataFields() {
+		if f.InListView {
+			candidates = append(candidates, f.Fieldname)
+		}
+	}
+	for _, name := range candidates {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if value, ok := fields[name]; ok && !isEmptyDisplayValue(value) {
+			return formatDocValue(name, "", value)
+		}
+	}
+	return dt.Name
+}
+
+func summaryFields(dt *doctype.DocType) []doctype.Field {
+	var fields []doctype.Field
+	seen := map[string]bool{}
+	add := func(f doctype.Field) {
+		if seen[f.Fieldname] || !isUserDisplayField(f) {
+			return
+		}
+		seen[f.Fieldname] = true
+		fields = append(fields, f)
+	}
+	for _, f := range dt.DataFields() {
+		if f.InListView {
+			add(f)
+		}
+	}
+	for _, f := range dt.DataFields() {
+		switch f.Fieldtype {
+		case "Select", "Date", "Datetime", "Link", "Data", "Currency", "Int", "Float", "Percent", "Check":
+			add(f)
+		}
+		if len(fields) >= 5 {
+			break
+		}
+	}
+	return fields
+}
+
+func isUserDisplayField(f doctype.Field) bool {
+	if f.Fieldtype == "Table" || f.Fieldtype == "Section Break" || f.Fieldtype == "Column Break" || f.Fieldtype == "Heading" {
+		return false
+	}
+	if f.Fieldname == "owner" || f.Fieldname == "creation" || f.Fieldname == "modified" || f.Fieldname == "modified_by" {
+		return false
+	}
+	return true
+}
+
+func isEmptyDisplayValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	s := strings.TrimSpace(fmt.Sprint(value))
+	return s == "" || s == "<nil>"
+}
+
+func fieldDisplayLabel(f doctype.Field) string {
+	if strings.TrimSpace(f.Label) != "" {
+		return strings.TrimSpace(f.Label)
+	}
+	return humanizeFieldLabel(f.Fieldname)
+}
+
+func humanizeFieldLabel(name string) string {
+	parts := strings.Split(strings.ReplaceAll(name, "-", "_"), "_")
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, " ")
+}
+
+func isDateLikeDocField(fieldType string) bool {
+	return fieldType == "Date" || fieldType == "Datetime"
+}
+
+func formatDocValue(fieldname, fieldType string, value any) string {
+	if isEmptyDisplayValue(value) {
+		return ""
+	}
+	text := fmt.Sprint(value)
+	if isDateLikeDocField(fieldType) {
+		if len(text) >= 10 && regexp.MustCompile(`^\d{4}-\d{2}-\d{2}`).MatchString(text) {
+			return text[:10]
+		}
+	}
+	return formatCell(fieldname, value)
 }
 
 type toolFilterArg struct {
