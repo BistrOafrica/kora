@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/asenawritescode/kora/doctype"
@@ -64,6 +65,34 @@ func TestBuildToolCatalogEmitsV2FindSchemaAndMetadata(t *testing.T) {
 	}
 	if len(find.FieldHints) != 3 || len(find.SystemFields) == 0 {
 		t.Fatalf("expected field and system hints, got %#v", find)
+	}
+}
+
+func TestListFormattingUsesSchemaSummary(t *testing.T) {
+	dt := &doctype.DocType{
+		Name:       "Task",
+		TitleField: "title",
+		Fields: []doctype.Field{
+			{Fieldname: "title", Fieldtype: "Data", Label: "Title", InListView: true},
+			{Fieldname: "due_date", Fieldtype: "Date", Label: "Due Date", InListView: true},
+			{Fieldname: "priority", Fieldtype: "Select", Label: "Priority", InListView: true, Options: "Low\nMedium\nHigh"},
+			{Fieldname: "creation", Fieldtype: "Datetime", Label: "Creation"},
+		},
+	}
+	out := formatDocSummary(dt, map[string]any{
+		"title":    "Call home",
+		"due_date": "2026-07-14 00:00:00 +0000 UTC",
+		"priority": "Medium",
+		"creation": "2026-07-13 20:49:53 +0000 UTC",
+	}, 1)
+
+	if strings.Contains(out, "map[") || strings.Contains(out, "+0000 UTC") || strings.Contains(out, "Creation") {
+		t.Fatalf("expected clean schema summary, got %q", out)
+	}
+	for _, want := range []string{"1. Call home", "Due Date: 2026-07-14", "Priority: Medium"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in summary %q", want, out)
+		}
 	}
 }
 

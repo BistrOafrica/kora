@@ -868,38 +868,11 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 		if total == 0 {
 			return fmt.Sprintf("No %s found.", dt.Name)
 		}
-		// Build a markdown table for clean presentation.
-		var cols []string
-		var colLabels []string
-		for _, f := range dt.DataFields() {
-			if f.Fieldtype == "Table" || f.Fieldtype == "Section Break" || f.Fieldtype == "Column Break" || f.Fieldtype == "Heading" {
-				continue
-			}
-			cols = append(cols, f.Fieldname)
-			colLabels = append(colLabels, f.Label)
+		var summaries []string
+		for i, doc := range docs {
+			summaries = append(summaries, formatDocSummary(dt, doc.Fields, i+1))
 		}
-		var lines []string
-		lines = append(lines, fmt.Sprintf("**%d %s found:**", total, dt.Name))
-		lines = append(lines, "")
-		// Header row.
-		lines = append(lines, "| "+strings.Join(colLabels, " | ")+" |")
-		// Separator.
-		var seps []string
-		for range cols {
-			seps = append(seps, "---")
-		}
-		lines = append(lines, "| "+strings.Join(seps, " | ")+" |")
-		// Data rows.
-		for _, doc := range docs {
-			var vals []string
-			for _, col := range cols {
-				v := doc.Get(col)
-				vals = append(vals, formatCell(col, v))
-			}
-			lines = append(lines, "| "+strings.Join(vals, " | ")+" |")
-		}
-		lines = append(lines, "")
-		return strings.Join(lines, "\n")
+		return fmt.Sprintf("%d %s found:\n%s", total, dt.Name, strings.Join(summaries, "\n"))
 	case "get":
 		name, _ := args["name"].(string)
 		doc, err := tx.GetDoc(dt, name, "")
