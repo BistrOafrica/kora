@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/asenawritescode/kora/doctype"
@@ -13,15 +15,52 @@ import (
 )
 
 type ToolDescriptor struct {
-	ID                   string         `json:"id"`
-	Source               string         `json:"source"`
-	Name                 string         `json:"name"`
-	Description          string         `json:"description"`
-	InputSchema          map[string]any `json:"input_schema"`
-	SafetyLevel          string         `json:"safety_level"`
-	RequiresConfirmation bool           `json:"requires_confirmation"`
-	RequiresRecentAuth   bool           `json:"requires_recent_auth"`
-	ChannelAllowlist     []string       `json:"channel_allowlist"`
+	ID                      string            `json:"id"`
+	Source                  string            `json:"source"`
+	Name                    string            `json:"name"`
+	Description             string            `json:"description"`
+	InputSchema             map[string]any    `json:"input_schema"`
+	SafetyLevel             string            `json:"safety_level"`
+	RequiresConfirmation    bool              `json:"requires_confirmation"`
+	RequiresRecentAuth      bool              `json:"requires_recent_auth"`
+	ChannelAllowlist        []string          `json:"channel_allowlist"`
+	ArgumentContractVersion string            `json:"argument_contract_version"`
+	Operation               string            `json:"operation"`
+	Doctype                 string            `json:"doctype,omitempty"`
+	DoctypeLabel            string            `json:"doctype_label,omitempty"`
+	TitleField              string            `json:"title_field,omitempty"`
+	SearchFields            []string          `json:"search_fields,omitempty"`
+	SortField               string            `json:"sort_field,omitempty"`
+	SortOrder               string            `json:"sort_order,omitempty"`
+	FieldHints              []FieldHint       `json:"field_hints,omitempty"`
+	SystemFields            []SystemFieldHint `json:"system_fields,omitempty"`
+}
+
+type FieldHint struct {
+	Name           string               `json:"name"`
+	Label          string               `json:"label,omitempty"`
+	Fieldtype      string               `json:"fieldtype"`
+	Type           string               `json:"type,omitempty"`
+	Format         string               `json:"format,omitempty"`
+	Options        []string             `json:"options,omitempty"`
+	LinkTarget     string               `json:"link_target,omitempty"`
+	TableTarget    string               `json:"table_target,omitempty"`
+	Required       bool                 `json:"required,omitempty"`
+	ReadOnly       bool                 `json:"read_only,omitempty"`
+	Computed       bool                 `json:"computed,omitempty"`
+	Writable       bool                 `json:"writable"`
+	StandardFilter bool                 `json:"standard_filter,omitempty"`
+	SearchIndex    bool                 `json:"search_index,omitempty"`
+	InListView     bool                 `json:"in_list_view,omitempty"`
+	Unique         bool                 `json:"unique,omitempty"`
+	Description    string               `json:"description,omitempty"`
+	Constraints    []doctype.Constraint `json:"constraints,omitempty"`
+}
+
+type SystemFieldHint struct {
+	Name      string `json:"name"`
+	Fieldtype string `json:"fieldtype"`
+	Writable  bool   `json:"writable"`
 }
 
 type ToolCatalog struct {
@@ -132,36 +171,81 @@ func buildFunctions(reg *doctype.Registry) []map[string]any {
 
 func BuildToolCatalog(reg *doctype.Registry) ToolCatalog {
 	var catalog []ToolDescriptor
-	for _, raw := range append(buildFunctions(reg), buildSystemFunctions()...) {
-		fn, ok := raw["function"].(map[string]any)
-		if !ok {
+	for _, dt := range reg.All() {
+		if dt.IsChildTable {
 			continue
 		}
-		name, _ := fn["name"].(string)
-		description, _ := fn["description"].(string)
-		params, _ := fn["parameters"].(map[string]any)
-		descriptor := ToolDescriptor{
-			ID:               "tenant." + name,
-			Source:           "tenant",
-			Name:             name,
-			Description:      description,
-			InputSchema:      params,
-			SafetyLevel:      classifyToolSafety(name),
-			ChannelAllowlist: []string{"web", "whatsapp"},
+		catalog = append(catalog, buildDoctypeToolDescriptors(dt)...)
+	}
+	for _, raw := range buildSystemFunctions() {
+		if descriptor, ok := descriptorFromRawFunction(raw); ok {
+			catalog = append(catalog, descriptor)
 		}
-		switch {
-		case strings.HasSuffix(name, "_find"), strings.HasSuffix(name, "_list"), strings.HasSuffix(name, "_get"), name == "list_doctypes", strings.Contains(name, "analytics"):
-			descriptor.ChannelAllowlist = []string{"web", "whatsapp"}
-		case strings.HasSuffix(name, "_create"), strings.HasSuffix(name, "_update"), strings.HasSuffix(name, "_delete"), name == "update_doctype_draft", name == "create_doctype_draft", name == "script_create":
-			descriptor.RequiresConfirmation = true
-			descriptor.RequiresRecentAuth = true
-		}
-		catalog = append(catalog, descriptor)
 	}
 	return ToolCatalog{
 		Version: toolCatalogVersion(catalog),
 		Tools:   catalog,
 	}
+}
+
+func buildDoctypeToolDescriptors(dt *doctype.DocType) []ToolDescriptor {
+	lower := sanitizeName(dt.Name)
+	common := func(name, operation, description string, schema map[string]any) ToolDescriptor {
+		return ToolDescriptor{
+			ID:                      "tenant." + name,
+			Source:                  "tenant",
+			Name:                    name,
+			Description:             description,
+			InputSchema:             schema,
+			SafetyLevel:             classifyToolSafety(name),
+			ChannelAllowlist:        []string{"web", "whatsapp"},
+			ArgumentContractVersion: "v2",
+			Operation:               operation,
+			Doctype:                 dt.Name,
+			DoctypeLabel:            dt.Name,
+			TitleField:              dt.TitleField,
+			SearchFields:            splitCSV(dt.SearchFields),
+			SortField:               defaultString(dt.SortField, "modified"),
+			SortOrder:               defaultString(dt.SortOrder, "DESC"),
+			FieldHints:              buildFieldHints(dt),
+			SystemFields:            systemFieldHints(),
+		}
+	}
+	create := common(lower+"_create", "create", "Create a new "+dt.Name+". Available fields: "+strings.Join(fieldNamesForDescription(dt), ", "), buildCreateSchema(dt))
+	create.RequiresConfirmation = true
+	create.RequiresRecentAuth = true
+	return []ToolDescriptor{
+		common(lower+"_find", "find", "Find "+dt.Name+" records using typed filters.", buildFindSchema()),
+		common(lower+"_list", "list", "List "+dt.Name+" documents (recent first). Use find when filters are present.", buildListSchema()),
+		common(lower+"_get", "get", "Get a single "+dt.Name+" by name.", buildGetSchema()),
+		create,
+	}
+}
+
+func descriptorFromRawFunction(raw map[string]any) (ToolDescriptor, bool) {
+	fn, ok := raw["function"].(map[string]any)
+	if !ok {
+		return ToolDescriptor{}, false
+	}
+	name, _ := fn["name"].(string)
+	description, _ := fn["description"].(string)
+	params, _ := fn["parameters"].(map[string]any)
+	descriptor := ToolDescriptor{
+		ID:                      "tenant." + name,
+		Source:                  "tenant",
+		Name:                    name,
+		Description:             description,
+		InputSchema:             params,
+		SafetyLevel:             classifyToolSafety(name),
+		ChannelAllowlist:        []string{"web", "whatsapp"},
+		ArgumentContractVersion: "v2",
+		Operation:               "system",
+	}
+	if name == "script_create" || name == "update_doctype_draft" || name == "create_doctype_draft" {
+		descriptor.RequiresConfirmation = true
+		descriptor.RequiresRecentAuth = true
+	}
+	return descriptor, true
 }
 
 func toolCatalogVersion(catalog []ToolDescriptor) string {
@@ -171,6 +255,172 @@ func toolCatalogVersion(catalog []ToolDescriptor) string {
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func buildFindSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"filters": map[string]any{
+				"type":        "array",
+				"description": "Typed filters. Each item is {field, op, value}.",
+				"items": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"properties": map[string]any{
+						"field": map[string]any{"type": "string"},
+						"op":    map[string]any{"type": "string", "enum": []string{"=", "!=", ">", ">=", "<", "<=", "like", "not like", "in", "not in", "between", "is", "is not"}},
+						"value": map[string]any{},
+					},
+					"required": []string{"field", "op", "value"},
+				},
+			},
+			"limit":    map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "description": "Max results (default 5)"},
+			"offset":   map[string]any{"type": "integer", "minimum": 0, "description": "Pagination offset"},
+			"order_by": map[string]any{"type": "string", "description": "Sort expression such as modified DESC using a valid field."},
+		},
+	}
+}
+
+func buildListSchema() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"limit":  map[string]any{"type": "integer", "description": "Max results (default 20)"},
+		"offset": map[string]any{"type": "integer", "description": "Pagination offset"},
+	}}
+}
+
+func buildGetSchema() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"name": map[string]any{"type": "string", "description": "Document name"},
+	}, "required": []string{"name"}}
+}
+
+func buildCreateSchema(dt *doctype.DocType) map[string]any {
+	props := map[string]any{}
+	required := []string{}
+	for _, f := range dt.DataFields() {
+		if f.Fieldtype == "Table" || f.ReadOnly || f.Computed != "" {
+			continue
+		}
+		props[f.Fieldname] = aiFieldSchema(&f)
+		if f.Reqd {
+			required = append(required, f.Fieldname)
+		}
+	}
+	schema := map[string]any{"type": "object", "properties": props}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return schema
+}
+
+func aiFieldSchema(f *doctype.Field) map[string]any {
+	schema := map[string]any{}
+	switch f.Fieldtype {
+	case "Int":
+		schema["type"] = "integer"
+	case "Float", "Currency", "Percent":
+		schema["type"] = "number"
+	case "Check":
+		schema["type"] = "boolean"
+	case "Date":
+		schema["type"], schema["format"] = "string", "date"
+	case "Time":
+		schema["type"], schema["format"] = "string", "time"
+	case "Datetime":
+		schema["type"], schema["format"] = "string", "date-time"
+	case "JSON":
+		schema["type"] = "object"
+	case "Table":
+		schema["type"] = "array"
+	default:
+		schema["type"] = "string"
+	}
+	if f.Label != "" {
+		schema["description"] = f.Label
+	}
+	if f.Fieldtype == "Select" {
+		if options := splitOptions(f.Options); len(options) > 0 {
+			schema["enum"] = options
+		}
+	}
+	return schema
+}
+
+func buildFieldHints(dt *doctype.DocType) []FieldHint {
+	hints := make([]FieldHint, 0, len(dt.DataFields()))
+	for _, f := range dt.DataFields() {
+		schema := aiFieldSchema(&f)
+		hint := FieldHint{
+			Name:           f.Fieldname,
+			Label:          f.Label,
+			Fieldtype:      f.Fieldtype,
+			Type:           fmt.Sprint(schema["type"]),
+			Required:       f.Reqd,
+			ReadOnly:       f.ReadOnly,
+			Computed:       f.Computed != "",
+			Writable:       f.Fieldtype != "Table" && !f.ReadOnly && f.Computed == "",
+			StandardFilter: f.InStandardFilter,
+			SearchIndex:    f.SearchIndex,
+			InListView:     f.InListView,
+			Unique:         f.Unique,
+			Description:    f.Description,
+			Constraints:    f.Constraints,
+		}
+		if format, ok := schema["format"].(string); ok {
+			hint.Format = format
+		}
+		if f.Fieldtype == "Select" {
+			hint.Options = splitOptions(f.Options)
+		}
+		if f.Fieldtype == "Link" || f.Fieldtype == "Dynamic Link" {
+			hint.LinkTarget = f.Options
+		}
+		if f.Fieldtype == "Table" {
+			hint.TableTarget = f.Options
+		}
+		hints = append(hints, hint)
+	}
+	return hints
+}
+
+func systemFieldHints() []SystemFieldHint {
+	return []SystemFieldHint{
+		{Name: "name", Fieldtype: "Data"},
+		{Name: "owner", Fieldtype: "Data"},
+		{Name: "creation", Fieldtype: "Datetime"},
+		{Name: "modified", Fieldtype: "Datetime"},
+		{Name: "modified_by", Fieldtype: "Data"},
+		{Name: "doc_status", Fieldtype: "Int"},
+	}
+}
+
+func splitCSV(value string) []string {
+	var out []string
+	for _, part := range strings.Split(value, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func splitOptions(value string) []string {
+	var out []string
+	for _, line := range strings.Split(value, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func defaultString(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }
 
 func ExecuteTool(tx *orm.TxManager, reg *doctype.Registry, toolName string, args map[string]any, owner, siteName string) string {
@@ -582,19 +832,11 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 
 	switch operation {
 	case "find":
-		// Build JSON filter array from provided field values, using proper JSON encoding.
-		var filtParts []string
-		for k, v := range args {
-			if v != nil && v != "" && k != "limit" && k != "offset" {
-				vJSON, err := json.Marshal(fmt.Sprintf("%v", v))
-				if err != nil {
-					vJSON = []byte(fmt.Sprintf(`"%v"`, v))
-				}
-				filtParts = append(filtParts, fmt.Sprintf(`["%s","=",%s]`, k, vJSON))
-			}
+		filter, limit, offset, orderBy, err := buildValidatedFindArgs(dt, args)
+		if err != nil {
+			return fmt.Sprintf("Error finding %s: %v", dt.Name, err)
 		}
-		filter := "[" + strings.Join(filtParts, ",") + "]"
-		docs, total, err := tx.GetList(dt, filter, "", 5, 0, "")
+		docs, total, err := tx.GetList(dt, filter, orderBy, limit, offset, "")
 		if err != nil {
 			return fmt.Sprintf("Error finding %s: %v", dt.Name, err)
 		}
@@ -683,4 +925,210 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 	default:
 		return fmt.Sprintf("Unknown operation: %s", operation)
 	}
+}
+
+type toolFilterArg struct {
+	Field string
+	Op    string
+	Value any
+}
+
+func buildValidatedFindArgs(dt *doctype.DocType, args map[string]any) (string, int, int, string, error) {
+	for key := range args {
+		switch key {
+		case "filters", "limit", "offset", "order_by":
+		default:
+			return "", 0, 0, "", fmt.Errorf("unsupported find argument %q; use filters, limit, offset, and order_by", key)
+		}
+	}
+	limit := intArg(args["limit"], 5)
+	if limit < 1 || limit > 100 {
+		return "", 0, 0, "", fmt.Errorf("limit must be between 1 and 100")
+	}
+	offset := intArg(args["offset"], 0)
+	if offset < 0 {
+		return "", 0, 0, "", fmt.Errorf("offset must be greater than or equal to 0")
+	}
+	orderBy, _ := args["order_by"].(string)
+	if strings.TrimSpace(orderBy) != "" && !validOrderByFields(dt, orderBy) {
+		return "", 0, 0, "", fmt.Errorf("invalid order_by %q", orderBy)
+	}
+	filters, err := parseToolFilters(args["filters"])
+	if err != nil {
+		return "", 0, 0, "", err
+	}
+	ormFilters := make([][]any, 0, len(filters))
+	for _, filter := range filters {
+		value, err := validateAndCoerceFilter(dt, filter)
+		if err != nil {
+			return "", 0, 0, "", err
+		}
+		ormFilters = append(ormFilters, []any{filter.Field, strings.ToLower(filter.Op), value})
+	}
+	data, err := json.Marshal(ormFilters)
+	if err != nil {
+		return "", 0, 0, "", err
+	}
+	return string(data), limit, offset, orderBy, nil
+}
+
+func parseToolFilters(raw any) ([]toolFilterArg, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("filters must be an array")
+	}
+	filters := make([]toolFilterArg, 0, len(items))
+	for _, item := range items {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("each filter must be an object")
+		}
+		filter := toolFilterArg{
+			Field: strings.TrimSpace(fmt.Sprint(obj["field"])),
+			Op:    strings.TrimSpace(fmt.Sprint(obj["op"])),
+			Value: obj["value"],
+		}
+		if filter.Field == "" || filter.Op == "" {
+			return nil, fmt.Errorf("each filter requires field and op")
+		}
+		filters = append(filters, filter)
+	}
+	return filters, nil
+}
+
+func validateAndCoerceFilter(dt *doctype.DocType, filter toolFilterArg) (any, error) {
+	fieldType, ok := filterFieldType(dt, filter.Field)
+	if !ok {
+		return nil, fmt.Errorf("unknown filter field %q", filter.Field)
+	}
+	op := strings.ToLower(filter.Op)
+	if !operatorAllowedForFieldType(fieldType, op) {
+		return nil, fmt.Errorf("operator %q is not valid for %s field %q", filter.Op, fieldType, filter.Field)
+	}
+	if op == "in" || op == "not in" || op == "between" {
+		values, ok := filter.Value.([]any)
+		if !ok {
+			return nil, fmt.Errorf("operator %q requires an array value", filter.Op)
+		}
+		if op == "between" && len(values) != 2 {
+			return nil, fmt.Errorf("between requires exactly two values")
+		}
+		out := make([]any, 0, len(values))
+		for _, value := range values {
+			coerced, err := coerceFilterValue(fieldType, value)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, coerced)
+		}
+		return out, nil
+	}
+	if op == "is" || op == "is not" {
+		if filter.Value != nil {
+			return nil, fmt.Errorf("%s only supports null", filter.Op)
+		}
+		return nil, nil
+	}
+	return coerceFilterValue(fieldType, filter.Value)
+}
+
+func filterFieldType(dt *doctype.DocType, field string) (string, bool) {
+	switch field {
+	case "name", "owner", "modified_by":
+		return "Data", true
+	case "creation", "modified":
+		return "Datetime", true
+	case "doc_status":
+		return "Int", true
+	}
+	for _, f := range dt.DataFields() {
+		if f.Fieldname == field && f.Fieldtype != "Table" {
+			return f.Fieldtype, true
+		}
+	}
+	return "", false
+}
+
+func operatorAllowedForFieldType(fieldType, op string) bool {
+	switch op {
+	case "=", "!=", "in", "not in", "is", "is not":
+		return true
+	case "like", "not like":
+		return !isNumericOrBooleanField(fieldType)
+	case ">", ">=", "<", "<=", "between":
+		return fieldType == "Int" || fieldType == "Float" || fieldType == "Currency" || fieldType == "Percent" || fieldType == "Date" || fieldType == "Time" || fieldType == "Datetime"
+	default:
+		return false
+	}
+}
+
+func isNumericOrBooleanField(fieldType string) bool {
+	return fieldType == "Int" || fieldType == "Float" || fieldType == "Currency" || fieldType == "Percent" || fieldType == "Check"
+}
+
+func coerceFilterValue(fieldType string, value any) (any, error) {
+	switch fieldType {
+	case "Int":
+		switch v := value.(type) {
+		case float64:
+			return int(v), nil
+		case string:
+			return strconv.Atoi(strings.TrimSpace(v))
+		default:
+			return value, nil
+		}
+	case "Float", "Currency", "Percent":
+		if s, ok := value.(string); ok {
+			return strconv.ParseFloat(strings.TrimSpace(s), 64)
+		}
+	case "Check":
+		if s, ok := value.(string); ok {
+			return strconv.ParseBool(strings.TrimSpace(s))
+		}
+	case "Date":
+		s := strings.TrimSpace(fmt.Sprint(value))
+		if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`).MatchString(s) {
+			return nil, fmt.Errorf("Date filters require YYYY-MM-DD values")
+		}
+		return s, nil
+	case "Datetime":
+		s := strings.TrimSpace(fmt.Sprint(value))
+		if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2}`).MatchString(s) {
+			return nil, fmt.Errorf("Datetime filters require ISO-like date-time values")
+		}
+		return s, nil
+	}
+	return value, nil
+}
+
+func intArg(value any, fallback int) int {
+	switch v := value.(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case string:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			return parsed
+		}
+	}
+	return fallback
+}
+
+func validOrderByFields(dt *doctype.DocType, orderBy string) bool {
+	parts := strings.Fields(orderBy)
+	if len(parts) == 0 || len(parts) > 2 {
+		return false
+	}
+	if _, ok := filterFieldType(dt, parts[0]); !ok {
+		return false
+	}
+	if len(parts) == 2 {
+		dir := strings.ToUpper(parts[1])
+		return dir == "ASC" || dir == "DESC"
+	}
+	return true
 }
