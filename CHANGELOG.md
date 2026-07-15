@@ -1,3 +1,9 @@
+## v0.8.8-alpha — 2026-07-15
+
+### Features
+- feat: add schema-driven ai tool filters
+
+
 ## v0.8.6-alpha — 2026-07-11
 
 ### Fixes
