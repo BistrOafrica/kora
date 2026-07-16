@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { cn } from '@/lib/utils'
 
 interface LispFunction {
   name: string
@@ -123,7 +124,7 @@ export function LispAutocomplete({ value, onChange, fieldNames = [], className, 
         onFocus={() => { if (value.includes('(')) setShowSuggestions(true) }}
         onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
         onKeyDown={handleKeyDown}
-        className={className}
+        className={cn('bg-background text-foreground placeholder:text-muted-foreground', className)}
         placeholder={placeholder}
         style={{ fontFamily: 'monospace' }}
       />

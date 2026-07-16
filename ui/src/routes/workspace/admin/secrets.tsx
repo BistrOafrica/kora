@@ -4,6 +4,7 @@ import { fetchSecrets, setSecret, deleteSecret } from '@/lib/api/system'
 import type { SecretEntry } from '@/lib/api/system'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -172,8 +173,7 @@ export default function AdminSecretsPage() {
             </Select>
             {selectedProvider && (
               <>
-                <Input
-                  type="password"
+                <PasswordInput
                   value={providerKeyValue}
                   onChange={(e) => setProviderKeyValue(e.target.value)}
                   placeholder={`Enter ${AI_PROVIDERS.find(p => p.key === selectedProvider)?.label} API key...`}
@@ -293,9 +293,8 @@ export default function AdminSecretsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="value">Value *</Label>
-                <Input
+                <PasswordInput
                   id="value"
-                  type="password"
                   value={secretValue}
                   onChange={(e) => setSecretValue(e.target.value)}
                   placeholder={editKey && existingKeys.has(editKey) ? 'Enter new value (overwrites existing)' : 'Enter secret value'}

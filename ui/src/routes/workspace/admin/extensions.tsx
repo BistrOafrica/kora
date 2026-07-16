@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { fetchExtensions, createExtension, deleteExtension, fetchDeliveries, rotateSecret } from '@/lib/api/extensions'
 import { fetchDoctypes, fetchDoctypeSchema } from '@/lib/api/system'
 import type { ExtensionRecord, DeliveryRecord } from '@/lib/api/extensions'
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Webhook, Plus, Trash2, History, KeyRound, Loader2, ChevronDown, X } from 'lucide-react'
+import { Webhook, Plus, Trash2, History, KeyRound, Loader2, Copy, X } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,35 @@ function useIsMobile() {
   return isMobile
 }
 
+function OneTimeCredential({ label, description, value }: { label: string; description: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-amber-200 bg-white p-3 text-slate-950 shadow-sm dark:border-amber-900/60 dark:bg-slate-950 dark:text-slate-50">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold">{label}</p>
+          <p className="mt-0.5 text-xs leading-5 text-slate-600 dark:text-slate-300">{description}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={() => navigator.clipboard.writeText(value)}
+        >
+          <Copy className="mr-1.5 h-3.5 w-3.5" />
+          Copy
+        </Button>
+      </div>
+      <Input
+        value={value}
+        readOnly
+        className="mt-3 h-9 border-slate-300 bg-slate-50 font-mono text-xs text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+        onFocus={(event) => event.currentTarget.select()}
+      />
+    </div>
+  )
+}
+
 export default function AdminExtensionsPage() {
   const isMobile = useIsMobile()
   const queryClient = useQueryClient()
@@ -39,7 +68,7 @@ export default function AdminExtensionsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({ name: '', display_name: '', description: '', endpoint_url: '', subscriptions: '[]', api_permissions: '[]' })
   const [saving, setSaving] = useState(false)
-  const [newSecret, setNewSecret] = useState<string | null>(null)
+  const [newCredentials, setNewCredentials] = useState<{ secret: string; accessToken?: string } | null>(null)
   type ConfirmAction = { type: 'delete'; name: string } | { type: 'rotate'; name: string } | null
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
 
@@ -120,7 +149,7 @@ export default function AdminExtensionsPage() {
         name: form.name, display_name: form.display_name, description: form.description,
         endpoint_url: form.endpoint_url, subscriptions: serializeSubs(), api_permissions: serializePerms(),
       })
-      setNewSecret(result.secret)
+      setNewCredentials({ secret: result.secret, accessToken: result.access_token })
       queryClient.invalidateQueries({ queryKey: ['admin', 'extensions'] })
     } catch (err: any) {
       toast('error', err?.message || 'Failed to create extension')
@@ -139,7 +168,7 @@ export default function AdminExtensionsPage() {
 
   const openCreate = () => {
     setForm({ name: '', display_name: '', description: '', endpoint_url: '', subscriptions: '[]', api_permissions: '[]' })
-    setNewSecret(null)
+    setNewCredentials(null)
     initBuilderState('[]', '[]')
     setDialogOpen(true)
   }
@@ -294,21 +323,33 @@ export default function AdminExtensionsPage() {
       )}
 
       {/* Create Sheet */}
-      <Sheet open={dialogOpen} onOpenChange={(open) => { if (!open) { setDialogOpen(false); setNewSecret(null) } }}>
+      <Sheet open={dialogOpen} onOpenChange={(open) => { if (!open) { setDialogOpen(false); setNewCredentials(null) } }}>
         <SheetContent side={isMobile ? 'bottom' : 'right'} className={isMobile ? 'w-full max-h-[85vh] rounded-t-xl flex flex-col' : 'w-full sm:max-w-xl flex flex-col'}>
           <SheetHeader className="border-b pb-4">
             <SheetTitle className="text-lg">Register Extension</SheetTitle>
             <SheetDescription>Extensions receive webhooks when events occur in Kora. Create one to start receiving events.</SheetDescription>
           </SheetHeader>
 
-          {newSecret ? (
+          {newCredentials ? (
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 space-y-3">
-                <p className="font-semibold text-amber-800 text-base">Extension created!</p>
-                <p className="text-sm text-amber-700">This is your signing secret. Store it securely — it will not be shown again.</p>
-                <div className="flex items-center gap-2">
-                  <Input value={newSecret} readOnly className="font-mono text-sm bg-white" />
-                  <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(newSecret)}>Copy</Button>
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950 shadow-sm dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-50">
+                <p className="text-base font-semibold">Extension created</p>
+                <p className="mt-1 text-sm text-amber-900 dark:text-amber-100">
+                  Store these credentials securely. They are shown once and cannot be recovered from the extension list.
+                </p>
+                <div className="mt-4 space-y-4">
+                  {newCredentials.accessToken && (
+                    <OneTimeCredential
+                      label="API access token"
+                      description="Use this as the Bearer token for API calls from this extension."
+                      value={newCredentials.accessToken}
+                    />
+                  )}
+                  <OneTimeCredential
+                    label="Webhook signing secret"
+                    description="Use this to verify webhook payloads sent by Kora to your endpoint."
+                    value={newCredentials.secret}
+                  />
                 </div>
               </div>
             </div>
@@ -450,7 +491,8 @@ export default function AdminExtensionsPage() {
             queryClient.invalidateQueries({ queryKey: ['admin', 'extensions'] })
           } else {
             const result = await rotateSecret(confirmAction.name)
-            setNewSecret(result.secret)
+            setNewCredentials({ secret: result.secret })
+            setDialogOpen(true)
           }
           setConfirmAction(null)
         }}

@@ -5,6 +5,7 @@ import { listSites, createSite, updateSite, deleteSite, resetSitePassword } from
 import type { ConsoleSite } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -446,8 +447,7 @@ function SiteEditSheet({
                 onChange={e => setResetEmail(e.target.value)}
                 className="h-8 text-xs"
               />
-              <Input
-                type="password"
+              <PasswordInput
                 placeholder="New password"
                 value={resetPassword}
                 onChange={e => setResetPassword(e.target.value)}
@@ -613,7 +613,7 @@ function CreateSiteSheet({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="admin_password">Admin Password *</Label>
-                <Input id="admin_password" type="password" value={form.admin_password} onChange={update('admin_password')} required />
+                <PasswordInput id="admin_password" value={form.admin_password} onChange={update('admin_password')} required />
               </div>
             </div>
           </div>
@@ -657,7 +657,7 @@ function CreateSiteSheet({
                 </div>
                 <div className="space-y-1.5 col-span-2">
                   <Label htmlFor="db_password">DB Password</Label>
-                  <Input id="db_password" type="password" placeholder="(leave empty if no password)" value={form.db_password} onChange={update('db_password')} />
+                  <PasswordInput id="db_password" placeholder="(leave empty if no password)" value={form.db_password} onChange={update('db_password')} />
                 </div>
               </div>
             )}
@@ -707,7 +707,7 @@ function ChangePasswordPrompt() {
         <form onSubmit={handleChange} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="newPassword">New Password</Label>
-            <Input id="newPassword" type="password" value={pw} onChange={e => setPw(e.target.value)} required />
+            <PasswordInput id="newPassword" value={pw} onChange={e => setPw(e.target.value)} required />
           </div>
           {msg && <p className={`text-sm ${msg.includes('changed') ? 'text-green-600' : 'text-destructive'}`}>{msg}</p>}
           <div className="flex gap-2">

@@ -36,7 +36,7 @@ export function createExtension(data: {
   name: string; display_name?: string; description?: string
   endpoint_url: string; subscriptions?: string; api_permissions?: string
 }) {
-  return api.post<{ name: string; secret: string; warning: string }>('/api/v1/system/extension', data)
+  return api.post<{ name: string; secret: string; access_token: string; warning: string }>('/api/v1/system/extension', data)
 }
 
 export function deleteExtension(name: string) {

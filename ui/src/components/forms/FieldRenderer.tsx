@@ -1,5 +1,6 @@
 import type { Field } from '@/types/kora'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -222,9 +223,8 @@ export function FieldRenderer({
       return (
         <div className={gapClass}>
           <Label htmlFor={id} className={labelClass}>{label}</Label>
-          <Input
+          <PasswordInput
             id={id}
-            type="password"
             value={value ?? ''}
             onChange={(e) => onChange(fieldname, e.target.value)}
             disabled={disabled || field.read_only}

@@ -240,23 +240,14 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
       )}
     >
       {/* Header */}
-      <div className="flex h-14 items-center justify-between px-4">
+      <div className={cn('flex h-14 items-center justify-between px-4', mobile && 'pr-12')}>
         {!collapsed && (
           <span className="text-lg font-bold tracking-tight truncate flex items-center gap-2">
             <LogoMark size={20} />
             {data?.branding?.app_name || 'Kora'}
           </span>
         )}
-        {mobile ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarOpen(false)}
-            className="h-8 w-8 shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        ) : (
+        {!mobile && (
           <Button
             variant="ghost"
             size="icon"
@@ -316,6 +307,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
               isOpen={openMenu === 'Favorites'}
               onOpen={() => handleMenuOpen('Favorites')}
               onClose={() => handleMenuClose('Favorites')}
+              onItemClick={() => setSidebarOpen(false)}
             />
           )}
 
@@ -327,6 +319,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
               isOpen={openMenu === 'Recent'}
               onOpen={() => handleMenuOpen('Recent')}
               onClose={() => handleMenuClose('Recent')}
+              onItemClick={() => setSidebarOpen(false)}
             />
           )}
 
@@ -347,6 +340,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
                   onOpen={() => handleMenuOpen(`module:${module.module}`)}
                   onClose={() => handleMenuClose(`module:${module.module}`)}
                   onItemClick={(item) => {
+                    setSidebarOpen(false)
                     setActiveModule(module.module)
                     recordDoctypeVisit(item)
                   }}
@@ -371,6 +365,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
             isOpen={openMenu === 'Administrator'}
             onOpen={() => handleMenuOpen('Administrator')}
             onClose={() => handleMenuClose('Administrator')}
+            onItemClick={() => setSidebarOpen(false)}
           />
           <PendingBadge />
           <a
@@ -532,7 +527,21 @@ function ModuleSection({
   )
 }
 
-function FavoritesFlyout({ collapsed, items, isOpen, onOpen, onClose }: { collapsed: boolean; items: FlyoutItem[]; isOpen: boolean; onOpen: () => void; onClose: () => void }) {
+function FavoritesFlyout({
+  collapsed,
+  items,
+  isOpen,
+  onOpen,
+  onClose,
+  onItemClick,
+}: {
+  collapsed: boolean
+  items: FlyoutItem[]
+  isOpen: boolean
+  onOpen: () => void
+  onClose: () => void
+  onItemClick?: (item: FlyoutItem) => void
+}) {
   return (
     <FlyoutMenu
       label="Favorites"
@@ -542,12 +551,29 @@ function FavoritesFlyout({ collapsed, items, isOpen, onOpen, onClose }: { collap
       isOpen={isOpen}
       onOpen={onOpen}
       onClose={onClose}
-      onItemClick={(item) => recordDoctypeVisit(item)}
+      onItemClick={(item) => {
+        onItemClick?.(item)
+        recordDoctypeVisit(item)
+      }}
     />
   )
 }
 
-function RecentFlyout({ collapsed, items, isOpen, onOpen, onClose }: { collapsed: boolean; items: FlyoutItem[]; isOpen: boolean; onOpen: () => void; onClose: () => void }) {
+function RecentFlyout({
+  collapsed,
+  items,
+  isOpen,
+  onOpen,
+  onClose,
+  onItemClick,
+}: {
+  collapsed: boolean
+  items: FlyoutItem[]
+  isOpen: boolean
+  onOpen: () => void
+  onClose: () => void
+  onItemClick?: (item: FlyoutItem) => void
+}) {
   return (
     <FlyoutMenu
       label="Recent"
@@ -557,7 +583,10 @@ function RecentFlyout({ collapsed, items, isOpen, onOpen, onClose }: { collapsed
       isOpen={isOpen}
       onOpen={onOpen}
       onClose={onClose}
-      onItemClick={(item) => recordDoctypeVisit(item)}
+      onItemClick={(item) => {
+        onItemClick?.(item)
+        recordDoctypeVisit(item)
+      }}
     />
   )
 }

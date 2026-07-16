@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useConsoleAuthStore } from '@/lib/console-auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertCircle, Loader2, CheckCircle } from 'lucide-react'
@@ -102,8 +103,8 @@ export default function ConsoleLoginPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password" type="password" placeholder="••••••••"
+                <PasswordInput
+                  id="password" placeholder="Password"
                   value={password} onChange={(e) => { setPassword(e.target.value); if (loginError) clearError() }}
                   required
                 />
@@ -134,13 +135,13 @@ export default function ConsoleLoginPage() {
               </p>
               <div className="space-y-2">
                 <Label htmlFor="hostname">Site name</Label>
-                <div className="flex items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                <div className="flex items-center rounded-md border border-input bg-background text-foreground focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                   <input
                     id="hostname" type="text" required minLength={3} maxLength={50} pattern="[a-z0-9-]+"
                     placeholder="mybusiness"
                     value={hostname}
                     onChange={(e) => setHostname(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                    className="flex-1 bg-transparent px-3 py-2 text-sm outline-none font-mono"
+                    className="flex-1 bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none font-mono"
                   />
                   <span className="pr-3 text-xs text-muted-foreground font-mono">.local</span>
                 </div>
@@ -153,7 +154,7 @@ export default function ConsoleLoginPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="onboard-password">Password</Label>
-                <Input id="onboard-password" type="password" required minLength={8} placeholder="Minimum 8 characters"
+                <PasswordInput id="onboard-password" required minLength={8} placeholder="Minimum 8 characters"
                   value={onboardPassword} onChange={(e) => { setOnboardPassword(e.target.value); if (onboardError) setOnboardError(null) }}
                 />
               </div>

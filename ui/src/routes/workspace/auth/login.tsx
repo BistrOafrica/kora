@@ -4,6 +4,7 @@ import { AlertCircle, ArrowLeft, CheckCircle2, KeyRound, Loader2, Mail, ShieldCh
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { LogoMark } from '@/components/ui/LogoMark'
 import { useAuthStore } from '@/lib/auth-store'
@@ -307,17 +308,16 @@ export default function LoginPage() {
                 {mode === 'password' && hasPassword ? (
                   <div className="space-y-2">
                     <Label htmlFor="password">Password</Label>
-                    <Input
+                    <PasswordInput
                       id="password"
-                      type="password"
-                      placeholder="••••••••"
+                      placeholder="Password"
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value)
                         if (error) clearError()
                       }}
                       required
-                      className="h-11"
+                      className="h-11 pr-11"
                       autoComplete="current-password"
                     />
                   </div>

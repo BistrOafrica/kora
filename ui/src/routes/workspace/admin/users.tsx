@@ -4,6 +4,7 @@ import { fetchUsers, createUser, updateUser, deleteUser, resetUserPassword, fetc
 import type { User, UserCreateRequest, UserUpdateRequest } from '@/lib/api/system'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -302,9 +303,8 @@ export default function AdminUsersPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="password">{editingUser ? 'New Password (leave blank to keep current)' : 'Password *'}</Label>
-                <Input
+                <PasswordInput
                   id="password"
-                  type="password"
                   value={form.password}
                   onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                   placeholder={editingUser ? 'Leave blank to keep current' : 'Min 8 characters'}
@@ -379,9 +379,8 @@ export default function AdminUsersPage() {
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
                 <Label htmlFor="reset_password">New Password</Label>
-                <Input
+                <PasswordInput
                   id="reset_password"
-                  type="password"
                   value={resetPassword}
                   onChange={(e) => setResetPassword(e.target.value)}
                   placeholder="Min 8 characters"
@@ -390,9 +389,8 @@ export default function AdminUsersPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reset_confirm">Confirm Password</Label>
-                <Input
+                <PasswordInput
                   id="reset_confirm"
-                  type="password"
                   value={resetConfirm}
                   onChange={(e) => setResetConfirm(e.target.value)}
                   placeholder="Re-enter password"

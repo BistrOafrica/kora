@@ -132,7 +132,7 @@ export function LinkField({ field, value, onChange, disabled, error, compact }: 
       <div className="relative">
         <div
           className={cn(
-            'flex items-center rounded-md border bg-transparent',
+            'flex items-center rounded-md border bg-background text-foreground',
             compact && 'h-8 text-sm',
             error && 'border-destructive',
             disabled && 'opacity-50',
@@ -141,7 +141,7 @@ export function LinkField({ field, value, onChange, disabled, error, compact }: 
           <input
             type="text"
             className={cn(
-              'flex-1 bg-transparent px-2 outline-none placeholder:text-muted-foreground',
+              'flex-1 bg-transparent px-2 text-foreground outline-none placeholder:text-muted-foreground',
               compact ? 'py-1 text-xs' : 'px-3 py-2 text-sm',
             )}
             placeholder={compact ? field.label : `Search ${targetDoctype}...`}
