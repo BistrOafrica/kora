@@ -1,3 +1,8 @@
+## v0.8.14-alpha — 2026-07-16
+### Fixes
+- fix: verify setup admin users
+
+
 ## v0.8.13-alpha — 2026-07-16
 
 ### Features
