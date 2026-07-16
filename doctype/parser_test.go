@@ -100,6 +100,35 @@ func TestParseFieldworkConfigs(t *testing.T) {
 	}
 }
 
+func TestParseContentConfigsWithPublicAccess(t *testing.T) {
+	doctypes, err := ParseDirectory("../config/content/doctypes")
+	if err != nil {
+		t.Fatalf("parsing Content configs: %v", err)
+	}
+
+	if len(doctypes) == 0 {
+		t.Fatal("expected content doctypes")
+	}
+
+	seenPublic := false
+	for _, dt := range doctypes {
+		if dt.PublicAccess == nil {
+			t.Fatalf("%s should define public_access", dt.Name)
+		}
+		if !dt.PublicAccess.Enabled {
+			t.Fatalf("%s public_access should be enabled", dt.Name)
+		}
+		if len(dt.PublicAccess.Fields) == 0 {
+			t.Fatalf("%s public_access should expose at least one field", dt.Name)
+		}
+		seenPublic = true
+	}
+
+	if !seenPublic {
+		t.Fatal("expected at least one public content doctype")
+	}
+}
+
 func TestParseSingleFile(t *testing.T) {
 	dt, err := ParseFile("../config/fieldwork/doctypes/customer.yaml")
 	if err != nil {

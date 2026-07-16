@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	goyaml "github.com/goccy/go-yaml"
@@ -211,23 +212,23 @@ var knownConstraintFields = buildConstraintFieldSet()
 var knownDocConstraintFields = buildDocConstraintFieldSet()
 
 func buildFieldSet(s interface{}) map[string]bool {
-	// We manually list the yaml tags to avoid reflection at runtime.
-	// This also serves as documentation of all valid fields.
-	return map[string]bool{
-		// DocType fields
-		"name": true, "module": true, "is_submittable": true,
-		"is_child_table": true, "is_single": true, "track_changes": true,
-		"title_field": true, "search_fields": true, "sort_field": true,
-		"sort_order": true, "description": true, "fields": true,
-		"doc_constraints": true,
-		// Field fields
-		"fieldname": true, "fieldtype": true, "label": true, "options": true,
-		"reqd": true, "unique": true, "default": true, "hidden": true,
-		"read_only": true, "bold": true, "in_list_view": true,
-		"in_standard_filter": true, "search_index": true,
-		"depends_on": true, "mandatory_depends_on": true, "constraints": true,
-		"renamed_from": true, "linked_field": true, "computed": true,
+	names := make(map[string]bool)
+	t := reflect.TypeOf(s)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
 	}
+	if t.Kind() != reflect.Struct {
+		return names
+	}
+	for i := 0; i < t.NumField(); i++ {
+		tag := t.Field(i).Tag.Get("yaml")
+		name := strings.Split(tag, ",")[0]
+		if name == "" || name == "-" {
+			continue
+		}
+		names[name] = true
+	}
+	return names
 }
 
 func buildConstraintFieldSet() map[string]bool {

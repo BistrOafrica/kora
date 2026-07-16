@@ -2,7 +2,7 @@ name: Template
 module: Website
 sort_field: sort_order
 sort_order: ASC
-title_field: name
+title_field: template_name
 
 public_access:
   enabled: true
@@ -10,7 +10,7 @@ public_access:
   read: true
   fields:
     - slug
-    - name
+    - template_name
     - description
     - category
     - tags
@@ -38,7 +38,7 @@ fields:
     in_list_view: true
     search_index: true
 
-  - fieldname: name
+  - fieldname: template_name
     fieldtype: Data
     label: Name
     reqd: true
