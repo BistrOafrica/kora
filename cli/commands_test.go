@@ -70,6 +70,20 @@ func TestConfigCommand_Exists(t *testing.T) {
 	}
 }
 
+func TestConfigImportCommand_HasDBNameOverride(t *testing.T) {
+	configCmd := findSubCommand(rootCmd, "config")
+	if configCmd == nil {
+		t.Fatal("config command not found under root")
+	}
+	importCmd := findSubCommand(configCmd, "import")
+	if importCmd == nil {
+		t.Fatal("config import command not found")
+	}
+	if importCmd.Flags().Lookup("db-name") == nil {
+		t.Fatal("config import command missing --db-name flag")
+	}
+}
+
 func TestSecretCommand_Exists(t *testing.T) {
 	cmd := findSubCommand(rootCmd, "secret")
 	if cmd == nil {

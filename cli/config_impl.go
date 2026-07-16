@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -118,10 +119,11 @@ func runConfigExport(siteName, path string) error {
 	return nil
 }
 
-func runConfigImport(siteName, path string) error {
+func runConfigImport(siteName, path, dbName string) error {
 	// Load site config.
 	common_cfg := site.CommonConfigFromEnv()
-	siteCfg := site.ReconstructSiteConfig(siteName, common_cfg, nil)
+	siteCfg := resolveConfigImportSiteConfig(siteName, dbName, common_cfg)
+	fmt.Printf("Import target: site=%s database=%s\n", siteName, siteCfg.DBName)
 
 	// Connect to database.
 	db, err := site.Connect(siteCfg)
@@ -212,23 +214,87 @@ func runConfigImport(siteName, path string) error {
 		return fmt.Errorf("migrating: %w", err)
 	}
 	// Print changelog summary.
-		var changelogStr string
-		db.QueryRow("SELECT COALESCE(changelog, '') FROM _kora_config_version WHERE id = ?", versionID).Scan(&changelogStr)
-		if changelogStr != "" {
-			var diff doctype.ConfigDiff
-			if json.Unmarshal([]byte(changelogStr), &diff) == nil {
-				if diff.IsBreaking {
-					fmt.Printf("  ⚠️  Warning: %d breaking changes detected!\n", len(diff.BreakingChanges()))
-					for _, c := range diff.BreakingChanges() {
-						fmt.Printf("     - %s\n", c.Message)
-					}
+	var changelogStr string
+	db.QueryRow("SELECT COALESCE(changelog, '') FROM _kora_config_version WHERE id = ?", versionID).Scan(&changelogStr)
+	if changelogStr != "" {
+		var diff doctype.ConfigDiff
+		if json.Unmarshal([]byte(changelogStr), &diff) == nil {
+			if diff.IsBreaking {
+				fmt.Printf("  ⚠️  Warning: %d breaking changes detected!\n", len(diff.BreakingChanges()))
+				for _, c := range diff.BreakingChanges() {
+					fmt.Printf("     - %s\n", c.Message)
 				}
-				fmt.Printf("  ✓ %s\n", diff.Summary())
 			}
+			fmt.Printf("  ✓ %s\n", diff.Summary())
 		}
+	}
 
 	fmt.Println("Config imported successfully.")
 	return nil
+}
+
+func resolveConfigImportSiteConfig(siteName, dbName string, commonCfg *site.CommonConfig) *site.SiteConfig {
+	if info, ok := lookupRegisteredSite(siteName, commonCfg); ok {
+		cfg := site.ReconstructSiteConfigFromDBInfo(info, commonCfg)
+		if dbName != "" {
+			cfg.DBName = dbName
+		}
+		return cfg
+	}
+
+	cfg := site.ReconstructSiteConfig(siteName, commonCfg, nil)
+	if dbName != "" {
+		cfg.DBName = dbName
+	}
+	return cfg
+}
+
+func lookupRegisteredSite(siteName string, commonCfg *site.CommonConfig) (site.DBSiteInfo, bool) {
+	db, err := openSiteDiscoveryDB(commonCfg)
+	if err != nil {
+		return site.DBSiteInfo{}, false
+	}
+	defer db.Close()
+
+	sites, err := site.DiscoverSitesFromDB(db)
+	if err != nil {
+		return site.DBSiteInfo{}, false
+	}
+	for _, info := range sites {
+		if info.Name == siteName {
+			return info, true
+		}
+		for _, domain := range info.Domains {
+			if domain == siteName {
+				return info, true
+			}
+		}
+	}
+	return site.DBSiteInfo{}, false
+}
+
+func openSiteDiscoveryDB(commonCfg *site.CommonConfig) (*sql.DB, error) {
+	if dsn := os.Getenv("DB_DSN"); dsn != "" {
+		driver := commonCfg.DBType
+		if driver == "" {
+			driver = os.Getenv("KORA_DB_TYPE")
+		}
+		if driver == "" {
+			driver = "mysql"
+		}
+		db, err := sql.Open(driver, dsn)
+		if err != nil {
+			return nil, err
+		}
+		if err := db.Ping(); err != nil {
+			db.Close()
+			return nil, err
+		}
+		return db, nil
+	}
+
+	discoveryCfg := site.ReconstructSiteConfig("_discovery_", commonCfg, nil)
+	return site.Connect(discoveryCfg)
 }
 
 // --- Config versioning CLI subcommands ---
