@@ -1,3 +1,8 @@
+## v0.8.12-alpha — 2026-07-16
+### Fixes
+- fix: allow public content config validation
+
+
 ## v0.8.11-alpha — 2026-07-16
 
 ### Features
