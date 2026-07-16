@@ -35,13 +35,18 @@ func (d *MySQLDialect) Open(cfg DBConfig) (*sql.DB, error) {
 
 func (d *MySQLDialect) LoadSchema(db *sql.DB, dbName string) (*LiveSchema, error) {
 	schema := &LiveSchema{Tables: make(map[string]*LiveTable)}
+	schemaName := strings.TrimSpace(dbName)
+	var selectedSchema sql.NullString
+	if err := db.QueryRow("SELECT DATABASE()").Scan(&selectedSchema); err == nil && selectedSchema.Valid && selectedSchema.String != "" {
+		schemaName = selectedSchema.String
+	}
 
 	// Read columns from INFORMATION_SCHEMA.
 	colRows, err := db.Query(`
 		SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
 		FROM INFORMATION_SCHEMA.COLUMNS
 		WHERE TABLE_SCHEMA = ? AND TABLE_NAME LIKE 'tab%'
-		ORDER BY TABLE_NAME, ORDINAL_POSITION`, dbName)
+		ORDER BY TABLE_NAME, ORDINAL_POSITION`, schemaName)
 	if err != nil {
 		return nil, fmt.Errorf("reading columns: %w", err)
 	}
@@ -70,7 +75,7 @@ func (d *MySQLDialect) LoadSchema(db *sql.DB, dbName string) (*LiveSchema, error
 		SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, NON_UNIQUE
 		FROM INFORMATION_SCHEMA.STATISTICS
 		WHERE TABLE_SCHEMA = ? AND TABLE_NAME LIKE 'tab%'
-		ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`, dbName)
+		ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`, schemaName)
 	if err != nil {
 		return nil, fmt.Errorf("reading indexes: %w", err)
 	}
@@ -151,7 +156,7 @@ func (d *MySQLDialect) CreateTable(dt *doctype.DocType) []string {
 	cols = append(cols, "PRIMARY KEY (name)")
 
 	tableName := d.QuoteIdent(dt.RawTableName())
-	ddl := fmt.Sprintf("CREATE TABLE %s (\n  %s\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+	ddl := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n  %s\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 		tableName, strings.Join(cols, ",\n  "))
 
 	// Build statement list — separate CREATE INDEX statements for MySQL compatibility.
@@ -362,10 +367,29 @@ func (d *MySQLDialect) ExecuteBatch(db *sql.DB, statements []string) error {
 	defer tx.Rollback()
 	for _, stmt := range statements {
 		if _, err := tx.Exec(stmt); err != nil {
+			if isIgnorableMySQLCreateError(err, stmt) {
+				continue
+			}
 			return fmt.Errorf("executing DDL: %w\nSQL: %s", err, stmt)
 		}
 	}
 	return tx.Commit()
+}
+
+func isIgnorableMySQLCreateError(err error, stmt string) bool {
+	var mysqlErr *mysql.MySQLError
+	if !errors.As(err, &mysqlErr) {
+		return false
+	}
+	normalized := strings.ToUpper(strings.TrimSpace(stmt))
+	switch mysqlErr.Number {
+	case 1050: // ER_TABLE_EXISTS_ERROR
+		return strings.HasPrefix(normalized, "CREATE TABLE")
+	case 1061: // ER_DUP_KEYNAME
+		return strings.HasPrefix(normalized, "CREATE INDEX") || strings.HasPrefix(normalized, "CREATE UNIQUE INDEX")
+	default:
+		return false
+	}
 }
 
 func (d *MySQLDialect) SystemTableSQL() []string {

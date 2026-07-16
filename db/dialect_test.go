@@ -125,8 +125,8 @@ func TestMySQL_CreateTable(t *testing.T) {
 	}
 
 	first := stmts[0]
-	if first[:12] != "CREATE TABLE" {
-		t.Errorf("first statement = %q..., want CREATE TABLE", first[:12])
+	if !strings.HasPrefix(first, "CREATE TABLE IF NOT EXISTS") {
+		t.Errorf("first statement = %q..., want CREATE TABLE IF NOT EXISTS", first[:26])
 	}
 	if !contains(first, "`title` VARCHAR(140)") {
 		t.Error("CreateTable should include title column")
@@ -142,6 +142,31 @@ func TestMySQL_CreateTable(t *testing.T) {
 	}
 	if !contains(first, "ENGINE=InnoDB") {
 		t.Error("CreateTable should include ENGINE=InnoDB")
+	}
+}
+
+func TestMySQL_IgnoresDuplicateCreateDDL(t *testing.T) {
+	duplicateTable := &mysql.MySQLError{Number: 1050}
+	if !isIgnorableMySQLCreateError(duplicateTable, "CREATE TABLE `tabTemplate` (name varchar(140))") {
+		t.Fatal("duplicate table create should be ignored")
+	}
+	if !isIgnorableMySQLCreateError(duplicateTable, "CREATE TABLE IF NOT EXISTS `tabTemplate` (name varchar(140))") {
+		t.Fatal("duplicate table create with IF NOT EXISTS should be ignored")
+	}
+
+	duplicateIndex := &mysql.MySQLError{Number: 1061}
+	if !isIgnorableMySQLCreateError(duplicateIndex, "CREATE INDEX `idx_tabTemplate_slug` ON `tabTemplate` (`slug`)") {
+		t.Fatal("duplicate index create should be ignored")
+	}
+	if !isIgnorableMySQLCreateError(duplicateIndex, "CREATE UNIQUE INDEX `uq_tabTemplate_slug` ON `tabTemplate` (`slug`)") {
+		t.Fatal("duplicate unique index create should be ignored")
+	}
+
+	if isIgnorableMySQLCreateError(duplicateTable, "ALTER TABLE `tabTemplate` ADD COLUMN `title` varchar(140)") {
+		t.Fatal("duplicate table error should not be ignored for non-create DDL")
+	}
+	if isIgnorableMySQLCreateError(&mysql.MySQLError{Number: 1060}, "ALTER TABLE `tabTemplate` ADD COLUMN `title` varchar(140)") {
+		t.Fatal("duplicate column error should not be ignored")
 	}
 }
 
