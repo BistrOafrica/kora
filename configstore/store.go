@@ -133,7 +133,7 @@ func (s *Store) saveDocTypeExec(ex db.Queryer, dt *doctype.DocType, site string)
 func (s *Store) LoadAll(site string) ([]*doctype.DocType, error) {
 	rows, err := s.DB.Query(`
 		SELECT name, module, is_submittable, is_child_table, is_single,
-			track_changes, title_field, search_fields, sort_field, sort_order, description
+			track_changes, title_field, search_fields, sort_field, sort_order, description, COALESCE(config_json, '')
 		FROM _kora_doctype
 		WHERE site = ? OR site = ''
 		ORDER BY name
@@ -147,14 +147,23 @@ func (s *Store) LoadAll(site string) ([]*doctype.DocType, error) {
 	for rows.Next() {
 		dt := &doctype.DocType{}
 		var isSubmittable, isChildTable, isSingle, trackChanges int
+		var configJSON string
 		err := rows.Scan(
 			&dt.Name, &dt.Module, &isSubmittable, &isChildTable, &isSingle,
 			&trackChanges, &dt.TitleField, &dt.SearchFields, &dt.SortField,
-			&dt.SortOrder, &dt.Description,
+			&dt.SortOrder, &dt.Description, &configJSON,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning doctype: %w", err)
 		}
+		if strings.TrimSpace(configJSON) != "" {
+			var configured doctype.DocType
+			if err := json.Unmarshal([]byte(configJSON), &configured); err != nil {
+				return nil, fmt.Errorf("unmarshaling doctype config %s: %w", dt.Name, err)
+			}
+			dt = &configured
+		}
+		// Preserve indexed columns as the source of truth for common listing metadata.
 		dt.IsSubmittable = isSubmittable == 1
 		dt.IsChildTable = isChildTable == 1
 		dt.IsSingle = isSingle == 1

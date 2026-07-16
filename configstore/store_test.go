@@ -24,8 +24,8 @@ func TestLoadAll_Empty(t *testing.T) {
 	s := newStore(db)
 
 	// Expect doctype query — returns empty.
-	mock.ExpectQuery("SELECT name, module, is_submittable, is_child_table, is_single, track_changes, title_field, search_fields, sort_field, sort_order, description FROM _kora_doctype WHERE site = \\? OR site = '' ORDER BY name").
-		WillReturnRows(sqlmock.NewRows([]string{"name", "module", "is_submittable", "is_child_table", "is_single", "track_changes", "title_field", "search_fields", "sort_field", "sort_order", "description"}))
+	mock.ExpectQuery("SELECT name, module, is_submittable, is_child_table, is_single, track_changes, title_field, search_fields, sort_field, sort_order, description, COALESCE\\(config_json, ''\\) FROM _kora_doctype WHERE site = \\? OR site = '' ORDER BY name").
+		WillReturnRows(sqlmock.NewRows([]string{"name", "module", "is_submittable", "is_child_table", "is_single", "track_changes", "title_field", "search_fields", "sort_field", "sort_order", "description", "config_json"}))
 
 	// Expect field query — also empty.
 	mock.ExpectQuery("SELECT .* FROM _kora_field WHERE .* ORDER BY parent, idx").
@@ -56,11 +56,12 @@ func TestLoadAll_WithDoctypes(t *testing.T) {
 	s := newStore(db)
 
 	// Doctype rows.
-	dtRows := sqlmock.NewRows([]string{"name", "module", "is_submittable", "is_child_table", "is_single", "track_changes", "title_field", "search_fields", "sort_field", "sort_order", "description"}).
-		AddRow("Task", "Core", 1, 0, 0, 0, "subject", "subject,status", "modified", "DESC", "A task").
-		AddRow("User", "Core", 0, 0, 0, 0, "name", "name,email", "modified", "DESC", "A user")
+	taskConfig := `{"name":"Task","module":"Core","title_field":"subject","public_access":{"enabled":true,"list":true,"fields":["name","subject"]}}`
+	dtRows := sqlmock.NewRows([]string{"name", "module", "is_submittable", "is_child_table", "is_single", "track_changes", "title_field", "search_fields", "sort_field", "sort_order", "description", "config_json"}).
+		AddRow("Task", "Core", 1, 0, 0, 0, "subject", "subject,status", "modified", "DESC", "A task", taskConfig).
+		AddRow("User", "Core", 0, 0, 0, 0, "name", "name,email", "modified", "DESC", "A user", "")
 
-	mock.ExpectQuery("SELECT name, module, is_submittable, is_child_table, is_single, track_changes, title_field, search_fields, sort_field, sort_order, description FROM _kora_doctype WHERE site = \\? OR site = '' ORDER BY name").
+	mock.ExpectQuery("SELECT name, module, is_submittable, is_child_table, is_single, track_changes, title_field, search_fields, sort_field, sort_order, description, COALESCE\\(config_json, ''\\) FROM _kora_doctype WHERE site = \\? OR site = '' ORDER BY name").
 		WillReturnRows(dtRows)
 
 	// Field rows.
@@ -101,6 +102,12 @@ func TestLoadAll_WithDoctypes(t *testing.T) {
 	}
 	if !doctypes[0].Fields[0].Reqd {
 		t.Error("subject should be required")
+	}
+	if doctypes[0].PublicAccess == nil || !doctypes[0].PublicAccess.Enabled {
+		t.Fatal("Task public access should be loaded from config_json")
+	}
+	if got := doctypes[0].PublicAccess.Fields; len(got) != 2 || got[1] != "subject" {
+		t.Fatalf("Task public fields = %#v, want name and subject", got)
 	}
 
 	// Verify second doctype.
