@@ -1,3 +1,11 @@
+## v0.8.17-alpha — 2026-07-16
+### Fixes
+- fix: improve form and mobile sidebar UX
+
+### Improvements
+- fix: improve form and mobile sidebar UX
+
+
 ## v0.8.16-alpha — 2026-07-16
 ### Fixes
 - fix: load public access from doctype config
