@@ -1,3 +1,8 @@
+## v0.8.15-alpha — 2026-07-16
+### Fixes
+- fix: infer config import database from site registry
+
+
 ## v0.8.14-alpha — 2026-07-16
 ### Fixes
 - fix: verify setup admin users
