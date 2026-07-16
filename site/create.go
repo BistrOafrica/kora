@@ -259,9 +259,9 @@ func createAdminUser(db *sql.DB, email, password, fullName, site string) error {
 	}
 
 	_, err := db.Exec(
-		`INSERT INTO _kora_user (name, email, password_hash, full_name, roles, site)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		ulid.Make().String(), email, passwordHash, fullName, "Administrator", site,
+		`INSERT INTO _kora_user (name, site, email, password_hash, full_name, enabled, email_verified_at, roles)
+		 VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, ?)`,
+		ulid.Make().String(), site, email, passwordHash, fullName, "Administrator",
 	)
 	if err != nil {
 		return fmt.Errorf("inserting admin user: %w", err)

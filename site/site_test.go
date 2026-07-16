@@ -31,7 +31,7 @@ func TestCreateAdminUserAllowsPasswordlessBootstrap(t *testing.T) {
 	defer db.Close()
 
 	mock.ExpectExec("INSERT INTO _kora_user").
-		WithArgs(sqlmock.AnyArg(), "owner@example.com", "$kora$passwordless$disabled", "Owner", "Administrator", "live-demo").
+		WithArgs(sqlmock.AnyArg(), "live-demo", "owner@example.com", "$kora$passwordless$disabled", "Owner", "Administrator").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	if err := createAdminUser(db, "owner@example.com", "", "Owner", "live-demo"); err != nil {
