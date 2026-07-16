@@ -1,3 +1,12 @@
+## v0.8.13-alpha — 2026-07-16
+
+### Features
+- fix: make mysql create migrations resumable
+
+### Fixes
+- fix: make mysql create migrations resumable
+
+
 ## v0.8.12-alpha — 2026-07-16
 ### Fixes
 - fix: allow public content config validation
