@@ -12,11 +12,11 @@ type ComputedHookFunc func(doctypeName, fieldName string, doc *Document) (any, e
 // Registry holds all DocType definitions, permissions, and workflows.
 // It is rebuilt from the active config version on startup and after config changes.
 type Registry struct {
-	mu              sync.RWMutex
-	doctypes        map[string]*DocType // keyed by doctype name
-	Permissions     *PermissionMatrix
-	Workflows       *WorkflowMap
-	ComputedHooks   ComputedHookFunc // optional — runs script-based computed fields
+	mu            sync.RWMutex
+	doctypes      map[string]*DocType // keyed by doctype name
+	Permissions   *PermissionMatrix
+	Workflows     *WorkflowMap
+	ComputedHooks ComputedHookFunc // optional — runs script-based computed fields
 }
 
 // NewRegistry creates an empty registry with blank permission matrix and workflow map.
@@ -32,6 +32,7 @@ func NewRegistry() *Registry {
 func (r *Registry) Register(dt *DocType) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	dt.NormalizePublicAccess()
 	r.doctypes[dt.Name] = dt
 }
 

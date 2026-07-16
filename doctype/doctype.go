@@ -4,19 +4,41 @@ package doctype
 // DocType represents a data entity definition. It defines the fields,
 // constraints, relationships, and UI hints for a document type.
 type DocType struct {
-	Name          string        `yaml:"name"          json:"name"`
-	Module        string        `yaml:"module"        json:"module"`
-	IsSubmittable bool          `yaml:"is_submittable" json:"is_submittable"`
-	IsChildTable  bool          `yaml:"is_child_table" json:"is_child_table"`
-	IsSingle      bool          `yaml:"is_single"      json:"is_single"`
-	TrackChanges  bool          `yaml:"track_changes"  json:"track_changes"`
-	TitleField    string        `yaml:"title_field"    json:"title_field"`
-	SearchFields  string        `yaml:"search_fields"  json:"search_fields"`
-	SortField     string        `yaml:"sort_field"     json:"sort_field"`
-	SortOrder     string        `yaml:"sort_order"     json:"sort_order"`
-	Description   string        `yaml:"description"    json:"description"`
-	Fields        []Field       `yaml:"fields"         json:"fields"`
+	Name           string          `yaml:"name"          json:"name"`
+	Module         string          `yaml:"module"        json:"module"`
+	IsSubmittable  bool            `yaml:"is_submittable" json:"is_submittable"`
+	IsChildTable   bool            `yaml:"is_child_table" json:"is_child_table"`
+	IsSingle       bool            `yaml:"is_single"      json:"is_single"`
+	TrackChanges   bool            `yaml:"track_changes"  json:"track_changes"`
+	TitleField     string          `yaml:"title_field"    json:"title_field"`
+	SearchFields   string          `yaml:"search_fields"  json:"search_fields"`
+	SortField      string          `yaml:"sort_field"     json:"sort_field"`
+	SortOrder      string          `yaml:"sort_order"     json:"sort_order"`
+	Description    string          `yaml:"description"    json:"description"`
+	Fields         []Field         `yaml:"fields"         json:"fields"`
 	DocConstraints []DocConstraint `yaml:"doc_constraints" json:"doc_constraints"`
+	PublicAccess   *PublicAccess   `yaml:"public_access" json:"public_access,omitempty"`
+}
+
+// PublicAccess defines the explicit unauthenticated read surface for a DocType.
+// Public routes expose only listed fields after server-owned filters are applied.
+type PublicAccess struct {
+	Enabled     bool           `yaml:"enabled" json:"enabled"`
+	List        bool           `yaml:"list" json:"list"`
+	Read        bool           `yaml:"read" json:"read"`
+	Fields      []string       `yaml:"fields" json:"fields"`
+	Filters     []PublicFilter `yaml:"filters" json:"filters"`
+	SortField   string         `yaml:"sort_field" json:"sort_field"`
+	SortOrder   string         `yaml:"sort_order" json:"sort_order"`
+	MaxLimit    int            `yaml:"max_limit" json:"max_limit"`
+	CacheMaxAge int            `yaml:"cache_max_age" json:"cache_max_age"`
+}
+
+// PublicFilter is a server-owned public filter.
+type PublicFilter struct {
+	Field string `yaml:"field" json:"field"`
+	Op    string `yaml:"op" json:"op"`
+	Value any    `yaml:"value" json:"value"`
 }
 
 // TableName returns the backtick-quoted database table name for SQL statements.
@@ -137,23 +159,23 @@ type Constraint struct {
 
 // DocConstraint is a document-level validation rule.
 type DocConstraint struct {
-	Type           string         `yaml:"type"            json:"type"`
-	Description    string         `yaml:"description"     json:"description"`
-		Predicate      string         `yaml:"predicate"       json:"predicate,omitempty"` // s-expression predicate, e.g. "(> end_date start_date)"
-	Condition      string         `yaml:"condition"       json:"condition,omitempty"`
-	RequireFields  []string       `yaml:"require_fields"  json:"require_fields,omitempty"`
-	Field          string         `yaml:"field"           json:"field,omitempty"`
-	GroupBy        []string       `yaml:"group_by"        json:"group_by,omitempty"`
-	Max            float64        `yaml:"max"             json:"max,omitempty"`
-	Message        string         `yaml:"message"         json:"message"`
-	LHS            string         `yaml:"lhs"             json:"lhs,omitempty"`
-	Operator       string         `yaml:"operator"        json:"operator,omitempty"`
-	RHS            string         `yaml:"rhs"             json:"rhs,omitempty"`
-	Fields         []string       `yaml:"fields"          json:"fields,omitempty"`
-	StatusField    string         `yaml:"status_field"    json:"status_field,omitempty"`
-	StatusValues   []string       `yaml:"status_values"   json:"status_values,omitempty"`
-	ImmutableFields []string      `yaml:"immutable_fields" json:"immutable_fields,omitempty"`
-	Constraints    []Constraint   `yaml:"constraints"     json:"constraints,omitempty"`
+	Type            string       `yaml:"type"            json:"type"`
+	Description     string       `yaml:"description"     json:"description"`
+	Predicate       string       `yaml:"predicate"       json:"predicate,omitempty"` // s-expression predicate, e.g. "(> end_date start_date)"
+	Condition       string       `yaml:"condition"       json:"condition,omitempty"`
+	RequireFields   []string     `yaml:"require_fields"  json:"require_fields,omitempty"`
+	Field           string       `yaml:"field"           json:"field,omitempty"`
+	GroupBy         []string     `yaml:"group_by"        json:"group_by,omitempty"`
+	Max             float64      `yaml:"max"             json:"max,omitempty"`
+	Message         string       `yaml:"message"         json:"message"`
+	LHS             string       `yaml:"lhs"             json:"lhs,omitempty"`
+	Operator        string       `yaml:"operator"        json:"operator,omitempty"`
+	RHS             string       `yaml:"rhs"             json:"rhs,omitempty"`
+	Fields          []string     `yaml:"fields"          json:"fields,omitempty"`
+	StatusField     string       `yaml:"status_field"    json:"status_field,omitempty"`
+	StatusValues    []string     `yaml:"status_values"   json:"status_values,omitempty"`
+	ImmutableFields []string     `yaml:"immutable_fields" json:"immutable_fields,omitempty"`
+	Constraints     []Constraint `yaml:"constraints"     json:"constraints,omitempty"`
 }
 
 // SystemColumns returns the list of system column definitions that every table has.

@@ -1,0 +1,104 @@
+name: Template
+module: Website
+sort_field: sort_order
+sort_order: ASC
+title_field: name
+
+public_access:
+  enabled: true
+  list: true
+  read: true
+  fields:
+    - slug
+    - name
+    - description
+    - category
+    - tags
+    - features_json
+    - hero_label
+    - sort_order
+  filters:
+    - field: status
+      op: equals
+      value: published
+    - field: public_signup
+      op: equals
+      value: "1"
+  sort_field: sort_order
+  sort_order: ASC
+  max_limit: 100
+  cache_max_age: 60
+
+fields:
+  - fieldname: slug
+    fieldtype: Data
+    label: Slug
+    reqd: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: name
+    fieldtype: Data
+    label: Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: description
+    fieldtype: Text
+    label: Description
+    in_list_view: true
+
+  - fieldname: category
+    fieldtype: Data
+    label: Category
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: tags
+    fieldtype: Text
+    label: Tags
+    description: Comma-separated tags for website filtering.
+
+  - fieldname: features_json
+    fieldtype: JSON
+    label: Features JSON
+    description: Public feature list rendered by the website.
+
+  - fieldname: hero_label
+    fieldtype: Data
+    label: Hero Label
+
+  - fieldname: sort_order
+    fieldtype: Int
+    label: Sort Order
+    default: "100"
+    in_list_view: true
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      draft
+      published
+      archived
+    default: draft
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: public_signup
+    fieldtype: Check
+    label: Available On Website
+    default: "0"
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: config_pack
+    fieldtype: Data
+    label: Config Pack
+    description: Internal config pack used during provisioning.
+
+  - fieldname: internal_notes
+    fieldtype: Text
+    label: Internal Notes

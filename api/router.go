@@ -761,6 +761,17 @@ func RegisterRoutesOnGroup(apiGroup *gin.RouterGroup, registry *doctype.Registry
 	RegisterRoutesOnGroupWithAnalytics(apiGroup, registry, txManager, nil, nil, nil, nil, nil, nil, nil)
 }
 
+// RegisterPublicRoutesOnGroup registers unauthenticated, read-only public
+// delivery routes. Access is controlled by DocType public_access config.
+func RegisterPublicRoutesOnGroup(apiGroup *gin.RouterGroup, registry *doctype.Registry, txManager *orm.TxManager) {
+	handler := NewHandler(registry, txManager)
+	public := apiGroup.Group("/public/resource")
+	{
+		public.GET("/:doctype", handler.HandlePublicList)
+		public.GET("/:doctype/:name", handler.HandlePublicGet)
+	}
+}
+
 // RegisterRoutesOnGroupWithAnalytics registers all CRUD routes with optional
 // analytics event propagation. siteBuses maps site name → EventBus; if nil or
 // empty, analytics event emission is a no-op.

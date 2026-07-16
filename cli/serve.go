@@ -296,6 +296,11 @@ func runServe() error {
 	apiLegacyGroup.Use(knet.CompressMiddleware()) // Gzip API responses
 	txManager := &orm.TxManager{DB: firstDB, Registry: primaryRegistry, Dialect: kdb.Resolve(common.DBType)}
 
+	publicV1Group := router.Group("/api/v1")
+	publicV1Group.Use(knet.CompressMiddleware())
+	publicLegacyGroup := router.Group("/api")
+	publicLegacyGroup.Use(knet.CompressMiddleware())
+
 	// Initialize script runner (embedded goja runtime, disabled if no scripts configured).
 	var scriptRunner script.Runner
 	siteScriptStores := make(map[string]*script.Store)
@@ -363,6 +368,8 @@ func runServe() error {
 
 	api.RegisterRoutesOnGroupWithAnalytics(apiGroup, primaryRegistry, txManager, siteBuses, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueue)
 	api.RegisterRoutesOnGroupWithAnalytics(apiLegacyGroup, primaryRegistry, txManager, siteBuses, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueue)
+	api.RegisterPublicRoutesOnGroup(publicV1Group, primaryRegistry, txManager)
+	api.RegisterPublicRoutesOnGroup(publicLegacyGroup, primaryRegistry, txManager)
 
 	workspaceHandler := workspace.NewHandler(primaryRegistry)
 	if spaIndex, _ := workspace.SPAFS().Open("index.html"); spaIndex != nil {

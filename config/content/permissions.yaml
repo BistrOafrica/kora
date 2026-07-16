@@ -1,0 +1,41 @@
+- doctype: Template
+  role: Content Manager
+  read: true
+  write: true
+  create: true
+  delete: true
+
+- doctype: Blog Post
+  role: Content Manager
+  read: true
+  write: true
+  create: true
+  delete: true
+
+- doctype: Marketing Page
+  role: Content Manager
+  read: true
+  write: true
+  create: true
+  delete: true
+
+- doctype: FAQ
+  role: Content Manager
+  read: true
+  write: true
+  create: true
+  delete: true
+
+- doctype: Use Case
+  role: Content Manager
+  read: true
+  write: true
+  create: true
+  delete: true
+
+- doctype: Comparison Page
+  role: Content Manager
+  read: true
+  write: true
+  create: true
+  delete: true

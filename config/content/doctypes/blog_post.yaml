@@ -1,0 +1,95 @@
+name: Blog Post
+module: Website
+sort_field: published_at
+sort_order: DESC
+title_field: title
+
+public_access:
+  enabled: true
+  list: true
+  read: true
+  fields:
+    - slug
+    - title
+    - description
+    - body
+    - category
+    - published_at
+    - seo_title
+    - seo_description
+    - og_image
+    - author_name
+  filters:
+    - field: status
+      op: equals
+      value: published
+  sort_field: published_at
+  sort_order: DESC
+  max_limit: 50
+  cache_max_age: 60
+
+fields:
+  - fieldname: slug
+    fieldtype: Data
+    label: Slug
+    reqd: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: title
+    fieldtype: Data
+    label: Title
+    reqd: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: description
+    fieldtype: Text
+    label: Description
+
+  - fieldname: body
+    fieldtype: Text
+    label: Body
+
+  - fieldname: category
+    fieldtype: Data
+    label: Category
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: published_at
+    fieldtype: Datetime
+    label: Published At
+    in_list_view: true
+
+  - fieldname: seo_title
+    fieldtype: Data
+    label: SEO Title
+
+  - fieldname: seo_description
+    fieldtype: Text
+    label: SEO Description
+
+  - fieldname: og_image
+    fieldtype: Attach Image
+    label: Open Graph Image
+
+  - fieldname: author_name
+    fieldtype: Data
+    label: Author Name
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      draft
+      published
+      archived
+    default: draft
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: internal_notes
+    fieldtype: Text
+    label: Internal Notes

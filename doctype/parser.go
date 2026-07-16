@@ -633,6 +633,10 @@ func (d *DocType) Validate() error {
 		}
 	}
 
+	if err := d.ValidatePublicAccess(); err != nil {
+		return fmt.Errorf("doctype %s: %w", d.Name, err)
+	}
+
 	return nil
 }
 

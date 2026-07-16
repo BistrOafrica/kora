@@ -1,0 +1,63 @@
+name: Use Case
+module: Website
+sort_field: sort_order
+sort_order: ASC
+title_field: title
+
+public_access:
+  enabled: true
+  list: true
+  read: true
+  fields:
+    - slug
+    - title
+    - description
+    - body
+    - category
+    - sort_order
+  filters:
+    - field: status
+      op: equals
+      value: published
+  sort_field: sort_order
+  sort_order: ASC
+  max_limit: 100
+  cache_max_age: 60
+
+fields:
+  - fieldname: slug
+    fieldtype: Data
+    label: Slug
+    reqd: true
+    unique: true
+
+  - fieldname: title
+    fieldtype: Data
+    label: Title
+    reqd: true
+
+  - fieldname: description
+    fieldtype: Text
+    label: Description
+
+  - fieldname: body
+    fieldtype: Text
+    label: Body
+
+  - fieldname: category
+    fieldtype: Data
+    label: Category
+
+  - fieldname: sort_order
+    fieldtype: Int
+    label: Sort Order
+    default: "100"
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      draft
+      published
+      archived
+    default: draft

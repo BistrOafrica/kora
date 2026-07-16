@@ -108,6 +108,73 @@ func TestHandleList_Empty(t *testing.T) {
 	}
 }
 
+func TestHandlePublicList_RequiresExplicitPublicAccess(t *testing.T) {
+	handler, _, _, _ := setupTestHandler(t)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/api/public/resource/TestDoc", nil)
+	c.Params = gin.Params{{Key: "doctype", Value: "TestDoc"}}
+
+	handler.HandlePublicList(c)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusNotFound, w.Body.String())
+	}
+}
+
+func TestHandlePublicList_AllowlistedFieldsAndServerFilters(t *testing.T) {
+	handler, reg, mock, sqlDB := setupTestHandler(t)
+	reg.Register(&doctype.DocType{
+		Name:      "PublicPost",
+		SortField: "modified",
+		SortOrder: "DESC",
+		Fields: []doctype.Field{
+			{Fieldname: "title", Fieldtype: "Data"},
+			{Fieldname: "status", Fieldtype: "Data"},
+			{Fieldname: "internal_notes", Fieldtype: "Text"},
+		},
+		PublicAccess: &doctype.PublicAccess{
+			Enabled: true,
+			List:    true,
+			Read:    true,
+			Fields:  []string{"title"},
+			Filters: []doctype.PublicFilter{{Field: "status", Op: "equals", Value: "published"}},
+		},
+	})
+
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM `tabPublicPost` WHERE status = \\?").
+		WithArgs("published").
+		WillReturnRows(sqlmock.NewRows([]string{"count(*)"}).AddRow(1))
+	mock.ExpectQuery("SELECT .+ FROM `tabPublicPost` WHERE status = \\? ORDER BY `modified` DESC LIMIT \\? OFFSET \\?").
+		WithArgs("published", 50, 0).
+		WillReturnRows(sqlmock.NewRows([]string{"title", "status", "internal_notes", "name", "owner", "creation", "modified", "modified_by", "doc_status"}).
+			AddRow("Published", "published", "secret", "PUB-0001", "owner", nil, nil, nil, 0))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/api/public/resource/PublicPost", nil)
+	c.Params = gin.Params{{Key: "doctype", Value: "PublicPost"}}
+	injectDB(c, sqlDB, reg)
+
+	handler.HandlePublicList(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	var resp Response
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	data := resp.Data.([]any)[0].(map[string]any)
+	if data["title"] != "Published" {
+		t.Fatalf("title = %v, want Published", data["title"])
+	}
+	if _, ok := data["internal_notes"]; ok {
+		t.Fatalf("internal_notes leaked in public response: %#v", data)
+	}
+}
+
 func TestHandleList_WithFilters(t *testing.T) {
 	handler, reg, mock, sqlDB := setupTestHandler(t)
 
