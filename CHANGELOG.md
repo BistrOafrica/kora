@@ -1,3 +1,8 @@
+## v0.8.16-alpha — 2026-07-16
+### Fixes
+- fix: load public access from doctype config
+
+
 ## v0.8.15-alpha — 2026-07-16
 ### Fixes
 - fix: infer config import database from site registry
