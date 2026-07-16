@@ -1,3 +1,9 @@
+## v0.8.11-alpha — 2026-07-16
+
+### Features
+- feat: add explicit public content access
+
+
 ## v0.8.8-alpha — 2026-07-15
 
 ### Features
