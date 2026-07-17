@@ -1,0 +1,52 @@
+name: Loan Repayment
+module: SACCO
+is_submittable: true
+title_field: repayment_reference
+search_fields: repayment_reference, loan, member
+sort_field: repayment_date
+sort_order: DESC
+
+fields:
+  - fieldname: repayment_reference
+    fieldtype: Data
+    label: Repayment Reference
+    reqd: true
+    bold: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: loan
+    fieldtype: Link
+    label: Loan
+    options: Loan
+    reqd: true
+    in_list_view: true
+
+  - fieldname: member
+    fieldtype: Link
+    label: Member
+    options: Member
+    reqd: true
+    in_list_view: true
+
+  - fieldname: repayment_date
+    fieldtype: Date
+    label: Repayment Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: amount
+    fieldtype: Currency
+    label: Amount
+    reqd: true
+    in_list_view: true
+
+  - fieldname: method
+    fieldtype: Select
+    label: Method
+    options: |
+      Cash
+      Mobile Money
+      Bank Transfer
+      Payroll

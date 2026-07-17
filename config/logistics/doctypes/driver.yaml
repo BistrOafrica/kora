@@ -1,0 +1,43 @@
+name: Driver
+module: Logistics
+title_field: driver_name
+search_fields: driver_name, phone, license_number
+sort_field: driver_name
+sort_order: ASC
+
+fields:
+  - fieldname: driver_name
+    fieldtype: Data
+    label: Driver Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: phone
+    fieldtype: Data
+    label: Phone
+    options: Phone
+    in_list_view: true
+
+  - fieldname: license_number
+    fieldtype: Data
+    label: License Number
+    unique: true
+    in_list_view: true
+
+  - fieldname: license_expiry
+    fieldtype: Date
+    label: License Expiry
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Available
+      Assigned
+      Off Duty
+      Inactive
+    default: Available
+    in_list_view: true
+    in_standard_filter: true

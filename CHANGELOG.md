@@ -1,3 +1,10 @@
+## v0.8.18-alpha — 2026-07-17
+### Features
+- feat: add domain template config packs
+
+### Tests
+- test: cover new template config pack parsing
+
 ## v0.8.17-alpha — 2026-07-16
 ### Fixes
 - fix: improve form and mobile sidebar UX

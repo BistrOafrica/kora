@@ -1,0 +1,9 @@
+- name: Clinic Manager
+  workspace_access: true
+  description: Manages patients, visits, and clinic billing.
+- name: Clinician
+  workspace_access: true
+  description: Records appointments and clinical notes.
+- name: Administrator
+  workspace_access: true
+  description: Full system access.

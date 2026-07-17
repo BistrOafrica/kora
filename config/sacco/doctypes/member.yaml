@@ -1,0 +1,54 @@
+name: Member
+module: SACCO
+title_field: member_name
+search_fields: member_name, member_number, phone
+sort_field: member_name
+sort_order: ASC
+
+fields:
+  - fieldname: member_number
+    fieldtype: Data
+    label: Member Number
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: member_name
+    fieldtype: Data
+    label: Member Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: phone
+    fieldtype: Data
+    label: Phone
+    options: Phone
+    in_list_view: true
+
+  - fieldname: email
+    fieldtype: Data
+    label: Email
+    options: Email
+
+  - fieldname: join_date
+    fieldtype: Date
+    label: Join Date
+
+  - fieldname: membership_status
+    fieldtype: Select
+    label: Membership Status
+    options: |
+      Active
+      Dormant
+      Closed
+    default: Active
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: savings_balance
+    fieldtype: Currency
+    label: Savings Balance
+    default: "0"
+    in_list_view: true

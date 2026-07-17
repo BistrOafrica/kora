@@ -1,0 +1,45 @@
+name: Clinical Note
+module: Clinic
+title_field: visit_reason
+search_fields: visit_reason, patient
+sort_field: visit_date
+sort_order: DESC
+
+fields:
+  - fieldname: patient
+    fieldtype: Link
+    label: Patient
+    options: Patient
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: appointment
+    fieldtype: Link
+    label: Appointment
+    options: Appointment
+
+  - fieldname: visit_date
+    fieldtype: Datetime
+    label: Visit Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: visit_reason
+    fieldtype: Data
+    label: Visit Reason
+    reqd: true
+    bold: true
+    in_list_view: true
+
+  - fieldname: diagnosis
+    fieldtype: Text
+    label: Diagnosis
+
+  - fieldname: treatment_plan
+    fieldtype: Text
+    label: Treatment Plan
+
+  - fieldname: follow_up_date
+    fieldtype: Date
+    label: Follow-up Date

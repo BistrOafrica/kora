@@ -1,0 +1,55 @@
+name: Assessment
+module: School
+title_field: assessment_title
+search_fields: assessment_title, student, class, subject
+sort_field: assessment_date
+sort_order: DESC
+
+fields:
+  - fieldname: assessment_title
+    fieldtype: Data
+    label: Assessment Title
+    reqd: true
+    bold: true
+    in_list_view: true
+
+  - fieldname: student
+    fieldtype: Link
+    label: Student
+    options: Student
+    reqd: true
+    in_list_view: true
+
+  - fieldname: class
+    fieldtype: Link
+    label: Class
+    options: Class
+    in_list_view: true
+
+  - fieldname: subject
+    fieldtype: Data
+    label: Subject
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: assessment_date
+    fieldtype: Date
+    label: Assessment Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: score
+    fieldtype: Float
+    label: Score
+    reqd: true
+    in_list_view: true
+
+  - fieldname: grade
+    fieldtype: Data
+    label: Grade
+    in_list_view: true
+
+  - fieldname: remarks
+    fieldtype: Text
+    label: Remarks

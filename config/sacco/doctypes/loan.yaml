@@ -1,0 +1,62 @@
+name: Loan
+module: SACCO
+is_submittable: true
+title_field: loan_reference
+search_fields: loan_reference, member
+sort_field: application_date
+sort_order: DESC
+
+fields:
+  - fieldname: loan_reference
+    fieldtype: Data
+    label: Loan Reference
+    reqd: true
+    bold: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: member
+    fieldtype: Link
+    label: Member
+    options: Member
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: application_date
+    fieldtype: Date
+    label: Application Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: principal_amount
+    fieldtype: Currency
+    label: Principal Amount
+    reqd: true
+    in_list_view: true
+
+  - fieldname: interest_rate
+    fieldtype: Percent
+    label: Interest Rate
+
+  - fieldname: term_months
+    fieldtype: Int
+    label: Term Months
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Applied
+      Approved
+      Disbursed
+      Closed
+      Rejected
+    default: Applied
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: purpose
+    fieldtype: Text
+    label: Purpose

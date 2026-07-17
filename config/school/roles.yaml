@@ -1,0 +1,9 @@
+- name: School Administrator
+  workspace_access: true
+  description: Manages students, classes, attendance, and assessments.
+- name: Teacher
+  workspace_access: true
+  description: Records attendance and student assessment results.
+- name: Administrator
+  workspace_access: true
+  description: Full system access.

@@ -1,0 +1,9 @@
+- name: Fleet Manager
+  workspace_access: true
+  description: Manages vehicles, drivers, dispatches, and maintenance.
+- name: Dispatcher
+  workspace_access: true
+  description: Creates and updates dispatch records.
+- name: Administrator
+  workspace_access: true
+  description: Full system access.

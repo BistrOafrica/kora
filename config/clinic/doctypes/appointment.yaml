@@ -1,0 +1,58 @@
+name: Appointment
+module: Clinic
+title_field: appointment_title
+search_fields: appointment_title, patient
+sort_field: appointment_time
+sort_order: DESC
+
+fields:
+  - fieldname: appointment_title
+    fieldtype: Data
+    label: Appointment Title
+    reqd: true
+    bold: true
+    in_list_view: true
+
+  - fieldname: patient
+    fieldtype: Link
+    label: Patient
+    options: Patient
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: appointment_time
+    fieldtype: Datetime
+    label: Appointment Time
+    reqd: true
+    in_list_view: true
+
+  - fieldname: clinician
+    fieldtype: Data
+    label: Clinician
+    in_list_view: true
+
+  - fieldname: visit_type
+    fieldtype: Select
+    label: Visit Type
+    options: |
+      Consultation
+      Follow Up
+      Lab Review
+      Procedure
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Scheduled
+      Checked In
+      Completed
+      Cancelled
+    default: Scheduled
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

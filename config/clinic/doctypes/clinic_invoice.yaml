@@ -1,0 +1,49 @@
+name: Clinic Invoice
+module: Clinic
+is_submittable: true
+title_field: invoice_title
+search_fields: invoice_title, patient
+sort_field: invoice_date
+sort_order: DESC
+
+fields:
+  - fieldname: invoice_title
+    fieldtype: Data
+    label: Invoice Title
+    reqd: true
+    bold: true
+    in_list_view: true
+
+  - fieldname: patient
+    fieldtype: Link
+    label: Patient
+    options: Patient
+    reqd: true
+    in_list_view: true
+
+  - fieldname: invoice_date
+    fieldtype: Date
+    label: Invoice Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: service_description
+    fieldtype: Text
+    label: Service Description
+
+  - fieldname: total_amount
+    fieldtype: Currency
+    label: Total Amount
+    reqd: true
+    in_list_view: true
+
+  - fieldname: payment_status
+    fieldtype: Select
+    label: Payment Status
+    options: |
+      Unpaid
+      Part Paid
+      Paid
+    default: Unpaid
+    in_list_view: true
+    in_standard_filter: true

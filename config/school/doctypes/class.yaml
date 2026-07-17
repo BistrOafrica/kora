@@ -1,0 +1,34 @@
+name: Class
+module: School
+title_field: class_name
+search_fields: class_name, class_teacher
+sort_field: class_name
+sort_order: ASC
+
+fields:
+  - fieldname: class_name
+    fieldtype: Data
+    label: Class Name
+    reqd: true
+    bold: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: academic_year
+    fieldtype: Data
+    label: Academic Year
+    in_list_view: true
+
+  - fieldname: class_teacher
+    fieldtype: Data
+    label: Class Teacher
+    in_list_view: true
+
+  - fieldname: capacity
+    fieldtype: Int
+    label: Capacity
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

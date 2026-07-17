@@ -1,0 +1,59 @@
+name: Patient
+module: Clinic
+title_field: patient_name
+search_fields: patient_name, phone, patient_id
+sort_field: patient_name
+sort_order: ASC
+
+fields:
+  - fieldname: patient_id
+    fieldtype: Data
+    label: Patient ID
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: patient_name
+    fieldtype: Data
+    label: Patient Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: date_of_birth
+    fieldtype: Date
+    label: Date of Birth
+
+  - fieldname: sex
+    fieldtype: Select
+    label: Sex
+    options: |
+      Female
+      Male
+      Other
+
+  - fieldname: phone
+    fieldtype: Data
+    label: Phone
+    options: Phone
+    in_list_view: true
+
+  - fieldname: email
+    fieldtype: Data
+    label: Email
+    options: Email
+
+  - fieldname: emergency_contact
+    fieldtype: Data
+    label: Emergency Contact
+
+  - fieldname: allergies
+    fieldtype: Text
+    label: Allergies
+
+  - fieldname: active
+    fieldtype: Check
+    label: Active
+    default: "1"
+    in_list_view: true

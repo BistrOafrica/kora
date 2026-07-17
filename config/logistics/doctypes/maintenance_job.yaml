@@ -1,0 +1,54 @@
+name: Maintenance Job
+module: Logistics
+title_field: maintenance_title
+search_fields: maintenance_title, vehicle
+sort_field: service_date
+sort_order: DESC
+
+fields:
+  - fieldname: maintenance_title
+    fieldtype: Data
+    label: Maintenance Title
+    reqd: true
+    bold: true
+    in_list_view: true
+
+  - fieldname: vehicle
+    fieldtype: Link
+    label: Vehicle
+    options: Vehicle
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: service_date
+    fieldtype: Date
+    label: Service Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: service_type
+    fieldtype: Select
+    label: Service Type
+    options: |
+      Routine Service
+      Repair
+      Inspection
+      Tire Change
+
+  - fieldname: vendor
+    fieldtype: Data
+    label: Vendor
+
+  - fieldname: cost
+    fieldtype: Currency
+    label: Cost
+    in_list_view: true
+
+  - fieldname: next_service_date
+    fieldtype: Date
+    label: Next Service Date
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

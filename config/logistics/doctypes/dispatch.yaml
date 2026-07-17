@@ -1,0 +1,64 @@
+name: Dispatch
+module: Logistics
+title_field: dispatch_reference
+search_fields: dispatch_reference, origin, destination
+sort_field: dispatch_date
+sort_order: DESC
+
+fields:
+  - fieldname: dispatch_reference
+    fieldtype: Data
+    label: Dispatch Reference
+    reqd: true
+    bold: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: dispatch_date
+    fieldtype: Datetime
+    label: Dispatch Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: vehicle
+    fieldtype: Link
+    label: Vehicle
+    options: Vehicle
+    reqd: true
+    in_list_view: true
+
+  - fieldname: driver
+    fieldtype: Link
+    label: Driver
+    options: Driver
+    reqd: true
+    in_list_view: true
+
+  - fieldname: origin
+    fieldtype: Data
+    label: Origin
+    reqd: true
+    in_list_view: true
+
+  - fieldname: destination
+    fieldtype: Data
+    label: Destination
+    reqd: true
+    in_list_view: true
+
+  - fieldname: cargo_description
+    fieldtype: Text
+    label: Cargo Description
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Planned
+      In Transit
+      Delivered
+      Cancelled
+    default: Planned
+    in_list_view: true
+    in_standard_filter: true

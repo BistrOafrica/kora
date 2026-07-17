@@ -1,0 +1,74 @@
+- doctype: Member
+  role: SACCO Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Member
+  role: Credit Manager
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+- doctype: Member
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+- doctype: Deposit
+  role: SACCO Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Deposit
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Loan
+  role: SACCO Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Loan
+  role: Credit Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Loan
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Loan Repayment
+  role: SACCO Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Loan Repayment
+  role: Credit Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Loan Repayment
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true

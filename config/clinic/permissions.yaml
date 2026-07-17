@@ -1,0 +1,68 @@
+- doctype: Patient
+  role: Clinic Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Patient
+  role: Clinician
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Patient
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+- doctype: Appointment
+  role: Clinic Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+- doctype: Appointment
+  role: Clinician
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Appointment
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+- doctype: Clinical Note
+  role: Clinic Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Clinical Note
+  role: Clinician
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Clinical Note
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+- doctype: Clinic Invoice
+  role: Clinic Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Clinic Invoice
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true

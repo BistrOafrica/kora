@@ -1,0 +1,50 @@
+name: Deposit
+module: SACCO
+is_submittable: true
+title_field: deposit_reference
+search_fields: deposit_reference, member
+sort_field: deposit_date
+sort_order: DESC
+
+fields:
+  - fieldname: deposit_reference
+    fieldtype: Data
+    label: Deposit Reference
+    reqd: true
+    bold: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: member
+    fieldtype: Link
+    label: Member
+    options: Member
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: deposit_date
+    fieldtype: Date
+    label: Deposit Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: amount
+    fieldtype: Currency
+    label: Amount
+    reqd: true
+    in_list_view: true
+
+  - fieldname: method
+    fieldtype: Select
+    label: Method
+    options: |
+      Cash
+      Mobile Money
+      Bank Transfer
+      Payroll
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

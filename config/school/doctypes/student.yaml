@@ -1,0 +1,54 @@
+name: Student
+module: School
+title_field: student_name
+search_fields: student_name, admission_number, guardian_phone
+sort_field: student_name
+sort_order: ASC
+
+fields:
+  - fieldname: admission_number
+    fieldtype: Data
+    label: Admission Number
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: student_name
+    fieldtype: Data
+    label: Student Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: class
+    fieldtype: Link
+    label: Class
+    options: Class
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: date_of_birth
+    fieldtype: Date
+    label: Date of Birth
+
+  - fieldname: guardian_name
+    fieldtype: Data
+    label: Guardian Name
+
+  - fieldname: guardian_phone
+    fieldtype: Data
+    label: Guardian Phone
+    options: Phone
+
+  - fieldname: enrollment_status
+    fieldtype: Select
+    label: Enrollment Status
+    options: |
+      Active
+      Transferred
+      Graduated
+      Withdrawn
+    default: Active
+    in_list_view: true
+    in_standard_filter: true

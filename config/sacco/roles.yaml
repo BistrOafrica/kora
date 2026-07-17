@@ -1,0 +1,9 @@
+- name: SACCO Officer
+  workspace_access: true
+  description: Manages members, deposits, loans, and repayments.
+- name: Credit Manager
+  workspace_access: true
+  description: Reviews loans and repayment status.
+- name: Administrator
+  workspace_access: true
+  description: Full system access.

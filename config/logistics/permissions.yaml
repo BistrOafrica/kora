@@ -1,0 +1,66 @@
+- doctype: Vehicle
+  role: Fleet Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Vehicle
+  role: Dispatcher
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+- doctype: Vehicle
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+- doctype: Driver
+  role: Fleet Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Driver
+  role: Dispatcher
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+- doctype: Driver
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+- doctype: Dispatch
+  role: Fleet Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Dispatch
+  role: Dispatcher
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Dispatch
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+- doctype: Maintenance Job
+  role: Fleet Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Maintenance Job
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true

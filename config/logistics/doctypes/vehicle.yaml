@@ -1,0 +1,51 @@
+name: Vehicle
+module: Logistics
+title_field: registration_number
+search_fields: registration_number, make_model
+sort_field: registration_number
+sort_order: ASC
+
+fields:
+  - fieldname: registration_number
+    fieldtype: Data
+    label: Registration Number
+    reqd: true
+    bold: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: make_model
+    fieldtype: Data
+    label: Make / Model
+    in_list_view: true
+
+  - fieldname: vehicle_type
+    fieldtype: Select
+    label: Vehicle Type
+    options: |
+      Truck
+      Van
+      Motorcycle
+      Car
+      Bus
+
+  - fieldname: capacity
+    fieldtype: Data
+    label: Capacity
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Available
+      Assigned
+      Maintenance
+      Inactive
+    default: Available
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: odometer
+    fieldtype: Float
+    label: Odometer

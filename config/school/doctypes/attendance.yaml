@@ -1,0 +1,50 @@
+name: Attendance
+module: School
+title_field: attendance_title
+search_fields: attendance_title, student, class
+sort_field: attendance_date
+sort_order: DESC
+
+fields:
+  - fieldname: attendance_title
+    fieldtype: Data
+    label: Attendance Title
+    reqd: true
+    bold: true
+    in_list_view: true
+
+  - fieldname: student
+    fieldtype: Link
+    label: Student
+    options: Student
+    reqd: true
+    in_list_view: true
+
+  - fieldname: class
+    fieldtype: Link
+    label: Class
+    options: Class
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: attendance_date
+    fieldtype: Date
+    label: Attendance Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Present
+      Absent
+      Late
+      Excused
+    default: Present
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: remarks
+    fieldtype: Text
+    label: Remarks
