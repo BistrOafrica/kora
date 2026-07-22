@@ -1,3 +1,12 @@
+## v0.8.20-alpha — 2026-07-22
+### Fixes
+- fix: skip no-op resource updates
+- fix: allocate generated document names atomically
+
+### Documentation
+- fix: allocate generated document names atomically
+
+
 ## v0.8.19-alpha — 2026-07-22
 
 ### Features
