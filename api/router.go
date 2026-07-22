@@ -296,7 +296,7 @@ func (h *Handler) HandleList(c *gin.Context) {
 	}
 
 	// Filter fields if requested.
-	var result []map[string]any
+	result := make([]map[string]any, 0, len(docs))
 	for _, doc := range docs {
 		item := docToMap(doc, dt, h.siteRegistry(c), requestedFields)
 		result = append(result, item)
@@ -744,7 +744,7 @@ func (h *Handler) HandleDelete(c *gin.Context) {
 
 // docToMap converts a Document to a map for JSON serialization, including system fields.
 func docToMap(doc *doctype.Document, dt *doctype.DocType, registry *doctype.Registry, requestedFields []string) map[string]any {
-	result := make(map[string]any)
+	result := make(map[string]any, len(dt.DataFields())+2)
 	result["name"] = doc.Name
 	result["doc_status"] = doc.DocStatus
 
@@ -753,7 +753,7 @@ func docToMap(doc *doctype.Document, dt *doctype.DocType, registry *doctype.Regi
 			children := doc.GetTable(f.Fieldname)
 			if children != nil {
 				childDT := dtRegistryLookup(registry, dt, f.Fieldname)
-				var childMaps []map[string]any
+				childMaps := make([]map[string]any, 0, len(children))
 				for _, child := range children {
 					childMaps = append(childMaps, docToMap(child, childDT, registry, nil))
 				}

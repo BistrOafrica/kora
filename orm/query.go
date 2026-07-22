@@ -583,7 +583,7 @@ func (tx *TxManager) GetList(dt *doctype.DocType, filters string, orderBy string
 	}
 	defer rows.Close()
 
-	docs := make([]*doctype.Document, 0)
+	docs := make([]*doctype.Document, 0, limit)
 	for rows.Next() {
 		scanTargets := make([]any, len(cols))
 		for i := range cols {
