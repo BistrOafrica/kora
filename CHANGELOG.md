@@ -1,3 +1,9 @@
+## v0.8.19-alpha — 2026-07-22
+
+### Features
+- feat: support managed template packs
+
+
 ## v0.8.18-alpha — 2026-07-17
 ### Features
 - feat: add domain template config packs
