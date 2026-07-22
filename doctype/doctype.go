@@ -18,6 +18,13 @@ type DocType struct {
 	Fields         []Field         `yaml:"fields"         json:"fields"`
 	DocConstraints []DocConstraint `yaml:"doc_constraints" json:"doc_constraints"`
 	PublicAccess   *PublicAccess   `yaml:"public_access" json:"public_access,omitempty"`
+
+	metadataReady      bool
+	dataFields         []Field
+	nonTableDataFields []Field
+	tableFields        []Field
+	listFields         []Field
+	validSortColumns   map[string]bool
 }
 
 // PublicAccess defines the explicit unauthenticated read surface for a DocType.
@@ -75,24 +82,78 @@ func (d *DocType) GetField(fieldname string) *Field {
 // DataFields returns all fields that map to database columns
 // (excludes layout-only fields like Section Break, Column Break, Heading).
 func (d *DocType) DataFields() []Field {
-	var result []Field
-	for _, f := range d.Fields {
-		if f.IsDataField() {
-			result = append(result, f)
-		}
-	}
-	return result
+	d.ensureDerivedMetadata()
+	return d.dataFields
+}
+
+// NonTableDataFields returns data fields stored on the parent document table.
+func (d *DocType) NonTableDataFields() []Field {
+	d.ensureDerivedMetadata()
+	return d.nonTableDataFields
 }
 
 // TableFields returns all Table-type fields.
 func (d *DocType) TableFields() []Field {
-	var result []Field
+	d.ensureDerivedMetadata()
+	return d.tableFields
+}
+
+// ListFields returns all fields marked for list views.
+func (d *DocType) ListFields() []Field {
+	d.ensureDerivedMetadata()
+	return d.listFields
+}
+
+// ValidSortColumns returns the data/system columns allowed in ORDER BY clauses.
+func (d *DocType) ValidSortColumns() map[string]bool {
+	d.ensureDerivedMetadata()
+	return d.validSortColumns
+}
+
+// RebuildDerivedMetadata refreshes cached field groups derived from Fields.
+func (d *DocType) RebuildDerivedMetadata() {
+	dataFields := make([]Field, 0, len(d.Fields))
+	nonTableDataFields := make([]Field, 0, len(d.Fields))
+	tableFields := make([]Field, 0)
+	listFields := make([]Field, 0)
+	validSortColumns := map[string]bool{
+		"name":        true,
+		"owner":       true,
+		"creation":    true,
+		"modified":    true,
+		"modified_by": true,
+		"doc_status":  true,
+		"idx":         true,
+	}
+
 	for _, f := range d.Fields {
+		if !f.IsDataField() {
+			continue
+		}
+		dataFields = append(dataFields, f)
 		if f.Fieldtype == "Table" {
-			result = append(result, f)
+			tableFields = append(tableFields, f)
+			continue
+		}
+		nonTableDataFields = append(nonTableDataFields, f)
+		validSortColumns[f.Fieldname] = true
+		if f.InListView {
+			listFields = append(listFields, f)
 		}
 	}
-	return result
+
+	d.dataFields = dataFields
+	d.nonTableDataFields = nonTableDataFields
+	d.tableFields = tableFields
+	d.listFields = listFields
+	d.validSortColumns = validSortColumns
+	d.metadataReady = true
+}
+
+func (d *DocType) ensureDerivedMetadata() {
+	if !d.metadataReady {
+		d.RebuildDerivedMetadata()
+	}
 }
 
 // Field represents a single field in a DocType.

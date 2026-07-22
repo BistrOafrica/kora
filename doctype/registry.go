@@ -33,6 +33,7 @@ func (r *Registry) Register(dt *DocType) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	dt.NormalizePublicAccess()
+	dt.RebuildDerivedMetadata()
 	r.doctypes[dt.Name] = dt
 }
 
@@ -105,6 +106,8 @@ func (r *Registry) LoadFromDB(doctypes []*DocType) {
 	defer r.mu.Unlock()
 	r.doctypes = make(map[string]*DocType, len(doctypes))
 	for _, dt := range doctypes {
+		dt.NormalizePublicAccess()
+		dt.RebuildDerivedMetadata()
 		r.doctypes[dt.Name] = dt
 	}
 }
@@ -115,6 +118,8 @@ func (r *Registry) LoadFull(doctypes []*DocType, roles []*Role, permissions []*P
 	defer r.mu.Unlock()
 	r.doctypes = make(map[string]*DocType, len(doctypes))
 	for _, dt := range doctypes {
+		dt.NormalizePublicAccess()
+		dt.RebuildDerivedMetadata()
 		r.doctypes[dt.Name] = dt
 	}
 	r.Permissions.LoadPermissionsFromDB(roles, permissions)

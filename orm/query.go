@@ -124,7 +124,7 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 	now := time.Now()
 	doc.DocStatus = 0
 
-	dataFields := dt.DataFields()
+	dataFields := dt.NonTableDataFields()
 	var columns []string
 	var placeholders []string
 	var values []any
@@ -134,9 +134,6 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 	values = append(values, doc.Name, owner, now, now, modifiedBy, doc.DocStatus, nextNum)
 
 	for _, f := range dataFields {
-		if f.Fieldtype == "Table" {
-			continue
-		}
 		columns = append(columns, f.Fieldname)
 		placeholders = append(placeholders, "?")
 
@@ -298,15 +295,12 @@ func (tx *TxManager) Save(dt *doctype.DocType, doc *doctype.Document, modifiedBy
 	defer dbTx.Rollback() // no-op after Commit
 
 	now := time.Now()
-	dataFields := dt.DataFields()
+	dataFields := dt.NonTableDataFields()
 
 	var setClauses []string
 	var values []any
 
 	for _, f := range dataFields {
-		if f.Fieldtype == "Table" {
-			continue
-		}
 		// Note: read_only is a UI hint, not an ORM constraint.
 		// The workflow handler needs to persist state changes to read_only fields.
 		// Direct edits are blocked at the API level (HandleUpdate).
@@ -456,13 +450,10 @@ func (tx *TxManager) Save(dt *doctype.DocType, doc *doctype.Document, modifiedBy
 // GetDoc loads a single document by name, including child table expansion.
 // If owner is non-empty, only returns the document if owned by that user.
 func (tx *TxManager) GetDoc(dt *doctype.DocType, name string, owner string) (*doctype.Document, error) {
-	dataFields := dt.DataFields()
+	dataFields := dt.NonTableDataFields()
 
 	var cols []string
 	for _, f := range dataFields {
-		if f.Fieldtype == "Table" {
-			continue
-		}
 		cols = append(cols, f.Fieldname)
 	}
 	cols = append(cols, "name", "owner", "creation", "modified", "modified_by", "doc_status")
@@ -559,12 +550,9 @@ func (tx *TxManager) GetList(dt *doctype.DocType, filters string, orderBy string
 		return nil, 0, fmt.Errorf("counting documents: %w", err)
 	}
 
-	dataFields := dt.DataFields()
+	dataFields := dt.NonTableDataFields()
 	var cols []string
 	for _, f := range dataFields {
-		if f.Fieldtype == "Table" {
-			continue
-		}
 		cols = append(cols, f.Fieldname)
 	}
 	cols = append(cols, "name", "owner", "creation", "modified", "modified_by", "doc_status")
@@ -712,21 +700,7 @@ func (tx *TxManager) Delete(dt *doctype.DocType, name string, owner string) erro
 // validSortColumns returns the set of column names that can be used in ORDER BY clauses.
 // These are the DocType's data fields plus system columns.
 func validSortColumns(dt *doctype.DocType) map[string]bool {
-	cols := map[string]bool{
-		"name":        true,
-		"owner":       true,
-		"creation":    true,
-		"modified":    true,
-		"modified_by": true,
-		"doc_status":  true,
-		"idx":         true,
-	}
-	for _, f := range dt.DataFields() {
-		if f.Fieldtype != "Table" {
-			cols[f.Fieldname] = true
-		}
-	}
-	return cols
+	return dt.ValidSortColumns()
 }
 
 // validateOrderBy parses and validates an ORDER BY clause against known columns.
