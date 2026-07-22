@@ -395,6 +395,26 @@ func (d *PostgresDialect) InsertOrIgnorePrefix() string {
 	return "INSERT"
 }
 
+func (d *PostgresDialect) AllocateNameNumber(tx *sql.Tx, doctypeName, prefix, tableName string) (int64, error) {
+	var maxNum sql.NullInt64
+	if err := tx.QueryRow(d.NameGenQuery(tableName, prefix)).Scan(&maxNum); err != nil {
+		return 0, fmt.Errorf("reading max name number: %w", err)
+	}
+	var allocated int64
+	if err := tx.QueryRow(
+		`INSERT INTO "_kora_naming_series" ("doctype", "prefix", "current", "modified")
+VALUES ($1, $2, $3, NOW())
+ON CONFLICT ("doctype", "prefix")
+DO UPDATE SET "current" = "_kora_naming_series"."current" + 1,
+              "modified" = NOW()
+RETURNING "current"`,
+		doctypeName, prefix, maxNum.Int64+1,
+	).Scan(&allocated); err != nil {
+		return 0, fmt.Errorf("allocating name number: %w", err)
+	}
+	return allocated, nil
+}
+
 func (d *PostgresDialect) NameGenQuery(tableName, prefix string) string {
 	// PostgreSQL: SPLIT_PART(name, '-', 2) extracts the text after the first dash.
 	return fmt.Sprintf(
@@ -423,6 +443,15 @@ func (d *PostgresDialect) ExecuteBatch(db *sql.DB, statements []string) error {
 
 func (d *PostgresDialect) SystemTableSQL() []string {
 	return []string{
+		// _kora_naming_series
+		`CREATE TABLE IF NOT EXISTS "_kora_naming_series" (
+			"doctype" VARCHAR(140) NOT NULL,
+			"prefix" VARCHAR(32) NOT NULL,
+			"current" BIGINT NOT NULL DEFAULT 0,
+			"modified" TIMESTAMP NOT NULL DEFAULT NOW(),
+			PRIMARY KEY ("doctype", "prefix")
+		)`,
+
 		// _kora_doctype
 		`CREATE TABLE IF NOT EXISTS "_kora_doctype" (
 			"name" VARCHAR(140) PRIMARY KEY,

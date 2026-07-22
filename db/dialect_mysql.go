@@ -348,6 +348,27 @@ func (d *MySQLDialect) UpsertIncrement(conflictCols []string, incrementCols []st
 
 func (d *MySQLDialect) InsertOrIgnorePrefix() string { return "INSERT IGNORE" }
 
+func (d *MySQLDialect) AllocateNameNumber(tx *sql.Tx, doctypeName, prefix, tableName string) (int64, error) {
+	var maxNum sql.NullInt64
+	if err := tx.QueryRow(d.NameGenQuery(tableName, prefix)).Scan(&maxNum); err != nil {
+		return 0, fmt.Errorf("reading max name number: %w", err)
+	}
+	next := maxNum.Int64 + 1
+	if _, err := tx.Exec(
+		`INSERT INTO _kora_naming_series (doctype, prefix, current, modified)
+VALUES (?, ?, LAST_INSERT_ID(?), NOW(6))
+ON DUPLICATE KEY UPDATE current = LAST_INSERT_ID(current + 1), modified = NOW(6)`,
+		doctypeName, prefix, next,
+	); err != nil {
+		return 0, fmt.Errorf("allocating name number: %w", err)
+	}
+	var allocated int64
+	if err := tx.QueryRow("SELECT LAST_INSERT_ID()").Scan(&allocated); err != nil {
+		return 0, fmt.Errorf("reading allocated name number: %w", err)
+	}
+	return allocated, nil
+}
+
 func (d *MySQLDialect) NameGenQuery(tableName, prefix string) string {
 	return fmt.Sprintf(
 		"SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(name, '-', -1) AS UNSIGNED)), 0) FROM %s WHERE name LIKE '%s-%%'",
@@ -394,6 +415,9 @@ func isIgnorableMySQLCreateError(err error, stmt string) bool {
 
 func (d *MySQLDialect) SystemTableSQL() []string {
 	return []string{
+		// _kora_naming_series
+		"CREATE TABLE IF NOT EXISTS _kora_naming_series (\n\t\t\tdoctype VARCHAR(140) NOT NULL,\n\t\t\tprefix VARCHAR(32) NOT NULL,\n\t\t\tcurrent BIGINT NOT NULL DEFAULT 0,\n\t\t\tmodified DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),\n\t\t\tPRIMARY KEY (doctype, prefix)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
 		// _kora_doctype
 		"CREATE TABLE IF NOT EXISTS _kora_doctype (\n\t\t\tname VARCHAR(140) PRIMARY KEY,\n\t\t\tsite VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\tmodule VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\tis_submittable TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\tis_child_table TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\tis_single TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\ttrack_changes TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\ttitle_field VARCHAR(140) NOT NULL DEFAULT 'name',\n\t\t\tsearch_fields VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tsort_field VARCHAR(140) NOT NULL DEFAULT 'modified',\n\t\t\tsort_order VARCHAR(4) NOT NULL DEFAULT 'DESC',\n\t\t\tdescription TEXT,\n\t\t\tconfig_json JSON,\n\t\t\tversion INT NOT NULL DEFAULT 1,\n\t\t\tcreation DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),\n\t\t\tmodified DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 

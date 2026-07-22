@@ -372,6 +372,33 @@ func (d *LibSQLDialect) UpsertIncrement(conflictCols []string, incrementCols []s
 
 func (d *LibSQLDialect) InsertOrIgnorePrefix() string { return "INSERT OR IGNORE" }
 
+func (d *LibSQLDialect) AllocateNameNumber(tx *sql.Tx, doctypeName, prefix, tableName string) (int64, error) {
+	var maxNum sql.NullInt64
+	if err := tx.QueryRow(d.NameGenQuery(tableName, prefix)).Scan(&maxNum); err != nil {
+		return 0, fmt.Errorf("reading max name number: %w", err)
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO "_kora_naming_series" ("doctype", "prefix", "current", "modified")
+VALUES (?, ?, ?, STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
+ON CONFLICT("doctype", "prefix") DO NOTHING`,
+		doctypeName, prefix, maxNum.Int64,
+	); err != nil {
+		return 0, fmt.Errorf("initializing name counter: %w", err)
+	}
+	var allocated int64
+	if err := tx.QueryRow(
+		`UPDATE "_kora_naming_series"
+SET "current" = "current" + 1,
+    "modified" = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
+WHERE "doctype" = ? AND "prefix" = ?
+RETURNING "current"`,
+		doctypeName, prefix,
+	).Scan(&allocated); err != nil {
+		return 0, fmt.Errorf("allocating name number: %w", err)
+	}
+	return allocated, nil
+}
+
 func (d *LibSQLDialect) NameGenQuery(tableName, prefix string) string {
 	// SQLite: SUBSTR(name, INSTR(name, '-')+1) extracts text after the first dash.
 	// CAST AS INTEGER converts to number.
@@ -408,6 +435,15 @@ func (d *LibSQLDialect) ExecuteBatch(db *sql.DB, statements []string) error {
 
 func (d *LibSQLDialect) SystemTableSQL() []string {
 	return []string{
+		// _kora_naming_series
+		`CREATE TABLE IF NOT EXISTS "_kora_naming_series" (
+			"doctype" TEXT NOT NULL,
+			"prefix" TEXT NOT NULL,
+			"current" INTEGER NOT NULL DEFAULT 0,
+			"modified" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+			PRIMARY KEY ("doctype", "prefix")
+		)`,
+
 		// _kora_doctype
 		`CREATE TABLE IF NOT EXISTS "_kora_doctype" (
 			"name" TEXT NOT NULL PRIMARY KEY,

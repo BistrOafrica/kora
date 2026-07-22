@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/doctype"
 	"github.com/asenawritescode/kora/orm"
+	"github.com/asenawritescode/kora/script"
 )
 
 // setupTestHandler creates a Handler with a mocked DB, a registry containing
@@ -70,6 +72,26 @@ func injectDB(c *gin.Context, sqlDB *sql.DB, reg *doctype.Registry) {
 	c.Set("site_db", sqlDB)
 	c.Set("site_registry", reg)
 }
+
+func expectGeneratedName(mock sqlmock.Sqlmock, maxSuffix, allocated int64) {
+	mock.ExpectQuery("SELECT COALESCE\\(MAX").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(maxSuffix))
+	mock.ExpectExec("INSERT INTO _kora_naming_series").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT LAST_INSERT_ID\\(\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"last_insert_id"}).AddRow(allocated))
+}
+
+type fakeScriptRunner struct{}
+
+func (fakeScriptRunner) Execute(context.Context, script.ExecuteRequest) (*script.ExecuteResult, error) {
+	return &script.ExecuteResult{}, nil
+}
+
+func (fakeScriptRunner) Validate(string) error { return nil }
+
+func (fakeScriptRunner) Close() error { return nil }
 
 // ---------------------------------------------------------------------------
 // HandleList
@@ -322,8 +344,7 @@ func TestHandleCreate_ValidDoc(t *testing.T) {
 
 	// Insert uses a transaction: Begin → NameGen → INSERT → Commit
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT COALESCE\\(MAX").
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	expectGeneratedName(mock, 0, 1)
 	mock.ExpectExec("INSERT INTO `tabTestDoc`").
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -360,8 +381,7 @@ func TestHandleCreate_ValidationError(t *testing.T) {
 
 	// Should succeed — validation passes for an empty Data field.
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT COALESCE\\(MAX").
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	expectGeneratedName(mock, 0, 1)
 	mock.ExpectExec("INSERT INTO `tabTestDoc`").
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -719,8 +739,7 @@ func TestExtensionPermission_CreateGranted(t *testing.T) {
 	handler, reg, mock, sqlDB := setupTestHandler(t)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT COALESCE\\(MAX").
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	expectGeneratedName(mock, 0, 1)
 	mock.ExpectExec("INSERT INTO `tabTestDoc`").
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))

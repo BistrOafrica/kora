@@ -38,6 +38,7 @@ type QueryDialect interface {
 	UpsertClause(conflictCols []string, updateCols []string) string
 	UpsertIncrement(conflictCols []string, incrementCols []string) string
 	InsertOrIgnorePrefix() string
+	AllocateNameNumber(tx *sql.Tx, doctypeName, prefix, tableName string) (int64, error)
 	NameGenQuery(tableName, prefix string) string
 	Placeholder(n int) string
 	NowTimestamp() string

@@ -112,16 +112,13 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 
 	nextNum := 1
 	if doc.Name == "" {
-		var maxNum sql.NullInt64
 		prefix := derivePrefix(dt.Name)
-		err := dbTx.QueryRow(
-			tx.Dialect.NameGenQuery(dt.RawTableName(), prefix),
-		).Scan(&maxNum)
+		allocated, err := tx.Dialect.AllocateNameNumber(dbTx, dt.Name, prefix, dt.RawTableName())
 		if err != nil {
-			return fmt.Errorf("reading max name number: %w", err)
+			return err
 		}
-		nextNum = int(maxNum.Int64) + 1
-		doc.Name = fmt.Sprintf("%s-%04d", derivePrefix(dt.Name), nextNum)
+		nextNum = int(allocated)
+		doc.Name = fmt.Sprintf("%s-%04d", prefix, nextNum)
 	}
 
 	now := time.Now()
