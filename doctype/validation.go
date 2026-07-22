@@ -50,9 +50,7 @@ func ValidateDocument(dt *DocType, doc *Document, registry *Registry, oldDoc *Do
 	var errors ValidationErrors
 
 	// Evaluate predicate-based document constraints.
-	sandbox := NewLispSandbox()
-	defer sandbox.Close()
-
+	var sandbox *LispSandbox
 	for _, dc := range dt.DocConstraints {
 		if dc.Predicate == "" {
 			continue
@@ -63,6 +61,10 @@ func ValidateDocument(dt *DocType, doc *Document, registry *Registry, oldDoc *Do
 			}
 		}
 
+		if sandbox == nil {
+			sandbox = NewLispSandbox()
+			defer sandbox.Close()
+		}
 		result, err := sandbox.Eval(dc.Predicate, doc.Fields, nil)
 		if err != nil {
 			errors = append(errors, &ValidationError{
