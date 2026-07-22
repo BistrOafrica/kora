@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -530,6 +531,14 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 		}
 	}
 
+	if h.canShortCircuitNoopUpdate() && !resourceUpdateChanged(dt, oldDoc, rawData) {
+		c.JSON(http.StatusOK, Response{
+			Data: docToMap(oldDoc, dt, h.siteRegistry(c), nil),
+			Meta: &Meta{DocType: doctypeName},
+		})
+		return
+	}
+
 	// Run validate hooks (scripts can reject with throw).
 	if err := h.siteTx(c).RunHooksForValidate(dt, doc, oldDoc); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -570,6 +579,126 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 		Data: docToMap(doc, dt, h.siteRegistry(c), nil),
 		Meta: &Meta{DocType: doctypeName},
 	})
+}
+
+func (h *Handler) canShortCircuitNoopUpdate() bool {
+	return h.ScriptRunner == nil
+}
+
+func resourceUpdateChanged(dt *doctype.DocType, oldDoc *doctype.Document, rawData map[string]any) bool {
+	for key, newVal := range rawData {
+		field := dt.GetField(key)
+		if field == nil || field.ReadOnly {
+			continue
+		}
+		if field.Fieldtype == "Table" {
+			return true
+		}
+		if !resourceFieldValuesEqual(field, oldDoc.Get(key), newVal) {
+			return true
+		}
+	}
+	return false
+}
+
+func resourceFieldValuesEqual(field *doctype.Field, oldVal, newVal any) bool {
+	if oldVal == nil || newVal == nil {
+		return oldVal == newVal
+	}
+
+	switch field.Fieldtype {
+	case "Int":
+		oldInt, okOld := anyToInt64(oldVal)
+		newInt, okNew := anyToInt64(newVal)
+		return okOld && okNew && oldInt == newInt
+	case "Float", "Currency", "Percent":
+		oldFloat, okOld := anyToFloat64(oldVal)
+		newFloat, okNew := anyToFloat64(newVal)
+		return okOld && okNew && oldFloat == newFloat
+	case "Check":
+		oldBool, okOld := anyToBool(oldVal)
+		newBool, okNew := anyToBool(newVal)
+		return okOld && okNew && oldBool == newBool
+	case "JSON":
+		return jsonValuesEqual(oldVal, newVal)
+	default:
+		return reflect.DeepEqual(oldVal, newVal)
+	}
+}
+
+func anyToInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case int:
+		return int64(n), true
+	case int64:
+		return n, true
+	case float64:
+		if n == math.Trunc(n) {
+			return int64(n), true
+		}
+	case []byte:
+		return anyToInt64(string(n))
+	case string:
+		parsed, err := strconv.ParseInt(n, 10, 64)
+		return parsed, err == nil
+	}
+	return 0, false
+}
+
+func anyToFloat64(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case float64:
+		return n, true
+	case []byte:
+		return anyToFloat64(string(n))
+	case string:
+		parsed, err := strconv.ParseFloat(n, 64)
+		return parsed, err == nil
+	}
+	return 0, false
+}
+
+func anyToBool(v any) (bool, bool) {
+	switch b := v.(type) {
+	case bool:
+		return b, true
+	case int64:
+		return b != 0, true
+	case float64:
+		return b != 0, true
+	case []byte:
+		return anyToBool(string(b))
+	case string:
+		if b == "1" {
+			return true, true
+		}
+		if b == "0" {
+			return false, true
+		}
+		parsed, err := strconv.ParseBool(b)
+		return parsed, err == nil
+	}
+	return false, false
+}
+
+func jsonValuesEqual(oldVal, newVal any) bool {
+	var oldDecoded any
+	if s, ok := oldVal.(string); ok {
+		if err := json.Unmarshal([]byte(s), &oldDecoded); err == nil {
+			oldVal = oldDecoded
+		}
+	}
+	var newDecoded any
+	if s, ok := newVal.(string); ok {
+		if err := json.Unmarshal([]byte(s), &newDecoded); err == nil {
+			newVal = newDecoded
+		}
+	}
+	return reflect.DeepEqual(oldVal, newVal)
 }
 
 // --- Delete Handler ---

@@ -459,8 +459,8 @@ func TestHandleUpdate_Valid(t *testing.T) {
 	// GetDoc (no transaction).
 	mock.ExpectQuery("SELECT .+ FROM `tabTestDoc` WHERE name = \\?").
 		WithArgs("TEST-0001").
-		WillReturnRows(sqlmock.NewRows([]string{"name", "owner", "creation", "modified", "modified_by", "doc_status", "title"}).
-			AddRow("TEST-0001", "admin", "2024-01-01 00:00:00", "2024-01-01 00:00:00", "admin", 0, "Original Title"))
+		WillReturnRows(sqlmock.NewRows([]string{"title", "name", "owner", "creation", "modified", "modified_by", "doc_status"}).
+			AddRow("Original Title", "TEST-0001", "admin", "2024-01-01 00:00:00", "2024-01-01 00:00:00", "admin", 0))
 
 	// Save uses a transaction: Begin → UPDATE → Commit
 	mock.ExpectBegin()
@@ -495,6 +495,134 @@ func TestHandleUpdate_Valid(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unmet mock expectations: %v", err)
+	}
+}
+
+func TestHandleUpdate_NoEditableChangesSkipsSave(t *testing.T) {
+	handler, reg, mock, sqlDB := setupTestHandler(t)
+
+	mock.ExpectQuery("SELECT .+ FROM `tabTestDoc` WHERE name = \\?").
+		WithArgs("TEST-0001").
+		WillReturnRows(sqlmock.NewRows([]string{"title", "name", "owner", "creation", "modified", "modified_by", "doc_status"}).
+			AddRow("Original Title", "TEST-0001", "admin", "2024-01-01 00:00:00", "2024-01-01 00:00:00", "admin", 0))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := `{"title": "Original Title"}`
+	c.Request = httptest.NewRequest("PUT", "/api/resource/TestDoc/TEST-0001", strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{
+		{Key: "doctype", Value: "TestDoc"},
+		{Key: "name", Value: "TEST-0001"},
+	}
+	injectDB(c, sqlDB, reg)
+	injectContext(c)
+
+	handler.HandleUpdate(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet mock expectations: %v", err)
+	}
+}
+
+func TestHandleUpdate_ReadOnlySubmittedFieldSkipsSave(t *testing.T) {
+	handler, reg, mock, sqlDB := setupTestHandler(t)
+	dt := reg.Get("TestDoc")
+	dt.Fields = append(dt.Fields, doctype.Field{
+		Fieldname: "internal_note",
+		Fieldtype: "Data",
+		ReadOnly:  true,
+	})
+	reg.Register(dt)
+
+	mock.ExpectQuery("SELECT .+ FROM `tabTestDoc` WHERE name = \\?").
+		WithArgs("TEST-0001").
+		WillReturnRows(sqlmock.NewRows([]string{"title", "internal_note", "name", "owner", "creation", "modified", "modified_by", "doc_status"}).
+			AddRow("Original Title", "locked", "TEST-0001", "admin", "2024-01-01 00:00:00", "2024-01-01 00:00:00", "admin", 0))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := `{"internal_note": "changed"}`
+	c.Request = httptest.NewRequest("PUT", "/api/resource/TestDoc/TEST-0001", strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{
+		{Key: "doctype", Value: "TestDoc"},
+		{Key: "name", Value: "TEST-0001"},
+	}
+	injectDB(c, sqlDB, reg)
+	injectContext(c)
+
+	handler.HandleUpdate(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet mock expectations: %v", err)
+	}
+}
+
+func TestHandleUpdate_ScriptRunnerDisablesNoopShortCircuit(t *testing.T) {
+	handler, reg, mock, sqlDB := setupTestHandler(t)
+	handler.ScriptRunner = fakeScriptRunner{}
+
+	mock.ExpectQuery("SELECT .+ FROM `tabTestDoc` WHERE name = \\?").
+		WithArgs("TEST-0001").
+		WillReturnRows(sqlmock.NewRows([]string{"title", "name", "owner", "creation", "modified", "modified_by", "doc_status"}).
+			AddRow("Original Title", "TEST-0001", "admin", "2024-01-01 00:00:00", "2024-01-01 00:00:00", "admin", 0))
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `tabTestDoc` SET").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := `{"title": "Original Title"}`
+	c.Request = httptest.NewRequest("PUT", "/api/resource/TestDoc/TEST-0001", strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{
+		{Key: "doctype", Value: "TestDoc"},
+		{Key: "name", Value: "TEST-0001"},
+	}
+	injectDB(c, sqlDB, reg)
+	injectContext(c)
+
+	handler.HandleUpdate(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet mock expectations: %v", err)
+	}
+}
+
+func TestResourceFieldValuesEqualNormalizesCommonSQLAndJSONTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		field    doctype.Field
+		oldVal   any
+		newVal   any
+		wantSame bool
+	}{
+		{"int string and json number", doctype.Field{Fieldtype: "Int"}, "7", float64(7), true},
+		{"float string and json number", doctype.Field{Fieldtype: "Currency"}, "7.50", float64(7.5), true},
+		{"check int and bool", doctype.Field{Fieldtype: "Check"}, int64(1), true, true},
+		{"json string and object", doctype.Field{Fieldtype: "JSON"}, `{"enabled":true}`, map[string]any{"enabled": true}, true},
+		{"data change", doctype.Field{Fieldtype: "Data"}, "old", "new", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resourceFieldValuesEqual(&tt.field, tt.oldVal, tt.newVal)
+			if got != tt.wantSame {
+				t.Fatalf("resourceFieldValuesEqual() = %v, want %v", got, tt.wantSame)
+			}
+		})
 	}
 }
 
