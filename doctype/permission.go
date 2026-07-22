@@ -17,26 +17,26 @@ func SetAdminRole(role string) { AdminRole = role }
 
 // Role definition from roles.yaml
 type Role struct {
-	Name        string `yaml:"name"        json:"name"`
+	Name            string `yaml:"name"        json:"name"`
 	WorkspaceAccess bool   `yaml:"workspace_access" json:"workspace_access"`
-	Description string `yaml:"description" json:"description"`
+	Description     string `yaml:"description" json:"description"`
 }
 
 // Permission definition from permissions.yaml
 type Permission struct {
-	Doctype   string `yaml:"doctype"   json:"doctype"`
-	Role      string `yaml:"role"      json:"role"`
-	Read      bool   `yaml:"read"      json:"read"`
-	Write     bool   `yaml:"write"     json:"write"`
-	Create    bool   `yaml:"create"    json:"create"`
-	Delete    bool   `yaml:"delete"    json:"delete"`
-	Submit    bool   `yaml:"submit"    json:"submit"`
-	Cancel    bool   `yaml:"cancel"    json:"cancel"`
-	Amend     bool   `yaml:"amend"     json:"amend"`
-	Export    bool   `yaml:"export"    json:"export"`
-	Import    bool   `yaml:"import"    json:"import"`
-	Report    bool   `yaml:"report"    json:"report"`
-	IfOwner   bool   `yaml:"if_owner"  json:"if_owner"`
+	Doctype string `yaml:"doctype"   json:"doctype"`
+	Role    string `yaml:"role"      json:"role"`
+	Read    bool   `yaml:"read"      json:"read"`
+	Write   bool   `yaml:"write"     json:"write"`
+	Create  bool   `yaml:"create"    json:"create"`
+	Delete  bool   `yaml:"delete"    json:"delete"`
+	Submit  bool   `yaml:"submit"    json:"submit"`
+	Cancel  bool   `yaml:"cancel"    json:"cancel"`
+	Amend   bool   `yaml:"amend"     json:"amend"`
+	Export  bool   `yaml:"export"    json:"export"`
+	Import  bool   `yaml:"import"    json:"import"`
+	Report  bool   `yaml:"report"    json:"report"`
+	IfOwner bool   `yaml:"if_owner"  json:"if_owner"`
 }
 
 // PermissionMatrix provides fast lookup of permissions.
@@ -192,6 +192,11 @@ func ParseRolesFile(path string) ([]*Role, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading roles file: %w", err)
 	}
+	return ParseRolesYAML(data)
+}
+
+// ParseRolesYAML parses roles from YAML data in memory.
+func ParseRolesYAML(data []byte) ([]*Role, error) {
 	var roles []*Role
 	if err := yaml.Unmarshal(data, &roles); err != nil {
 		return nil, fmt.Errorf("parsing roles: %w", err)
@@ -210,6 +215,11 @@ func ParsePermissionsFile(path string) ([]*Permission, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading permissions file: %w", err)
 	}
+	return ParsePermissionsYAML(data)
+}
+
+// ParsePermissionsYAML parses permissions from YAML data in memory.
+func ParsePermissionsYAML(data []byte) ([]*Permission, error) {
 	var perms []*Permission
 	if err := yaml.Unmarshal(data, &perms); err != nil {
 		return nil, fmt.Errorf("parsing permissions: %w", err)

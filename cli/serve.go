@@ -244,7 +244,26 @@ func runServe() error {
 			return
 		}
 		if existing := siteRouter.SiteByName(req.Site); existing != nil {
-			c.JSON(http.StatusOK, gin.H{"status": "already_loaded", "site": req.Site})
+			// Site already loaded — rebuild its registry from DB to pick up config changes.
+			infos, err := site.DiscoverSitesFromDB(platformDB)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			for _, info := range infos {
+				if info.Name != req.Site {
+					continue
+				}
+				reloaded, err := loadRuntimeSite(info, common)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+				siteRouter.AddSite(reloaded)
+				c.JSON(http.StatusOK, gin.H{"status": "reloaded", "site": req.Site})
+				return
+			}
+			c.JSON(http.StatusNotFound, gin.H{"error": "site not found in registry"})
 			return
 		}
 		infos, err := site.DiscoverSitesFromDB(platformDB)

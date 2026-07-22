@@ -110,8 +110,17 @@ func TestParseContentConfigsWithPublicAccess(t *testing.T) {
 		t.Fatal("expected content doctypes")
 	}
 
+	// Doctypes that are intentionally private (internal CMS schema, not website-facing).
+	privateDoctypes := map[string]bool{
+		"Template Pack":      true,
+		"Template Pack File": true,
+	}
+
 	seenPublic := false
 	for _, dt := range doctypes {
+		if privateDoctypes[dt.Name] {
+			continue
+		}
 		if dt.PublicAccess == nil {
 			t.Fatalf("%s should define public_access", dt.Name)
 		}

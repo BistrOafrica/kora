@@ -160,9 +160,10 @@ func getUserPermissions(reg *doctype.Registry, c *gin.Context, dt string) map[st
 
 // NavigationResponse is the full navigation config for the SPA sidebar.
 type NavigationResponse struct {
-	Modules  []ModuleGroup `json:"modules"`
-	Branding Branding      `json:"branding"`
-	User     UserInfo      `json:"user"`
+	Modules           []ModuleGroup `json:"modules"`
+	Branding          Branding      `json:"branding"`
+	User              UserInfo      `json:"user"`
+	AdminCapabilities []string      `json:"admin_capabilities"`
 }
 
 // ModuleGroup is a group of DocTypes under a module.
@@ -273,13 +274,34 @@ func (h *Handler) HandleSystemNavigation(c *gin.Context) {
 
 	branding := AppBranding
 
+	// Admin capabilities: only users with the admin role see the Administrator section.
+	// Each string matches the `name` of an admin item in the sidebar (Sidebar.tsx:adminItems).
+	adminCapabilities := []string{}
+	if userHasAdminRole(user.Roles) {
+		adminCapabilities = []string{
+			"doctypes", "permissions", "workflows", "versions",
+			"users", "scripts", "extensions", "secrets", "analytics",
+		}
+	}
+
 	c.JSON(http.StatusOK, Response{
 		Data: NavigationResponse{
-			Modules:  modules,
-			Branding: branding,
-			User:     user,
+			Modules:           modules,
+			Branding:          branding,
+			User:              user,
+			AdminCapabilities: adminCapabilities,
 		},
 	})
+}
+
+// userHasAdminRole returns true if the user has the configured admin role.
+func userHasAdminRole(roles []string) bool {
+	for _, r := range roles {
+		if r == doctype.AdminRole {
+			return true
+		}
+	}
+	return false
 }
 
 // findReferencingDoctypes returns a list of doctypes that have Link fields pointing to targetDoctype.
@@ -1308,6 +1330,136 @@ func (h *Handler) HandleConfigVersionRollback(c *gin.Context) {
 	}})
 }
 
+// HandleConfigVersionSnapshot returns the full ConfigSnapshot for a version,
+// including ready-to-use YAML pack files for the Template Pack workflow.
+// GET /api/system/config/versions/:id/snapshot
+func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
+	versionID := c.Param("id")
+	db := h.siteTx(c).DB
+
+	var configJSON, siteName, label string
+	var versionNum int
+	err := db.QueryRow(
+		"SELECT config, site, version, COALESCE(label, '') FROM _kora_config_version WHERE id = ?", versionID,
+	).Scan(&configJSON, &siteName, &versionNum, &label)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Version not found"}})
+		return
+	}
+
+	snapshot, err := doctype.ParseConfig(configJSON)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: map[string]string{"message": "Failed to parse version config: " + err.Error()},
+		})
+		return
+	}
+
+	// Collect doctype names.
+	doctypeNames := make([]string, 0, len(snapshot.DocTypes))
+	for _, dt := range snapshot.DocTypes {
+		if dt != nil {
+			doctypeNames = append(doctypeNames, dt.Name)
+		}
+	}
+
+	// Generate YAML pack files ready for Template Pack File rows.
+	packFiles := make([]map[string]string, 0)
+
+	// Doctypes → doctypes/<name>.yaml
+	for _, dt := range snapshot.DocTypes {
+		if dt == nil {
+			continue
+		}
+		yamlBytes, err := yaml.Marshal(dt)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: map[string]string{"message": fmt.Sprintf("Failed to serialize doctype %s: %v", dt.Name, err)},
+			})
+			return
+		}
+		packFiles = append(packFiles, map[string]string{
+			"path":         fmt.Sprintf("doctypes/%s.yaml", strings.ToLower(dt.Name)),
+			"content":      string(yamlBytes),
+			"content_type": "doctype",
+		})
+	}
+
+	// Roles → roles.yaml
+	if len(snapshot.Roles) > 0 {
+		yamlBytes, err := yaml.Marshal(snapshot.Roles)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: map[string]string{"message": fmt.Sprintf("Failed to serialize roles: %v", err)},
+			})
+			return
+		}
+		packFiles = append(packFiles, map[string]string{
+			"path":         "roles.yaml",
+			"content":      string(yamlBytes),
+			"content_type": "roles",
+		})
+	}
+
+	// Permissions → permissions.yaml
+	if len(snapshot.Permissions) > 0 {
+		yamlBytes, err := yaml.Marshal(snapshot.Permissions)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: map[string]string{"message": fmt.Sprintf("Failed to serialize permissions: %v", err)},
+			})
+			return
+		}
+		packFiles = append(packFiles, map[string]string{
+			"path":         "permissions.yaml",
+			"content":      string(yamlBytes),
+			"content_type": "permissions",
+		})
+	}
+
+	// Workflows → workflows/<name>.yaml
+	for _, wf := range snapshot.Workflows {
+		if wf == nil {
+			continue
+		}
+		yamlBytes, err := yaml.Marshal(wf)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: map[string]string{"message": fmt.Sprintf("Failed to serialize workflow %s: %v", wf.Name, err)},
+			})
+			return
+		}
+		packFiles = append(packFiles, map[string]string{
+			"path":         fmt.Sprintf("doctypes/%s_workflow.yaml", strings.ToLower(wf.Name)),
+			"content":      string(yamlBytes),
+			"content_type": "workflow",
+		})
+	}
+
+	// Full snapshot JSON (reference).
+	snapshotJSON, err := json.Marshal(snapshot)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: map[string]string{"message": "Failed to serialize snapshot: " + err.Error()},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{Data: map[string]any{
+		"version_id":        versionID,
+		"version":           versionNum,
+		"site":              siteName,
+		"label":             label,
+		"doctype_names":     doctypeNames,
+		"doctype_count":     len(snapshot.DocTypes),
+		"roles_count":       len(snapshot.Roles),
+		"permissions_count": len(snapshot.Permissions),
+		"workflows_count":   len(snapshot.Workflows),
+		"snapshot":          json.RawMessage(snapshotJSON),
+		"pack_files":        packFiles,
+	}})
+}
+
 // --- Config Import (YAML upload) ---
 
 // HandleConfigImport imports a YAML config file and returns parsed DocType JSON.
@@ -1569,6 +1721,7 @@ func RegisterSystemRoutes(apiGroup *gin.RouterGroup, handler *Handler) {
 		system.POST("/config/versions/:id/discard", handler.HandleConfigVersionDiscard)
 		system.GET("/config/versions/:id/rollback-preview", handler.HandleConfigVersionRollbackPreview)
 		system.POST("/config/versions/:id/rollback", handler.HandleConfigVersionRollback)
+		system.GET("/config/versions/:id/snapshot", handler.HandleConfigVersionSnapshot)
 
 		// Config import.
 		system.POST("/config/import", handler.HandleConfigImport)

@@ -1,0 +1,65 @@
+name: Template Pack
+module: Website
+title_field: pack_name
+sort_field: modified
+sort_order: DESC
+
+fields:
+  - fieldname: pack_name
+    fieldtype: Data
+    label: Pack Name
+    reqd: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: version
+    fieldtype: Data
+    label: Version
+    default: "1.0.0"
+    in_list_view: true
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      draft
+      reviewed
+      published
+      deprecated
+    default: draft
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: min_kora_version
+    fieldtype: Data
+    label: Minimum Kora Version
+    description: Kora binary version required to deploy this pack (e.g., 0.8.17).
+
+  - fieldname: config_hash
+    fieldtype: Data
+    label: Config Hash
+    description: SHA-256 hash of the full pack content. Set automatically after validation.
+    read_only: true
+
+  - fieldname: validation_status
+    fieldtype: Select
+    label: Validation Status
+    options: |
+      pending
+      valid
+      invalid
+    default: pending
+    read_only: true
+    in_list_view: true
+
+  - fieldname: validation_error
+    fieldtype: Text
+    label: Validation Error
+    description: Error message if validation failed. Set automatically.
+    read_only: true
+
+  - fieldname: template_files
+    fieldtype: Table
+    label: Pack Files
+    options: Template Pack File

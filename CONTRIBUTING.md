@@ -53,7 +53,7 @@ Kora is a **single Go binary** that embeds a React SPA inside itself:
 Browser → :8000 → Gin router
   ├── /api/*       → SiteGuard (auth) → Permission check → ORM → MySQL
   ├── /workspace/* → NoRoute handler → serves embedded React SPA
-  ├── /console/*   → SystemGuard → server-rendered admin console
+  ├── /console/*   → SystemGuard → embedded React SPA (console)
   └── /api/auth/*  → Public (login, logout)
 ```
 
@@ -123,8 +123,7 @@ kora/
 ├── orm/            # Generic CRUD on map[string]any documents
 ├── schema/         # INFORMATION_SCHEMA diff → DDL, migration safety tiers
 ├── configstore/    # Persist config to _kora_* tables, versioning, roles/permissions
-├── workspace/      # SPA serving (go:embed), NoRoute handler
-├── console/        # System admin console (server-rendered Go HTML templates)
+├── workspace/      # SPA serving (go:embed), NoRoute handler, console SPA
 ├── scheduler/      # Cron-style background jobs
 ├── ui/             # React 19 SPA
 │   ├── src/
@@ -150,7 +149,7 @@ kora/
 
 | You want to... | Change this |
 |---------------|-------------|
-| Add a new API endpoint | `api/system.go` — add handler, register in `RegisterSystemRoutes` |
+| Add a new API endpoint | `api/system.go` — add handler, register in `RegisterSystemRoutes` (in `api/router.go`) |
 | Add a new field type | `doctype/doctype.go` — add to `validateFieldType`, `Field.DBType`, `Field.IsDataField`; `ui/src/types/kora.ts` — add to `FieldType` union; `ui/src/components/forms/FieldRenderer.tsx` — add render case |
 | Add a new admin page | `ui/src/routes/workspace/admin/` — new page component; `ui/src/router.tsx` — add route; `ui/src/components/layout/Sidebar.tsx` — add nav item |
 | Change how data is stored | `configstore/store.go` — DB schema and queries; `doctype/` — struct definitions |

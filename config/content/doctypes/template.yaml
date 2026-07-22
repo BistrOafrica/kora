@@ -94,10 +94,16 @@ fields:
     in_list_view: true
     in_standard_filter: true
 
+  - fieldname: template_pack
+    fieldtype: Link
+    label: Template Pack
+    options: Template Pack
+    description: The deployable schema pack for this template.
+
   - fieldname: config_pack
     fieldtype: Data
-    label: Config Pack
-    description: Internal config pack used during provisioning.
+    label: Config Pack (Legacy)
+    description: Legacy filesystem config pack path. Use template_pack instead.
 
   - fieldname: internal_notes
     fieldtype: Text

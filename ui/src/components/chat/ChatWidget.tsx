@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useMemo, useState, useRef, useEffect, type KeyboardEvent, type ReactNode } from 'react'
 import { useRouterState } from '@tanstack/react-router'
 import { useUIStore } from '@/lib/ui-store'
 import { useChat } from './useChat'
@@ -19,6 +19,12 @@ export function ChatWidget() {
   const { messages, loading, error, send } = useChat()
   const routerState = useRouterState()
   const { shellMode } = useUIStore()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when new messages arrive or loading state changes.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
 
   const context = useMemo(() => {
     const pathname = routerState.location.pathname
@@ -205,6 +211,7 @@ export function ChatWidget() {
                 {error}
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           <div className="border-t bg-background px-4 py-3">

@@ -5,7 +5,8 @@ import { useAuthStore } from '@/lib/auth-store'
 import { useUIStore } from '@/lib/ui-store'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { LayoutGrid, ArrowRight, Star, Clock, CheckCircle2, Boxes, PlusCircle, Search, Filter } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { LayoutGrid, ArrowRight, Star, Clock, CheckCircle2, Boxes, PlusCircle, Search, Filter, AlertCircle, RefreshCw } from 'lucide-react'
 import { getFavorites, getRecentDoctypes, recordDoctypeVisit } from '@/lib/recent-doctypes'
 import { listDocumentDrafts } from '@/lib/draft-storage'
 import { useState, useEffect, useMemo } from 'react'
@@ -15,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
 export default function DashboardPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['navigation'],
     queryFn: fetchNavigation,
     staleTime: 5 * 60_000,
@@ -172,8 +173,20 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Module cards */}
-      {isLoading ? (
+      {/* Module grid */}
+      {isError && !isLoading ? (
+        <div className="rounded-lg border border-dashed border-destructive/50 p-12 text-center">
+          <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
+          <h3 className="mt-4 text-lg font-medium">Failed to load navigation</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {error instanceof Error ? error.message : 'The server returned an error. Check your connection and try again.'}
+          </p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={() => refetch()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
+        </div>
+      ) : isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-32" />
@@ -247,12 +260,12 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {!isLoading && !data?.modules?.length && (
+      {!isLoading && !isError && !data?.modules?.length && (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <LayoutGrid className="mx-auto h-12 w-12 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-medium">No modules configured</h3>
+          <h3 className="mt-4 text-lg font-medium">No modules configured yet</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Run <code className="rounded bg-muted px-1 py-0.5 text-xs">kora config import</code> to load doctypes.
+            Create your first DocType to start building your application.
           </p>
         </div>
       )}

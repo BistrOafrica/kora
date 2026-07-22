@@ -259,11 +259,16 @@ func ParseFile(path string) (*DocType, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading file %s: %w", path, err)
 	}
+	return ParseYAML(data, path)
+}
 
+// ParseYAML parses a DocType from YAML data in memory (no filesystem dependency).
+// The source name is used for error messages (e.g., "doctypes/patient.yaml").
+func ParseYAML(data []byte, source string) (*DocType, error) {
 	dt := &DocType{}
 	unknowns, err := strictUnmarshal(data, dt, "doctype")
 	if err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
+		return nil, fmt.Errorf("parsing %s: %w", source, err)
 	}
 	if len(unknowns) > 0 {
 		for _, u := range unknowns {
@@ -272,16 +277,16 @@ func ParseFile(path string) (*DocType, error) {
 				u.Detail = fmt.Sprintf("did you mean %q?", suggestion)
 			}
 		}
-		return nil, formatSyntaxErrors(path, unknowns)
+		return nil, formatSyntaxErrors(source, unknowns)
 	}
 
 	// Also check fields for unknown keys by parsing the raw YAML with the field struct.
 	if err := checkFieldUnknownKeys(data); err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
+		return nil, fmt.Errorf("parsing %s: %w", source, err)
 	}
 
 	if err := dt.Validate(); err != nil {
-		return nil, fmt.Errorf("validating %s: %w", path, err)
+		return nil, fmt.Errorf("validating %s: %w", source, err)
 	}
 
 	return dt, nil
@@ -294,16 +299,18 @@ func ParseFileNonStrict(path string) (*DocType, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading file %s: %w", path, err)
 	}
+	return ParseYAMLNonStrict(data, path)
+}
 
+// ParseYAMLNonStrict parses a DocType from YAML data without strict key checking.
+func ParseYAMLNonStrict(data []byte, source string) (*DocType, error) {
 	dt := &DocType{}
 	if err := goyaml.Unmarshal(data, dt); err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
+		return nil, fmt.Errorf("parsing %s: %w", source, err)
 	}
-
 	if err := dt.Validate(); err != nil {
-		return nil, fmt.Errorf("validating %s: %w", path, err)
+		return nil, fmt.Errorf("validating %s: %w", source, err)
 	}
-
 	return dt, nil
 }
 

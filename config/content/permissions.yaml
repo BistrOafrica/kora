@@ -39,3 +39,17 @@
   write: true
   create: true
   delete: true
+
+- doctype: Template Pack
+  role: Content Manager
+  read: true
+  write: true
+  create: true
+  delete: true
+
+- doctype: Template Pack File
+  role: Content Manager
+  read: true
+  write: true
+  create: true
+  delete: true

@@ -1,0 +1,32 @@
+name: Template Pack File
+module: Website
+is_child_table: true
+title_field: path
+sort_field: path
+sort_order: ASC
+
+fields:
+  - fieldname: path
+    fieldtype: Data
+    label: File Path
+    reqd: true
+    in_list_view: true
+    description: Relative path within the pack (e.g., doctypes/patient.yaml, roles.yaml).
+
+  - fieldname: content
+    fieldtype: Text Editor
+    label: Content
+    reqd: true
+    description: YAML file content. Supports up to 256KB per file.
+
+  - fieldname: content_type
+    fieldtype: Select
+    label: Content Type
+    options: |
+      doctype
+      roles
+      permissions
+      workflow
+    default: doctype
+    in_list_view: true
+    description: What this file defines.

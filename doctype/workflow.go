@@ -10,12 +10,12 @@ import (
 
 // Workflow defines a document lifecycle with states and transitions.
 type Workflow struct {
-	Name               string              `yaml:"name"                json:"name"`
-	DocumentType       string              `yaml:"document_type"       json:"document_type"`
-	IsActive           bool                `yaml:"is_active"           json:"is_active"`
-	WorkflowStateField string              `yaml:"workflow_state_field" json:"workflow_state_field"`
-	States             []WorkflowState     `yaml:"states"              json:"states"`
-	Transitions        []WorkflowTransition `yaml:"transitions"        json:"transitions"`
+	Name               string                 `yaml:"name"                json:"name"`
+	DocumentType       string                 `yaml:"document_type"       json:"document_type"`
+	IsActive           bool                   `yaml:"is_active"           json:"is_active"`
+	WorkflowStateField string                 `yaml:"workflow_state_field" json:"workflow_state_field"`
+	States             []WorkflowState        `yaml:"states"              json:"states"`
+	Transitions        []WorkflowTransition   `yaml:"transitions"        json:"transitions"`
 	Notifications      []WorkflowNotification `yaml:"notifications"   json:"notifications,omitempty"`
 }
 
@@ -29,12 +29,12 @@ type WorkflowState struct {
 
 // WorkflowTransition defines a possible transition between states.
 type WorkflowTransition struct {
-	Action        string            `yaml:"action"         json:"action"`
-	From          string            `yaml:"from"           json:"from"`
-	To            string            `yaml:"to"             json:"to"`
-	Allowed       string            `yaml:"allowed"        json:"allowed"`        // Role(s) allowed to perform
-	Condition     string            `yaml:"condition"      json:"condition,omitempty"`
-	RequireFields []string          `yaml:"require_fields" json:"require_fields,omitempty"`
+	Action        string   `yaml:"action"         json:"action"`
+	From          string   `yaml:"from"           json:"from"`
+	To            string   `yaml:"to"             json:"to"`
+	Allowed       string   `yaml:"allowed"        json:"allowed"` // Role(s) allowed to perform
+	Condition     string   `yaml:"condition"      json:"condition,omitempty"`
+	RequireFields []string `yaml:"require_fields" json:"require_fields,omitempty"`
 
 	// OnTransition runs before the state change. Throwing aborts the transition.
 	OnTransition []WorkflowAction `yaml:"on_transition"  json:"on_transition,omitempty"`
@@ -46,20 +46,20 @@ type WorkflowTransition struct {
 
 // WorkflowAction defines a custom action to run during a workflow transition.
 type WorkflowAction struct {
-	Type       string `yaml:"type"       json:"type"`       // "script" or "webhook"
-	Script     string `yaml:"script"     json:"script,omitempty"`     // script name from _kora_script
+	Type       string `yaml:"type"       json:"type"`             // "script" or "webhook"
+	Script     string `yaml:"script"     json:"script,omitempty"` // script name from _kora_script
 	WebhookURL string `yaml:"webhook_url" json:"webhook_url,omitempty"`
 	Condition  string `yaml:"condition"  json:"condition,omitempty"`
-	Async      bool   `yaml:"async"      json:"async"`      // fire-and-forget
+	Async      bool   `yaml:"async"      json:"async"` // fire-and-forget
 }
 
 // WorkflowNotification defines a notification triggered by a state change.
 type WorkflowNotification struct {
-	Event      string   `yaml:"event"      json:"event"`
-	ToState    string   `yaml:"to_state"   json:"to_state,omitempty"`
+	Event      string              `yaml:"event"      json:"event"`
+	ToState    string              `yaml:"to_state"   json:"to_state,omitempty"`
 	Recipients []map[string]string `yaml:"recipients" json:"recipients"`
-	Subject    string   `yaml:"subject"    json:"subject"`
-	Message    string   `yaml:"message"    json:"message"`
+	Subject    string              `yaml:"subject"    json:"subject"`
+	Message    string              `yaml:"message"    json:"message"`
 }
 
 // WorkflowMap maps doctype names to their active workflows.
@@ -230,6 +230,11 @@ func ParseWorkflowFile(path string) (*Workflow, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading workflow file: %w", err)
 	}
+	return ParseWorkflowYAML(data)
+}
+
+// ParseWorkflowYAML parses a workflow from YAML data in memory.
+func ParseWorkflowYAML(data []byte) (*Workflow, error) {
 	wf := &Workflow{}
 	if err := yaml.Unmarshal(data, wf); err != nil {
 		return nil, fmt.Errorf("parsing workflow: %w", err)

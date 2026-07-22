@@ -24,6 +24,8 @@ export default function NewFormPage() {
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState<Record<string, any>>({})
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null)
+  const [draftRestored, setDraftRestored] = useState(false)
 
   const schemaQuery = useQuery({
     queryKey: ['doctype', doctype],
@@ -64,6 +66,7 @@ export default function NewFormPage() {
       if (cancelled) return
       if (draft?.value) {
         setFormData(applyComputedFields(fields, draft.value))
+        setDraftRestored(true)
       }
       draftLoadedRef.current = true
     })()
@@ -78,6 +81,7 @@ export default function NewFormPage() {
     const timer = window.setTimeout(() => {
       if (Object.keys(formData).length === 0) return
       void saveDocumentDraft({ doctype }, formData)
+      setDraftSavedAt(new Date())
     }, 350)
     return () => window.clearTimeout(timer)
   }, [doctype, formData])
@@ -115,11 +119,11 @@ export default function NewFormPage() {
     setError(null)
     setFieldErrors({})
     try {
-      await createDocument(doctype, formData)
+      const created = await createDocument(doctype, formData)
       setFormData({})
       await clearDocumentDraft({ doctype })
       toast('success', `${dt?.name || doctype} created`)
-      navigate({ to: '/workspace/$doctype', params: { doctype } })
+      navigate({ to: '/workspace/$doctype/$name', params: { doctype, name: created.name } })
     } catch (err: any) {
       const msg = err.message || 'Failed to create'
       setError(msg)
@@ -289,11 +293,18 @@ export default function NewFormPage() {
 
           <div className="rounded-xl border bg-card p-4 shadow-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Drafts</p>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li>Autosaves are kept locally while the form is open.</li>
-              <li>Child tables render as mobile cards.</li>
-              <li>Validation stays inline to reduce backtracking.</li>
-            </ul>
+            {draftRestored && (
+              <p className="mt-2 text-xs text-primary">Draft restored from local storage.</p>
+            )}
+            {draftSavedAt ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Draft saved at {draftSavedAt.toLocaleTimeString()}
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Drafts are saved automatically as you type.
+              </p>
+            )}
           </div>
         </aside>
       </div>

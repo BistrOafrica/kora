@@ -5,6 +5,7 @@ package orm
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -146,7 +147,12 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 		if val == nil && f.Default != "" {
 			val = convertDefault(f.Default, f.Fieldtype)
 		}
-		values = append(values, val)
+		// Normalize JSON fields: arrays/objects marshalled to string for SQL binding.
+		if normalized, err := normalizeSQLValue(f, val); err != nil {
+			return fmt.Errorf("field %s: %w", f.Fieldname, err)
+		} else {
+			values = append(values, normalized)
+		}
 	}
 
 	query := fmt.Sprintf(
@@ -313,8 +319,13 @@ func (tx *TxManager) Save(dt *doctype.DocType, doc *doctype.Document, modifiedBy
 				continue
 			}
 		}
-		setClauses = append(setClauses, fmt.Sprintf("%s = ?", f.Fieldname))
-		values = append(values, newVal)
+		// Normalize JSON fields: arrays/objects marshalled to string for SQL binding.
+		if normalized, err := normalizeSQLValue(f, newVal); err != nil {
+			return fmt.Errorf("field %s: %w", f.Fieldname, err)
+		} else {
+			setClauses = append(setClauses, fmt.Sprintf("%s = ?", f.Fieldname))
+			values = append(values, normalized)
+		}
 	}
 
 	setClauses = append(setClauses, "modified = ?", "modified_by = ?", "doc_status = ?")
@@ -937,4 +948,32 @@ func copyFieldsWithStatus(fields map[string]any, docStatus int) map[string]any {
 	}
 	out["doc_status"] = docStatus
 	return out
+}
+
+// normalizeSQLValue converts a field value to a SQL-bindable type.
+// JSON fields: arrays/objects/slices are marshalled to JSON strings.
+// Strings are validated as JSON. Everything else passes through.
+func normalizeSQLValue(f doctype.Field, v any) (any, error) {
+	if f.Fieldtype != "JSON" {
+		return v, nil
+	}
+	switch x := v.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		if x == "" {
+			return nil, nil
+		}
+		var js json.RawMessage
+		if err := json.Unmarshal([]byte(x), &js); err != nil {
+			return nil, fmt.Errorf("invalid JSON")
+		}
+		return x, nil
+	default:
+		b, err := json.Marshal(x)
+		if err != nil {
+			return nil, fmt.Errorf("invalid JSON: %w", err)
+		}
+		return string(b), nil
+	}
 }

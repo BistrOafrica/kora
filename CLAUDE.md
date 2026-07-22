@@ -10,7 +10,7 @@ make build              # Build UI + Go binary
 make serve              # Start server on :8000
 make restart            # Kill old server + rebuild all + start fresh
 make setup              # Setup a site (SITE=airtime.local CONFIG=config/airtime/)
-make test               # Run Go tests (311 tests, 19/19 packages)
+make test               # Run Go tests (18 packages)
 make lint               # Run linters (golangci-lint + TypeScript)
 make fmt                # Format code
 make release TAG=v0.2.0 # Tag and push a release
@@ -115,7 +115,7 @@ Key patterns:
 
 ### Administrator Tab (SPA)
 
-The workspace sidebar has an Administrator section with nine views, all config-driven:
+The workspace sidebar has an Administrator section with ten views, all config-driven:
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -127,6 +127,7 @@ The workspace sidebar has an Administrator section with nine views, all config-d
 | Extensions | `/workspace/admin/extensions` | Webhook endpoints, custom API methods, event hooks |
 | Users | `/workspace/admin/users` | User CRUD, role assignment, enable/disable, password reset |
 | Secrets | `/workspace/admin/secrets` | AI provider keys (OpenAI, DeepSeek, Anthropic) via dropdown UI |
+| Analytics | `/workspace/admin/analytics` | Auto-generated metrics, time-series charts, daily/monthly rollups |
 | API Docs | `/api/swagger-ui` | Auto-generated OpenAPI 3.0 spec with interactive Swagger UI |
 
 The doctype editor uses a split-pane layout: visual form builder on the left, live YAML preview on the right (with syntax highlighting). YAML is editable and can be applied back to the form via `js-yaml` client-side parsing.
@@ -160,8 +161,7 @@ The `schema.AnalyzeImpact()` function compares old vs new doctype, counts affect
 | `net/` | SiteRouter with host validation, security headers, CORS, rate limiter, TLS (autocert), ULID request IDs |
 | `cli/` | Cobra CLI: serve, setup, migrate, config (import/export/versions/diff/rollback), new-site, mcp, secret |
 | `configstore/` | Read/write config to/from DB (_kora_doctype, _kora_field, etc.) |
-| `workspace/` | SPA serving (go:embed dist/*), NoRoute handler, static file server |
-| `console/` | System console — React SPA for site creation + system admin (SystemGuard auth) |
+| `workspace/` | SPA serving (go:embed dist/*), NoRoute handler, static file server, console SPA |
 | `scheduler/` | Cron-style background jobs |
 | `secret/` | Encrypted API key storage (AES-256-GCM) for AI provider keys (settable via UI at `/workspace/admin/secrets`) |
 | `analytics/` | EventBus + Worker + Query Engine — real-time CDC, daily/monthly rollup tables, time-series/funnel/duration queries, auto-generated metrics |
@@ -367,7 +367,7 @@ System console at `/console` sees all sites (SystemGuard, env var credentials). 
 
 ### SQL Dialect (`db/` package)
 
-> **Skill**: `.claude/skills/db-compat.md` — invoke when writing SQL, reviewing DB code, or debugging MySQL/LibSQL errors. All SQL must go through the Dialect; never hardcode database-specific syntax.
+All SQL must go through the Dialect; never hardcode database-specific syntax.
 
 The `db.Dialect` interface abstracts all DB-specific SQL generation for MySQL and LibSQL:
 - DDL: `CreateTable`, `AddColumn`, `ColumnType`, schema introspection (`LoadSchema` via INFORMATION_SCHEMA vs PRAGMA)

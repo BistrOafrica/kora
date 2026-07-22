@@ -144,36 +144,37 @@ export function DataTable({
     }
   }
 
-  // Empty state.
-  if (isEmpty && !isFetching) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 px-4">
-        <FileX className="h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-medium text-center">
-          {hasFilters ? filteredEmptyTitle : emptyTitle}
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground text-center">
-          {hasFilters ? filteredEmptyDescription : emptyDescription}
-        </p>
-      </div>
-    )
-  }
+  	// Error state — must be checked before empty to avoid masking errors.
+  	if (isError && !isFetching) {
+  		return (
+  			<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 px-4">
+  				<AlertCircle className="h-12 w-12 text-destructive" />
+  				<h3 className="mt-4 text-lg font-medium text-center">Failed to load data</h3>
+  				<p className="mt-1 text-sm text-muted-foreground text-center">There was an error fetching the list.</p>
+  				<Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+  					Retry
+  				</Button>
+  			</div>
+  		)
+  	}
 
-  // Error state.
-  if (isError && !isFetching) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 px-4">
-        <AlertCircle className="h-12 w-12 text-destructive" />
-        <h3 className="mt-4 text-lg font-medium text-center">Failed to load data</h3>
-        <p className="mt-1 text-sm text-muted-foreground text-center">There was an error fetching the list.</p>
-        <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
-          Retry
-        </Button>
-      </div>
-    )
-  }
+  	// Empty state.
+  	if (isEmpty && !isFetching) {
+  		return (
+  			<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 px-4">
+  				<FileX className="h-12 w-12 text-muted-foreground" />
+  				<h3 className="mt-4 text-lg font-medium text-center">
+  					{hasFilters ? filteredEmptyTitle : emptyTitle}
+  				</h3>
+  				<p className="mt-1 text-sm text-muted-foreground text-center">
+  					{hasFilters ? filteredEmptyDescription : emptyDescription}
+  				</p>
+  			</div>
+  		)
+  	}
 
-  return (
+  	// Data displaying — table on desktop, cards on mobile.
+  	return (
     <div className="space-y-4">
       <div className="rounded-md border">
         {/* Desktop: standard table */}

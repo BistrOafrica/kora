@@ -140,6 +140,24 @@ export async function rollbackVersion(id: string): Promise<{ message: string; st
   return api.post(`/api/v1/system/config/versions/${id}/rollback`)
 }
 
+export interface VersionSnapshot {
+  version_id: string
+  version: number
+  site: string
+  label: string
+  doctype_names: string[]
+  doctype_count: number
+  roles_count: number
+  permissions_count: number
+  workflows_count: number
+  snapshot: Record<string, any>
+  pack_files: Array<{ path: string; content: string; content_type: string }>
+}
+
+export async function fetchVersionSnapshot(id: string): Promise<VersionSnapshot> {
+  return api.get(`/api/v1/system/config/versions/${id}/snapshot`)
+}
+
 // --- Admin: Import (FormData upload) ---
 
 export async function importDoctypeYaml(file: File): Promise<DocType> {

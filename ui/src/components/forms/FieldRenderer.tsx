@@ -62,14 +62,20 @@ export function FieldRenderer({
       return (
         <div className={gapClass}>
           <Label htmlFor={id} className={labelClass}>{label}</Label>
-          <Input
-            id={id}
-            type={type}
-            value={value ?? ''}
-            onChange={(e) => onChange(fieldname, e.target.value)}
-            disabled={disabled || field.read_only}
-            placeholder={field.description || field.label}
-          />
+          {field.read_only ? (
+            <div className="flex min-h-[2.5rem] items-center rounded-md border border-transparent bg-muted/30 px-3 py-2 text-sm">
+              {value != null && value !== '' ? String(value) : <span className="text-muted-foreground">—</span>}
+            </div>
+          ) : (
+            <Input
+              id={id}
+              type={type}
+              value={value ?? ''}
+              onChange={(e) => onChange(fieldname, e.target.value)}
+              disabled={disabled}
+              placeholder={field.description || field.label}
+            />
+          )}
           {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
@@ -79,14 +85,20 @@ export function FieldRenderer({
       return (
         <div className={gapClass}>
           <Label htmlFor={id} className={labelClass}>{label}</Label>
-          <Textarea
-            id={id}
-            value={value ?? ''}
-            onChange={(e) => onChange(fieldname, e.target.value)}
-            disabled={disabled || field.read_only}
-            placeholder={field.description || field.label}
-            rows={4}
-          />
+          {field.read_only ? (
+            <div className="min-h-[2.5rem] rounded-md border border-transparent bg-muted/30 px-3 py-2 text-sm">
+              {value != null && value !== '' ? String(value) : <span className="text-muted-foreground">—</span>}
+            </div>
+          ) : (
+            <Textarea
+              id={id}
+              value={value ?? ''}
+              onChange={(e) => onChange(fieldname, e.target.value)}
+              disabled={disabled}
+              placeholder={field.description || field.label}
+              rows={4}
+            />
+          )}
           {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
@@ -95,15 +107,21 @@ export function FieldRenderer({
       return (
         <div className={gapClass}>
           <Label htmlFor={id} className={labelClass}>{label}</Label>
-          <Input
-            id={id}
-            type="number"
-            step="1"
-            className="[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-            value={value ?? ''}
-            onChange={(e) => onChange(fieldname, e.target.value === '' ? null : parseInt(e.target.value, 10))}
-            disabled={disabled || field.read_only}
-          />
+          {field.read_only ? (
+            <div className="flex min-h-[2.5rem] items-center rounded-md border border-transparent bg-muted/30 px-3 py-2 text-sm">
+              {value != null && value !== '' ? String(value) : <span className="text-muted-foreground">—</span>}
+            </div>
+          ) : (
+            <Input
+              id={id}
+              type="number"
+              step="1"
+              className="[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+              value={value ?? ''}
+              onChange={(e) => onChange(fieldname, e.target.value === '' ? null : parseInt(e.target.value, 10))}
+              disabled={disabled}
+            />
+          )}
           {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )
@@ -115,15 +133,21 @@ export function FieldRenderer({
       return (
         <div className={gapClass}>
           <Label htmlFor={id} className={labelClass}>{label}</Label>
-          <Input
-            id={id}
-            type="number"
-            step="any"
-            className="[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-            value={displayValue}
-            onChange={(e) => onChange(fieldname, e.target.value === '' ? null : parseFloat(e.target.value))}
-            disabled={disabled || field.read_only}
-          />
+          {field.read_only ? (
+            <div className="flex min-h-[2.5rem] items-center rounded-md border border-transparent bg-muted/30 px-3 py-2 text-sm">
+              {value != null && value !== '' ? String(value) : <span className="text-muted-foreground">—</span>}
+            </div>
+          ) : (
+            <Input
+              id={id}
+              type="number"
+              step="any"
+              className="[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+              value={displayValue}
+              onChange={(e) => onChange(fieldname, e.target.value === '' ? null : parseFloat(e.target.value))}
+              disabled={disabled}
+            />
+          )}
           {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
         </div>
       )

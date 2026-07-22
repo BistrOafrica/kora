@@ -46,6 +46,7 @@ export interface NavigationConfig {
   modules: ModuleGroup[]
   branding: Branding
   user: UserInfo
+  admin_capabilities: string[]
 }
 
 export interface ModuleGroup {

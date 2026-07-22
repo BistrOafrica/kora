@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/asenawritescode/kora/configstore"
 	sqlDialect "github.com/asenawritescode/kora/db"
@@ -34,37 +36,56 @@ func ImportConfig(db *sql.DB, registry *doctype.Registry, dbName, siteName, conf
 		workflows = append(workflows, wf2...)
 	}
 
-	// Step 4: Save to database.
+	return ImportConfigFromSnapshot(db, registry, dbName, siteName, fmt.Sprintf("Config import from %s", configPath), &doctype.ConfigSnapshot{
+		DocTypes:    doctypes,
+		Roles:       roles,
+		Permissions: permissions,
+		Workflows:   workflows,
+	}, dialect)
+}
+
+// ImportConfigFromSnapshot imports a full ConfigSnapshot into a site's database
+// and runs schema migration. Unlike ImportConfig, it takes an in-memory snapshot
+// instead of parsing YAML files from disk.
+//
+// This is the dynamic template path: templates store their ConfigSnapshot as
+// JSON in the kora-content DB. When a user onboards with a template, the config
+// is read from the DB and applied here — no filesystem dependency.
+func ImportConfigFromSnapshot(db *sql.DB, registry *doctype.Registry, dbName, siteName, label string, snapshot *doctype.ConfigSnapshot, dialect sqlDialect.Dialect) error {
+	if snapshot == nil {
+		return fmt.Errorf("snapshot is required")
+	}
+
+	// Step 1: Save to database.
 	store := configstore.NewStore(db, dialect)
-	for _, dt := range doctypes {
+	for _, dt := range snapshot.DocTypes {
 		if err := store.SaveDocType(dt, siteName); err != nil {
 			return fmt.Errorf("saving doctype %s: %w", dt.Name, err)
 		}
 	}
-	if err := store.SaveRoles(roles, siteName); err != nil {
+	if err := store.SaveRoles(snapshot.Roles, siteName); err != nil {
 		return fmt.Errorf("saving roles: %w", err)
 	}
-	if err := store.SavePermissions(permissions, siteName); err != nil {
+	if err := store.SavePermissions(snapshot.Permissions, siteName); err != nil {
 		return fmt.Errorf("saving permissions: %w", err)
 	}
-	if err := store.SaveWorkflows(workflows, siteName); err != nil {
+	if err := store.SaveWorkflows(snapshot.Workflows, siteName); err != nil {
 		return fmt.Errorf("saving workflows: %w", err)
 	}
 
-	// Step 5: Build registry with full config.
-	registry.LoadFull(doctypes, roles, permissions)
-	for _, wf := range workflows {
+	// Step 2: Build registry with full config.
+	registry.LoadFull(snapshot.DocTypes, snapshot.Roles, snapshot.Permissions)
+	for _, wf := range snapshot.Workflows {
 		registry.Workflows.Register(wf)
 	}
 
-	// Step 6: Create config version BEFORE migration (so we have a rollback snapshot).
-	snapshot := &doctype.ConfigSnapshot{DocTypes: doctypes}
-	versionID, _, err := store.CreateConfigVersion(siteName, "system", "Config import from "+configPath, "Active", snapshot)
+	// Step 3: Create config version BEFORE migration.
+	versionID, _, err := store.CreateConfigVersion(siteName, "system", label, "Active", snapshot)
 	if err != nil {
 		return fmt.Errorf("creating config version: %w", err)
 	}
 
-	// Step 7: Run schema migration.
+	// Step 4: Run schema migration.
 	if err := schema.MigrateSiteFromRegistry(db, dbName, registry, dialect); err != nil {
 		return fmt.Errorf("migrating schema: %w", err)
 	}
@@ -86,4 +107,132 @@ func ImportConfig(db *sql.DB, registry *doctype.Registry, dbName, siteName, conf
 	}
 
 	return nil
+}
+
+// PackFile represents a single file in a CMS-backed template pack.
+type PackFile struct {
+	Path        string // relative path (e.g., "doctypes/patient.yaml", "roles.yaml")
+	Content     string // YAML content
+	ContentType string // "doctype", "roles", "permissions", "workflow"
+}
+
+// ImportConfigFromPack imports a template pack from in-memory YAML files.
+// This is the CMS-backed template path: pack files are stored as child rows
+// in the kora-cms Template Pack doctype. No filesystem dependency.
+//
+// Security gates enforced here:
+//   - Rejects path traversal ("..", absolute paths)
+//   - Only .yaml/.yml extensions allowed
+//   - extension must agree with content_type (e.g., doctypes/*.yaml → "doctype")
+//   - individual file size cap (256 KB)
+//   - total pack size cap (2 MB)
+//   - blocks content_types that don't belong in packs (scripts, webhooks)
+func ImportConfigFromPack(db *sql.DB, registry *doctype.Registry, dbName, siteName, packName string, files []PackFile, dialect sqlDialect.Dialect) error {
+	if len(files) == 0 {
+		return fmt.Errorf("pack has no files")
+	}
+
+	const maxFileSize = 256 * 1024       // 256 KB per file
+	const maxTotalSize = 2 * 1024 * 1024 // 2 MB total pack
+
+	var doctypes []*doctype.DocType
+	var roles []*doctype.Role
+	var permissions []*doctype.Permission
+	var workflows []*doctype.Workflow
+	var totalSize int
+
+	for _, f := range files {
+		f.Path = strings.TrimSpace(f.Path)
+		f.ContentType = strings.TrimSpace(f.ContentType)
+
+		// ── Path security ──────────────────────────────────────────
+		if f.Path == "" {
+			return fmt.Errorf("pack file has empty path")
+		}
+		if filepath.IsAbs(f.Path) || strings.Contains(f.Path, "..") {
+			return fmt.Errorf("pack file %q: path traversal or absolute path rejected", f.Path)
+		}
+
+		// ── Extension validation ───────────────────────────────────
+		ext := strings.ToLower(filepath.Ext(f.Path))
+		if ext != ".yaml" && ext != ".yml" {
+			return fmt.Errorf("pack file %q: only .yaml/.yml allowed, got %q", f.Path, ext)
+		}
+		if ext == ".yml" && f.ContentType == "doctype" && !strings.HasPrefix(f.Path, "doctypes/") {
+			return fmt.Errorf("pack file %q: doctype files must be under doctypes/", f.Path)
+		}
+
+		// ── Content_type ↔ path agreement ──────────────────────────
+		switch f.ContentType {
+		case "doctype":
+			if !strings.HasPrefix(f.Path, "doctypes/") {
+				return fmt.Errorf("pack file %q: content_type doctype requires path under doctypes/", f.Path)
+			}
+		case "roles":
+			if f.Path != "roles.yaml" {
+				return fmt.Errorf("pack file %q: content_type roles requires path roles.yaml", f.Path)
+			}
+		case "permissions":
+			if f.Path != "permissions.yaml" {
+				return fmt.Errorf("pack file %q: content_type permissions requires path permissions.yaml", f.Path)
+			}
+		case "workflow":
+			if !strings.Contains(f.Path, "workflow") {
+				return fmt.Errorf("pack file %q: content_type workflow requires a workflow path", f.Path)
+			}
+		default:
+			return fmt.Errorf("pack file %q: unknown content_type %q (allowed: doctype, roles, permissions, workflow)", f.Path, f.ContentType)
+		}
+
+		// ── Size limits ────────────────────────────────────────────
+		fileSize := len(f.Content)
+		if fileSize > maxFileSize {
+			return fmt.Errorf("pack file %q: size %d exceeds max %d bytes", f.Path, fileSize, maxFileSize)
+		}
+		totalSize += fileSize
+		if totalSize > maxTotalSize {
+			return fmt.Errorf("pack total size %d exceeds max %d bytes", totalSize, maxTotalSize)
+		}
+
+		// ── Parse ──────────────────────────────────────────────────
+		data := []byte(f.Content)
+		switch f.ContentType {
+		case "doctype":
+			dt, err := doctype.ParseYAML(data, f.Path)
+			if err != nil {
+				return fmt.Errorf("pack file %q: %w", f.Path, err)
+			}
+			doctypes = append(doctypes, dt)
+
+		case "roles":
+			r, err := doctype.ParseRolesYAML(data)
+			if err != nil {
+				return fmt.Errorf("pack file %q: %w", f.Path, err)
+			}
+			roles = append(roles, r...)
+
+		case "permissions":
+			p, err := doctype.ParsePermissionsYAML(data)
+			if err != nil {
+				return fmt.Errorf("pack file %q: %w", f.Path, err)
+			}
+			permissions = append(permissions, p...)
+
+		case "workflow":
+			wf, err := doctype.ParseWorkflowYAML(data)
+			if err != nil {
+				return fmt.Errorf("pack file %q: %w", f.Path, err)
+			}
+			workflows = append(workflows, wf)
+		}
+	}
+
+	return ImportConfigFromSnapshot(db, registry, dbName, siteName,
+		fmt.Sprintf("Template pack %q import", packName),
+		&doctype.ConfigSnapshot{
+			DocTypes:    doctypes,
+			Roles:       roles,
+			Permissions: permissions,
+			Workflows:   workflows,
+		}, dialect)
 }

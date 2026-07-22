@@ -176,7 +176,8 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
   }, [])
 
   const normalizedQuery = navQuery.trim().toLowerCase()
-  const adminItems = useMemo(() => ([
+  const adminCapabilities = data?.admin_capabilities ?? []
+  const allAdminItems = useMemo(() => ([
     { name: 'doctypes', label: 'DocTypes', to: '/workspace/admin/doctypes' },
     { name: 'permissions', label: 'Permissions', to: '/workspace/admin/permissions' },
     { name: 'workflows', label: 'Workflows', to: '/workspace/admin/workflows' },
@@ -187,6 +188,10 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
     { name: 'secrets', label: 'Secrets', to: '/workspace/admin/secrets' },
     { name: 'analytics', label: 'Analytics', to: '/workspace/admin/analytics' },
   ]), [])
+  const adminItems = useMemo(() => {
+    if (adminCapabilities.length === 0) return []
+    return allAdminItems.filter((item) => adminCapabilities.includes(item.name))
+  }, [allAdminItems, adminCapabilities])
   const filteredAdminItems = useMemo(() => {
     if (!normalizedQuery) return adminItems
     return adminItems.filter((item) =>
@@ -357,17 +362,21 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
 
           <Separator className="my-2" />
 
-          {/* Administrator flyout */}
-            <FlyoutMenu
-            label="Administrator"
-            items={filteredAdminItems}
-            collapsed={collapsed}
-            isOpen={openMenu === 'Administrator'}
-            onOpen={() => handleMenuOpen('Administrator')}
-            onClose={() => handleMenuClose('Administrator')}
-            onItemClick={() => setSidebarOpen(false)}
-          />
-          <PendingBadge />
+          {/* Administrator flyout — only visible to users with the admin role. */}
+          {filteredAdminItems.length > 0 && (
+            <>
+              <FlyoutMenu
+                label="Administrator"
+                items={filteredAdminItems}
+                collapsed={collapsed}
+                isOpen={openMenu === 'Administrator'}
+                onOpen={() => handleMenuOpen('Administrator')}
+                onClose={() => handleMenuClose('Administrator')}
+                onItemClick={() => setSidebarOpen(false)}
+              />
+              <PendingBadge />
+            </>
+          )}
           <a
             href="/api/v1/swagger-ui"
             target="_blank"

@@ -6,17 +6,19 @@ import {
   discardVersion,
   fetchConfigVersionPreview,
   fetchRollbackVersionPreview,
+  fetchVersionSnapshot,
   rollbackVersion,
 } from '@/lib/api/system'
 import type {
   ConfigVersion,
   ConfigVersionPreview,
   RollbackVersionPreview,
+  VersionSnapshot,
 } from '@/lib/api/system'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import { History, Eye, Play, X, RotateCcw, AlertTriangle, RefreshCw } from 'lucide-react'
+import { History, Eye, Play, X, RotateCcw, AlertTriangle, RefreshCw, Download } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
@@ -50,6 +52,9 @@ export default function AdminVersionsPage() {
   const [preview, setPreview] = useState<LoadedPreview>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [dialogError, setDialogError] = useState<string | null>(null)
+  const [exportSnapshot, setExportSnapshot] = useState<VersionSnapshot | null>(null)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [exportCopied, setExportCopied] = useState(false)
 
   const drafts = useMemo(() => (data || []).filter(v => v.status === 'Draft'), [data])
 
@@ -128,6 +133,36 @@ export default function AdminVersionsPage() {
 
   const handleRollback = (id: string) => {
     setConfirmAction({ type: 'rollback', id })
+  }
+
+  const handleExportAsTemplate = async (v: ConfigVersion) => {
+    setExportLoading(true)
+    setExportSnapshot(null)
+    setExportCopied(false)
+    try {
+      const snapshot = await fetchVersionSnapshot(v.id)
+      setExportSnapshot(snapshot)
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : 'Failed to load snapshot')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const handleCopySnapshot = async () => {
+    if (!exportSnapshot) return
+    const json = JSON.stringify(exportSnapshot.snapshot, null, 2)
+    try {
+      await navigator.clipboard.writeText(json)
+      setExportCopied(true)
+      setTimeout(() => setExportCopied(false), 2000)
+    } catch {
+      toast('error', 'Failed to copy to clipboard')
+    }
+  }
+
+  const getSuggestedSlug = (v: ConfigVersion) => {
+    return v.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
   }
 
   const viewDiff = async (id: string) => {
@@ -277,6 +312,12 @@ export default function AdminVersionsPage() {
           handleActivate={handleActivate}
           handleDiscard={handleDiscard}
           handleRollback={handleRollback}
+          handleExportAsTemplate={handleExportAsTemplate}
+          exportSnapshot={exportSnapshot}
+          setExportSnapshot={setExportSnapshot}
+          exportLoading={exportLoading}
+          exportCopied={exportCopied}
+          handleCopySnapshot={handleCopySnapshot}
           setConfirmAction={setConfirmAction}
         />
       )}
@@ -418,7 +459,7 @@ export default function AdminVersionsPage() {
   )
 }
 
-function GroupedVersionList({ data, statusBadge, viewDiff, viewingDiff, diffData, acting, handleActivate, handleDiscard, handleRollback, setConfirmAction }: {
+function GroupedVersionList({ data, statusBadge, viewDiff, viewingDiff, diffData, acting, handleActivate, handleDiscard, handleRollback, handleExportAsTemplate, exportSnapshot, setExportSnapshot, exportLoading, exportCopied, handleCopySnapshot, setConfirmAction }: {
   data: ConfigVersion[]
   statusBadge: (s: string) => React.ReactNode
   viewDiff: (id: string) => void
@@ -428,6 +469,12 @@ function GroupedVersionList({ data, statusBadge, viewDiff, viewingDiff, diffData
   handleActivate: (id: string) => void
   handleDiscard: (id: string) => void
   handleRollback: (id: string) => void
+  handleExportAsTemplate: (v: ConfigVersion) => void
+  exportSnapshot: VersionSnapshot | null
+  setExportSnapshot: (s: VersionSnapshot | null) => void
+  exportLoading: boolean
+  exportCopied: boolean
+  handleCopySnapshot: () => void
   setConfirmAction: (action: { type: 'activateAll' } | null) => void
 }) {
   const drafts = data.filter(v => v.status === 'Draft')
@@ -452,6 +499,9 @@ function GroupedVersionList({ data, statusBadge, viewDiff, viewingDiff, diffData
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={() => viewDiff(v.id)}>
             <Eye className="h-4 w-4 mr-1" /> {viewingDiff === v.id ? 'Hide' : 'View'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => handleExportAsTemplate(v)} disabled={exportLoading}>
+            <Download className="h-4 w-4 mr-1" /> Export
           </Button>
           {v.status === 'Draft' && (
             <>
@@ -541,6 +591,81 @@ function GroupedVersionList({ data, statusBadge, viewDiff, viewingDiff, diffData
           </h2>
           <div className="space-y-2">
             {history.map(renderVersion)}
+          </div>
+        </div>
+      )}
+
+      {/* Export as Template Dialog */}
+      {exportSnapshot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setExportSnapshot(null)}>
+          <div className="bg-background border rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-background border-b px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Export as Template</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  v{exportSnapshot.version} &middot; {exportSnapshot.doctype_count} doctypes, {exportSnapshot.roles_count} roles, {exportSnapshot.permissions_count} permissions, {exportSnapshot.workflows_count} workflows
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setExportSnapshot(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold mb-2">How to create a template from this:</h3>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal pl-5">
+                  <li>Go to <code className="text-xs bg-muted px-1 rounded">kora-cms</code> → Website → <strong>Template Pack</strong> → New</li>
+                  <li>Set <strong>pack_name</strong> (e.g. <code className="text-xs bg-muted px-1 rounded">{exportSnapshot.site}-v{exportSnapshot.version}</code>) and <strong>status: published</strong></li>
+                  <li>Add each file below as a <strong>Template Pack File</strong> row (copy YAML content per file)</li>
+                  <li>Go to Website → <strong>Template</strong> → New, link to the Template Pack via <strong>template_pack</strong></li>
+                  <li>Fill in marketing metadata, set <strong>status: published</strong>, <strong>public_signup: true</strong></li>
+                </ol>
+              </div>
+
+              {(exportSnapshot.pack_files ?? []).length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold">Pack Files (YAML)</h3>
+                  {exportSnapshot.pack_files.map((f) => (
+                    <div key={f.path} className="border rounded-lg overflow-hidden">
+                      <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5 border-b">
+                        <span className="text-xs font-mono font-medium">{f.path}</span>
+                        <span className="text-[10px] text-muted-foreground uppercase">{f.content_type}</span>
+                      </div>
+                      <div className="relative">
+                        <pre className="bg-muted/20 p-3 text-xs overflow-auto max-h-48 whitespace-pre-wrap">
+                          {f.content}
+                        </pre>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="absolute top-1 right-1 text-[10px] h-6"
+                          onClick={() => {
+                            navigator.clipboard.writeText(f.content).catch(() => {})
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <details className="text-sm">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                  Full ConfigSnapshot JSON (reference)
+                </summary>
+                <pre className="bg-muted rounded-lg p-4 text-xs overflow-auto max-h-96 whitespace-pre-wrap break-all mt-2">
+                  {JSON.stringify(exportSnapshot.snapshot, null, 2)}
+                </pre>
+              </details>
+
+              <div className="text-sm text-muted-foreground">
+                <strong>Doctypes in this snapshot:</strong>{' '}
+                {exportSnapshot.doctype_names.join(', ')}
+              </div>
+            </div>
           </div>
         </div>
       )}
