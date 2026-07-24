@@ -141,7 +141,7 @@ func (h *Handler) siteTx(c *gin.Context) *orm.TxManager {
 						}
 					}
 					if siteNameStr, ok := siteName.(string); ok {
-						tm.ScriptProvider = newScriptProvider(tm, r, siteNameStr, ss, h.ScriptHTTPAllowlist)
+						tm.ScriptProvider = NewScriptProvider(tm, r, siteNameStr, ss, h.ScriptHTTPAllowlist)
 					}
 				}
 				// Set current user context for scripts.
@@ -899,6 +899,10 @@ func RegisterPublicRoutesOnGroup(apiGroup *gin.RouterGroup, registry *doctype.Re
 		public.GET("/:doctype", handler.HandlePublicList)
 		public.GET("/:doctype/:name", handler.HandlePublicGet)
 	}
+
+	// Public view routes (unauthenticated, three-layer security check).
+	apiGroup.GET("/v", handler.HandlePublicView)
+	apiGroup.POST("/v", handler.HandlePublicCreate)
 }
 
 // RegisterRoutesOnGroupWithAnalytics registers all CRUD routes with optional
@@ -947,6 +951,26 @@ func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doc
 		method.POST("/:name", handler.HandleMethod)
 		method.GET("/:name", handler.HandleMethod)
 	}
+
+	// View management endpoints.
+	sysViews := apiGroup.Group("/system/views")
+	{
+		sysViews.GET("", handler.HandleSystemViews)
+		sysViews.POST("", handler.HandleSystemViewCreate)
+		sysViews.GET("/:name", handler.HandleSystemView)
+		sysViews.PUT("/:name", handler.HandleSystemViewUpdate)
+		sysViews.DELETE("/:name", handler.HandleSystemViewDelete)
+		sysViews.POST("/validate", handler.HandleViewValidate)
+	}
+
+	// View runtime route resolution.
+	apiGroup.GET("/views", handler.HandleViewByRoute)
+
+	// View action execution.
+	apiGroup.POST("/view/action/:actionId", handler.HandleViewAction)
+
+	// View data aggregate endpoint.
+	apiGroup.GET("/view/data", handler.HandleViewData)
 
 	// System config endpoints.
 	system := apiGroup.Group("/system/config")
@@ -1363,7 +1387,7 @@ func (h *Handler) HandleConfigDiff(c *gin.Context) {
 	h.siteTx(c).DB.QueryRow("SELECT COALESCE(change_list, '') FROM _kora_config_version WHERE id = ?", toID).Scan(&changeList)
 	if changeList != "" {
 		var diff doctype.ConfigDiffFull
-		if err := json.Unmarshal([]byte(changeList), &diff); err == nil && len(diff.Doctypes.Changes) > 0 {
+		if err := json.Unmarshal([]byte(changeList), &diff); err == nil && diff.Doctypes != nil && len(diff.Doctypes.Changes) > 0 {
 			c.JSON(http.StatusOK, Response{Data: diff.Doctypes})
 			return
 		}
@@ -1523,7 +1547,7 @@ func (h *Handler) HandleMethod(c *gin.Context) {
 	if h.SiteSecretStores != nil {
 		ss = h.SiteSecretStores[siteNameStr]
 	}
-	provider := newScriptProvider(tx, h.siteRegistry(c), siteNameStr, ss, h.ScriptHTTPAllowlist)
+	provider := NewScriptProvider(tx, h.siteRegistry(c), siteNameStr, ss, h.ScriptHTTPAllowlist)
 
 	execReq := script.ExecuteRequest{
 		Script:     rec.Script,

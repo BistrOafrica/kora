@@ -688,6 +688,27 @@ func (d *LibSQLDialect) SystemTableSQL() []string {
 		`ALTER TABLE "_kora_workflow" ADD COLUMN "site" TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE "_kora_workflow_state" ADD COLUMN "site" TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE "_kora_workflow_transition" ADD COLUMN "site" TEXT NOT NULL DEFAULT ''`,
+
+		// _kora_view
+		`CREATE TABLE IF NOT EXISTS "_kora_view" (
+			"name" TEXT NOT NULL PRIMARY KEY,
+			"site" TEXT NOT NULL DEFAULT '',
+			"route" TEXT NOT NULL,
+			"type" TEXT NOT NULL DEFAULT 'custom',
+			"layout" TEXT NOT NULL DEFAULT 'single',
+			"label" TEXT NOT NULL DEFAULT '',
+			"module" TEXT NOT NULL DEFAULT '',
+			"source_doctype" TEXT NOT NULL DEFAULT '',
+			"public_enabled" INTEGER NOT NULL DEFAULT 0,
+			"public_components" TEXT,
+			"public_allow_mutations" INTEGER NOT NULL DEFAULT 0,
+			"config_json" TEXT,
+			"idx" INTEGER NOT NULL DEFAULT 0,
+			"creation" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+			"modified" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
+		)`,
+		`CREATE INDEX IF NOT EXISTS "idx_view_site" ON "_kora_view" ("site")`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS "idx_view_route_unique" ON "_kora_view" ("site", "route")`,
 	}
 }
 

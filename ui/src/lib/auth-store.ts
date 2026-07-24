@@ -92,7 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Ignore logout errors.
     }
     set({ user: null, isAuthenticated: false, isLoading: false })
-    // Redirect to login, preserving site prefix.
+    // Use router navigation instead of full page reload.
     window.location.href = sitePath('/workspace/auth/login')
   },
 

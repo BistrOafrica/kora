@@ -37,7 +37,7 @@ func (tx *TxManager) setupComputedHook() {
 				req := script.ExecuteRequest{
 					Script: rec.Script, ScriptType: rec.ScriptType, ScriptName: rec.Name,
 					DocType: doctypeName, Event: script.EventComputed,
-					Document: doc.Fields, User: tx.CurrentUser,
+					Document: doc.ToMap(), User: tx.CurrentUser,
 					UserRoles: []string{tx.CurrentUserRole}, Site: tx.SiteName,
 					Provider: tx.ScriptProvider,
 				}
@@ -92,7 +92,7 @@ func (tx *TxManager) runHooks(dt *doctype.DocType, event script.Event, doc *doct
 
 	var oldDocMap map[string]any
 	if oldDoc != nil {
-		oldDocMap = oldDoc.Fields
+		oldDocMap = oldDoc.ToMap()
 	}
 
 	ctx := tx.Context
@@ -120,7 +120,7 @@ func (tx *TxManager) runHooks(dt *doctype.DocType, event script.Event, doc *doct
 			ScriptName:  rec.Name,
 			DocType:     dt.Name,
 			Event:       event,
-			Document:    doc.Fields,
+			Document:    doc.ToMap(),
 			OldDocument: oldDocMap,
 			User:        tx.CurrentUser,
 			UserRoles:   userRoles,
@@ -163,9 +163,9 @@ func (tx *TxManager) runHooks(dt *doctype.DocType, event script.Event, doc *doct
 		if result != nil {
 			durationMs = int(result.Duration.Milliseconds())
 			if result.Modified && script.IsBeforeEvent(event) {
-				// Apply modified document from before_* hook.
-				doc.Fields = result.Document
-				req.Document = result.Document // update for subsequent scripts
+				// Apply modified document from before_* hook and restore typed child tables.
+				doc.Fields = normalizeHookDocumentFields(dt, tx.Registry, result.Document)
+				req.Document = doc.ToMap() // update for subsequent scripts
 			}
 		}
 
@@ -175,4 +175,90 @@ func (tx *TxManager) runHooks(dt *doctype.DocType, event script.Event, doc *doct
 		}
 	}
 	return nil
+}
+
+func normalizeHookDocumentFields(dt *doctype.DocType, registry *doctype.Registry, fields map[string]any) map[string]any {
+	if dt == nil || fields == nil {
+		return fields
+	}
+	out := make(map[string]any, len(fields))
+	for key, value := range fields {
+		out[key] = value
+	}
+	for _, field := range dt.TableFields() {
+		value, ok := out[field.Fieldname]
+		if !ok || value == nil {
+			continue
+		}
+		childDT := registry.Get(field.Options)
+		if childDT == nil {
+			continue
+		}
+		if children, ok := hookValueToChildDocuments(value, childDT); ok {
+			out[field.Fieldname] = children
+		}
+	}
+	delete(out, "name")
+	delete(out, "doc_status")
+	delete(out, "owner")
+	delete(out, "creation")
+	delete(out, "modified")
+	delete(out, "modified_by")
+	return out
+}
+
+func hookValueToChildDocuments(value any, childDT *doctype.DocType) ([]*doctype.Document, bool) {
+	switch rows := value.(type) {
+	case []*doctype.Document:
+		return rows, true
+	case []map[string]any:
+		children := make([]*doctype.Document, 0, len(rows))
+		for _, row := range rows {
+			children = append(children, hookMapToChildDocument(row, childDT))
+		}
+		return children, true
+	case []any:
+		children := make([]*doctype.Document, 0, len(rows))
+		for _, item := range rows {
+			row, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			children = append(children, hookMapToChildDocument(row, childDT))
+		}
+		return children, true
+	default:
+		return nil, false
+	}
+}
+
+func hookMapToChildDocument(row map[string]any, childDT *doctype.DocType) *doctype.Document {
+	child := doctype.NewDocument(childDT.Name)
+	if name, ok := row["name"].(string); ok {
+		child.Name = name
+		child.IsNew = name == ""
+	}
+	if status, ok := row["doc_status"]; ok {
+		child.DocStatus = hookIntValue(status)
+	}
+	for key, value := range row {
+		if key == "name" || key == "doc_status" || key == "owner" || key == "creation" || key == "modified" || key == "modified_by" {
+			continue
+		}
+		child.Set(key, value)
+	}
+	return child
+}
+
+func hookIntValue(value any) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
 }

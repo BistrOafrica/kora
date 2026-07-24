@@ -1,7 +1,9 @@
 package site
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -41,7 +43,7 @@ func ImportConfig(db *sql.DB, registry *doctype.Registry, dbName, siteName, conf
 		Roles:       roles,
 		Permissions: permissions,
 		Workflows:   workflows,
-	}, dialect)
+	}, dialect, nil)
 }
 
 // ImportConfigFromSnapshot imports a full ConfigSnapshot into a site's database
@@ -51,7 +53,7 @@ func ImportConfig(db *sql.DB, registry *doctype.Registry, dbName, siteName, conf
 // This is the dynamic template path: templates store their ConfigSnapshot as
 // JSON in the kora-content DB. When a user onboards with a template, the config
 // is read from the DB and applied here — no filesystem dependency.
-func ImportConfigFromSnapshot(db *sql.DB, registry *doctype.Registry, dbName, siteName, label string, snapshot *doctype.ConfigSnapshot, dialect sqlDialect.Dialect) error {
+func ImportConfigFromSnapshot(db *sql.DB, registry *doctype.Registry, dbName, siteName, label string, snapshot *doctype.ConfigSnapshot, dialect sqlDialect.Dialect, scriptBodyByHash map[string]string) error {
 	if snapshot == nil {
 		return fmt.Errorf("snapshot is required")
 	}
@@ -71,6 +73,15 @@ func ImportConfigFromSnapshot(db *sql.DB, registry *doctype.Registry, dbName, si
 	}
 	if err := store.SaveWorkflows(snapshot.Workflows, siteName); err != nil {
 		return fmt.Errorf("saving workflows: %w", err)
+	}
+	if err := store.SaveViews(snapshot.Views, siteName); err != nil {
+		return fmt.Errorf("saving views: %w", err)
+	}
+	if err := store.SaveAnalyticsMetrics(snapshot.AnalyticsMetrics, siteName); err != nil {
+		return fmt.Errorf("saving analytics metrics: %w", err)
+	}
+	if err := store.SaveScripts(snapshot.Scripts, scriptBodyByHash, siteName); err != nil {
+		return fmt.Errorf("saving scripts: %w", err)
 	}
 
 	// Step 2: Build registry with full config.
@@ -111,9 +122,9 @@ func ImportConfigFromSnapshot(db *sql.DB, registry *doctype.Registry, dbName, si
 
 // PackFile represents a single file in a CMS-backed template pack.
 type PackFile struct {
-	Path        string // relative path (e.g., "doctypes/patient.yaml", "roles.yaml")
-	Content     string // YAML content
-	ContentType string // "doctype", "roles", "permissions", "workflow"
+	Path        string // relative path (e.g., "doctypes/patient.yaml", "views/dashboard.yaml", "roles.yaml")
+	Content     string // file content (YAML for configs, JavaScript for scripts)
+	ContentType string // "doctype", "roles", "permissions", "workflow", "view", "script"
 }
 
 // ImportConfigFromPack imports a template pack from in-memory YAML files.
@@ -139,6 +150,9 @@ func ImportConfigFromPack(db *sql.DB, registry *doctype.Registry, dbName, siteNa
 	var roles []*doctype.Role
 	var permissions []*doctype.Permission
 	var workflows []*doctype.Workflow
+	var views []*doctype.View
+	var scripts []*doctype.ScriptSnapshot
+	scriptBodyByHash := make(map[string]string)
 	var totalSize int
 
 	for _, f := range files {
@@ -180,8 +194,20 @@ func ImportConfigFromPack(db *sql.DB, registry *doctype.Registry, dbName, siteNa
 			if !strings.Contains(f.Path, "workflow") {
 				return fmt.Errorf("pack file %q: content_type workflow requires a workflow path", f.Path)
 			}
+		case "view":
+			if !strings.HasPrefix(f.Path, "views/") {
+				return fmt.Errorf("pack file %q: content_type view requires path under views/", f.Path)
+			}
+		case "script":
+			if !strings.HasPrefix(f.Path, "scripts/") {
+				return fmt.Errorf("pack file %q: content_type script requires path under scripts/", f.Path)
+			}
+			ext := strings.ToLower(filepath.Ext(f.Path))
+			if ext != ".js" {
+				return fmt.Errorf("pack file %q: script files must be .js, got %q", f.Path, ext)
+			}
 		default:
-			return fmt.Errorf("pack file %q: unknown content_type %q (allowed: doctype, roles, permissions, workflow)", f.Path, f.ContentType)
+			return fmt.Errorf("pack file %q: unknown content_type %q (allowed: doctype, roles, permissions, workflow, view, script)", f.Path, f.ContentType)
 		}
 
 		// ── Size limits ────────────────────────────────────────────
@@ -224,6 +250,26 @@ func ImportConfigFromPack(db *sql.DB, registry *doctype.Registry, dbName, siteNa
 				return fmt.Errorf("pack file %q: %w", f.Path, err)
 			}
 			workflows = append(workflows, wf)
+
+		case "view":
+			v, err := doctype.ParseViewYAML(data)
+			if err != nil {
+				return fmt.Errorf("pack file %q: %w", f.Path, err)
+			}
+			views = append(views, v)
+
+		case "script":
+			h := sha256.Sum256(data)
+			sc := &doctype.ScriptSnapshot{
+				Name:       strings.TrimSuffix(filepath.Base(f.Path), ".js"),
+				ScriptType: "doc_event",
+				IsActive:   true,
+				Priority:   10,
+				TimeoutMs:  5000,
+				ScriptHash: hex.EncodeToString(h[:]),
+			}
+			scripts = append(scripts, sc)
+			scriptBodyByHash[sc.ScriptHash] = f.Content
 		}
 	}
 
@@ -234,5 +280,7 @@ func ImportConfigFromPack(db *sql.DB, registry *doctype.Registry, dbName, siteNa
 			Roles:       roles,
 			Permissions: permissions,
 			Workflows:   workflows,
-		}, dialect)
+			Views:       views,
+			Scripts:     scripts,
+		}, dialect, scriptBodyByHash)
 }

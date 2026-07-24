@@ -151,6 +151,7 @@ func runServe() error {
 		roles, _ := store.LoadRoles(info.Name)
 		permissions, _ := store.LoadPermissions(info.Name)
 		workflows, _ := store.LoadWorkflows(info.Name)
+		views, _ := store.LoadViews(info.Name)
 
 		// Check min_kora_version on the active config version at startup.
 		var minKoraVersion string
@@ -168,6 +169,7 @@ func runServe() error {
 
 		registry := doctype.NewRegistry()
 		registry.LoadFull(doctypes, roles, permissions)
+		registry.Views.LoadFromDB(views)
 		for _, wf := range workflows {
 			registry.Workflows.Register(wf)
 		}
@@ -382,7 +384,7 @@ func runServe() error {
 	}
 	// Start async hook worker (processes after_* hooks in background).
 	asyncHookQueue := make(chan orm.AsyncHookRequest, 1000)
-	go runAsyncHookWorker(asyncHookQueue, scriptRunner, siteScriptStores, loadedSites)
+	go runAsyncHookWorker(asyncHookQueue, scriptRunner, siteScriptStores, loadedSites, common.DBType, httpAllowlist)
 	slog.Info("async hook worker started", "queue_size", 1000)
 
 	api.RegisterRoutesOnGroupWithAnalytics(apiGroup, primaryRegistry, txManager, siteBuses, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueue)
@@ -515,9 +517,11 @@ func loadRuntimeSite(info site.DBSiteInfo, common *site.CommonConfig) (*knet.Loa
 	roles, _ := store.LoadRoles(info.Name)
 	permissions, _ := store.LoadPermissions(info.Name)
 	workflows, _ := store.LoadWorkflows(info.Name)
+	views, _ := store.LoadViews(info.Name)
 
 	registry := doctype.NewRegistry()
 	registry.LoadFull(doctypes, roles, permissions)
+	registry.Views.LoadFromDB(views)
 	for _, wf := range workflows {
 		registry.Workflows.Register(wf)
 	}
@@ -613,21 +617,23 @@ func configureLogging(level, format string) {
 }
 
 // runAsyncHookWorker processes after_* hook requests from the async queue.
-func runAsyncHookWorker(queue chan orm.AsyncHookRequest, runner script.Runner, stores map[string]*script.Store, sites []*knet.LoadedSite) {
-	// Build a site DB lookup.
-	siteDBs := make(map[string]*sql.DB)
+func runAsyncHookWorker(queue chan orm.AsyncHookRequest, runner script.Runner, stores map[string]*script.Store, sites []*knet.LoadedSite, dbType string, httpAllowlist []string) {
+	// Build a site runtime lookup.
+	sitesByName := make(map[string]*knet.LoadedSite)
 	for _, s := range sites {
-		siteDBs[s.Name] = s.DB
+		sitesByName[s.Name] = s
 	}
 
 	for req := range queue {
-		db, ok := siteDBs[req.Site]
-		if !ok {
+		loadedSite, ok := sitesByName[req.Site]
+		if !ok || loadedSite.DB == nil || loadedSite.Registry == nil {
 			continue
 		}
 
 		tm := &orm.TxManager{
-			DB:              db,
+			DB:              loadedSite.DB,
+			Registry:        loadedSite.Registry,
+			Dialect:         kdb.Resolve(dbType),
 			ScriptRunner:    runner,
 			SiteName:        req.Site,
 			CurrentUser:     req.User,
@@ -636,6 +642,7 @@ func runAsyncHookWorker(queue chan orm.AsyncHookRequest, runner script.Runner, s
 		if store, ok := stores[req.Site]; ok {
 			tm.ScriptStore = store
 		}
+		tm.ScriptProvider = api.NewScriptProvider(tm, loadedSite.Registry, req.Site, nil, httpAllowlist)
 
 		execReq := script.ExecuteRequest{
 			Script:     req.Rec.Script,
@@ -643,13 +650,14 @@ func runAsyncHookWorker(queue chan orm.AsyncHookRequest, runner script.Runner, s
 			ScriptName: req.Rec.Name,
 			DocType:    req.DT.Name,
 			Event:      req.Event,
-			Document:   req.Doc.Fields,
+			Document:   req.Doc.ToMap(),
 			User:       req.User,
 			UserRoles:  []string{req.UserRole},
 			Site:       req.Site,
+			Provider:   tm.ScriptProvider,
 		}
 		if req.OldDoc != nil {
-			execReq.OldDocument = req.OldDoc.Fields
+			execReq.OldDocument = req.OldDoc.ToMap()
 		}
 
 		result, execErr := runner.Execute(context.Background(), execReq)

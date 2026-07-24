@@ -73,6 +73,10 @@ func runConfigExport(siteName, path string) error {
 	if err != nil {
 		return fmt.Errorf("loading workflows: %w", err)
 	}
+	views, err := store.LoadViews(siteName)
+	if err != nil {
+		return fmt.Errorf("loading views: %w", err)
+	}
 
 	// Create output directory.
 	os.MkdirAll(path, 0755)
@@ -114,8 +118,23 @@ func runConfigExport(siteName, path string) error {
 		fmt.Printf("  ✓ %s (workflow)\n", filename)
 	}
 
-	fmt.Printf("\nExported %d doctypes, %d roles, %d permissions, %d workflows to %s\n",
-		len(doctypes), len(roles), len(permissions), len(workflows), path)
+	// Write views (one per file).
+	viewsDir := path + "/views"
+	os.MkdirAll(viewsDir, 0755)
+	for _, v := range views {
+		data, err := yaml.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("marshaling view %s: %w", v.Name, err)
+		}
+		filename := strings.ToLower(strings.ReplaceAll(v.Name, " ", "_")) + ".yaml"
+		if err := os.WriteFile(viewsDir+"/"+filename, data, 0644); err != nil {
+			return fmt.Errorf("writing view %s: %w", filename, err)
+		}
+		fmt.Printf("  ✓ %s (view)\n", filename)
+	}
+
+	fmt.Printf("\nExported %d doctypes, %d roles, %d permissions, %d workflows, %d views to %s\n",
+		len(doctypes), len(roles), len(permissions), len(workflows), len(views), path)
 	return nil
 }
 
@@ -191,6 +210,24 @@ func runConfigImport(siteName, path, dbName string) error {
 		return fmt.Errorf("saving workflows: %w", err)
 	}
 
+	// Parse and save views.
+	views, err := doctype.ParseViewsDirectory(path)
+	if err != nil {
+		views = nil
+	}
+	if v2, err := doctype.ParseViewsDirectory(path + "/views"); err == nil {
+		views = append(views, v2...)
+	}
+	if len(views) > 0 {
+		fmt.Printf("Found %d views\n", len(views))
+		if err := store.SaveViews(views, siteName); err != nil {
+			return fmt.Errorf("saving views: %w", err)
+		}
+		for _, v := range views {
+			fmt.Printf("  ✓ %s (view)\n", v.Name)
+		}
+	}
+
 	// Build registry with full config.
 	registry := doctype.NewRegistry()
 	registry.LoadFull(doctypes, roles, permissions)
@@ -202,7 +239,7 @@ func runConfigImport(siteName, path, dbName string) error {
 
 	// Create config version BEFORE migration (so we have a snapshot to roll back to).
 	// This is fatal — don't apply schema changes without a version record.
-	snapshot := &doctype.ConfigSnapshot{DocTypes: doctypes, Roles: roles, Permissions: permissions, Workflows: workflows, MinKoraVersion: Version}
+	snapshot := &doctype.ConfigSnapshot{DocTypes: doctypes, Roles: roles, Permissions: permissions, Workflows: workflows, Views: views, MinKoraVersion: Version}
 	versionID, versionNum, err := store.CreateConfigVersion(siteName, "system", "Config import from "+path, "Active", snapshot)
 	if err != nil {
 		return fmt.Errorf("creating config version: %w", err)

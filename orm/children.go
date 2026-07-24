@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oklog/ulid/v2"
 	"github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/doctype"
+	"github.com/oklog/ulid/v2"
 )
 
 func (tx *TxManager) insertChild(parentDT *doctype.DocType, parentField string, childDT *doctype.DocType, doc *doctype.Document, parentName string, idx int) error {
@@ -45,6 +45,7 @@ func insertChildExec(ex db.Queryer, parentDT *doctype.DocType, parentField strin
 		val := doc.Get(f.Fieldname)
 		if val == nil && f.Default != "" {
 			val = convertDefault(f.Default, f.Fieldtype)
+			doc.Set(f.Fieldname, val)
 		}
 		values = append(values, val)
 	}
@@ -128,6 +129,7 @@ func insertChildrenBatch(ex db.Queryer, parentDT *doctype.DocType, parentField s
 				val := child.Get(f.Fieldname)
 				if val == nil && f.Default != "" {
 					val = convertDefault(f.Default, f.Fieldtype)
+					child.Set(f.Fieldname, val)
 				}
 				values = append(values, val)
 			}
@@ -162,10 +164,13 @@ func reconcileChildren(ex db.Queryer, parentDT *doctype.DocType, parentField str
 		oldByName[c.Name] = c
 	}
 	newByName := make(map[string]*doctype.Document)
+	var unnamedNewChildren []*doctype.Document
 	for _, c := range newChildren {
-		if c.Name != "" {
-			newByName[c.Name] = c
+		if c.Name == "" {
+			unnamedNewChildren = append(unnamedNewChildren, c)
+			continue
 		}
+		newByName[c.Name] = c
 	}
 
 	// DELETE rows that were removed (in old but not in new).
@@ -190,7 +195,7 @@ func reconcileChildren(ex db.Queryer, parentDT *doctype.DocType, parentField str
 	}
 
 	// INSERT new rows (in new but not in old).
-	var toInsert []*doctype.Document
+	toInsert := append([]*doctype.Document(nil), unnamedNewChildren...)
 	for name, child := range newByName {
 		if _, ok := oldByName[name]; !ok {
 			toInsert = append(toInsert, child)
@@ -245,6 +250,43 @@ func updateChildRow(ex db.Queryer, tableName string, childDT *doctype.DocType, d
 
 	_, err := ex.Exec(query, values...)
 	return err
+}
+
+// persistComputedChildFields writes computed child values back to the parent-owned
+// child table after ComputeFields has populated them in memory.
+func persistComputedChildFields(ex db.Queryer, parentDT *doctype.DocType, parentField string, childDT *doctype.DocType, children []*doctype.Document) error {
+	var computedFields []doctype.Field
+	for _, f := range childDT.DataFields() {
+		if f.Fieldtype != "Table" && f.Computed != "" {
+			computedFields = append(computedFields, f)
+		}
+	}
+	if len(computedFields) == 0 {
+		return nil
+	}
+
+	tableName := parentDT.ChildTableName(parentField)
+	for _, child := range children {
+		if child == nil || child.Name == "" {
+			continue
+		}
+
+		setClauses := make([]string, 0, len(computedFields)+1)
+		values := make([]any, 0, len(computedFields)+2)
+		for _, f := range computedFields {
+			setClauses = append(setClauses, fmt.Sprintf("%s = ?", f.Fieldname))
+			values = append(values, child.Get(f.Fieldname))
+		}
+		setClauses = append(setClauses, "modified = ?")
+		values = append(values, time.Now(), child.Name)
+
+		query := fmt.Sprintf("UPDATE %s SET %s WHERE name = ?", tableName, strings.Join(setClauses, ", "))
+		if _, err := ex.Exec(query, values...); err != nil {
+			return fmt.Errorf("updating computed child row %s: %w", child.Name, err)
+		}
+	}
+
+	return nil
 }
 
 // documentsEqual compares two documents' data fields for equality (ignoring system columns).

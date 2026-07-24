@@ -140,6 +140,7 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 		val := doc.Get(f.Fieldname)
 		if val == nil && f.Default != "" {
 			val = convertDefault(f.Default, f.Fieldtype)
+			doc.Set(f.Fieldname, val)
 		}
 		// Normalize JSON fields: arrays/objects marshalled to string for SQL binding.
 		if normalized, err := normalizeSQLValue(f, val); err != nil {
@@ -199,6 +200,9 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 			if err := doctype.ComputeFields(childDT, child); err != nil {
 				slog.Warn("computed fields failed on child", "doctype", childDT.Name, "error", err)
 			}
+		}
+		if err := persistComputedChildFields(dbTx, dt, f.Fieldname, childDT, children); err != nil {
+			return fmt.Errorf("persisting computed child fields in %s: %w", f.Fieldname, err)
 		}
 	}
 
@@ -408,6 +412,9 @@ func (tx *TxManager) Save(dt *doctype.DocType, doc *doctype.Document, modifiedBy
 			if err := doctype.ComputeFields(childDT, child); err != nil {
 				slog.Warn("computed fields failed on child", "doctype", childDT.Name, "error", err)
 			}
+		}
+		if err := persistComputedChildFields(dbTx, dt, f.Fieldname, childDT, children); err != nil {
+			return fmt.Errorf("persisting computed child fields in %s: %w", f.Fieldname, err)
 		}
 	}
 

@@ -100,6 +100,12 @@ export default defineConfig({
           if (id.includes('node_modules/zod/')) {
             return 'vendor-zod'
           }
+          if (id.includes('node_modules/@codemirror/')) {
+            return 'vendor-codemirror'
+          }
+          if (id.includes('node_modules/@dnd-kit/')) {
+            return 'vendor-dnd'
+          }
         },
       },
     },

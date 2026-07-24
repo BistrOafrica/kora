@@ -223,6 +223,13 @@ func (sr *SiteRouter) Middleware() gin.HandlerFunc {
 		c.Set("site_name", site.Name)
 		c.Set("site_db", site.DB)
 		c.Set("site_registry", site.Registry)
+
+		// Set kora_site cookie so the frontend can read the site name.
+		// Only set if not already present or value differs (avoid redundant Set-Cookie).
+		if existing, _ := c.Cookie("kora_site"); existing != site.Name {
+			SetSecureCookie(c, "kora_site", site.Name, 86400, "/", false)
+		}
+
 		c.Next()
 	}
 }

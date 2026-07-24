@@ -51,7 +51,7 @@ export function RootLayout() {
         <Sidebar />
       </div>
 
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+      <Sheet key={sidebarOpen ? 'open' : 'closed'} open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-[86vw] max-w-sm p-0 md:hidden">
           <Sidebar mobile />
         </SheetContent>

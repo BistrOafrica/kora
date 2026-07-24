@@ -161,6 +161,7 @@ func getUserPermissions(reg *doctype.Registry, c *gin.Context, dt string) map[st
 // NavigationResponse is the full navigation config for the SPA sidebar.
 type NavigationResponse struct {
 	Modules           []ModuleGroup `json:"modules"`
+	Views             []ViewNavItem `json:"views,omitempty"`
 	Branding          Branding      `json:"branding"`
 	User              UserInfo      `json:"user"`
 	AdminCapabilities []string      `json:"admin_capabilities"`
@@ -179,6 +180,16 @@ type DocTypeNavItem struct {
 	Label   string `json:"label"`
 	Icon    string `json:"icon,omitempty"`
 	IsChild bool   `json:"is_child"`
+}
+
+// ViewNavItem is a configured workspace view entry in the navigation.
+type ViewNavItem struct {
+	Name   string `json:"name"`
+	Label  string `json:"label"`
+	Route  string `json:"route"`
+	Type   string `json:"type"`
+	Module string `json:"module"`
+	Icon   string `json:"icon,omitempty"`
 }
 
 // AppBranding is the global branding config (set from common config at startup).
@@ -242,6 +253,32 @@ func (h *Handler) HandleSystemNavigation(c *gin.Context) {
 		})
 	}
 
+	views := make([]ViewNavItem, 0)
+	if reg.Views != nil {
+		for _, view := range reg.Views.All() {
+			if view == nil || view.Route == "" {
+				continue
+			}
+			label := view.Label
+			if label == "" {
+				label = view.Name
+			}
+			views = append(views, ViewNavItem{
+				Name:   view.Name,
+				Label:  label,
+				Route:  view.Route,
+				Type:   view.Type,
+				Module: view.Module,
+			})
+		}
+		sort.Slice(views, func(i, j int) bool {
+			if views[i].Module == views[j].Module {
+				return views[i].Label < views[j].Label
+			}
+			return views[i].Module < views[j].Module
+		})
+	}
+
 	// Extract user info from context (set by SiteGuard/AuthMiddleware).
 	user := UserInfo{}
 	if userObj, exists := c.Get("user_obj"); exists {
@@ -280,13 +317,14 @@ func (h *Handler) HandleSystemNavigation(c *gin.Context) {
 	if userHasAdminRole(user.Roles) {
 		adminCapabilities = []string{
 			"doctypes", "permissions", "workflows", "versions",
-			"users", "scripts", "extensions", "secrets", "analytics",
+			"users", "scripts", "extensions", "secrets", "analytics", "views",
 		}
 	}
 
 	c.JSON(http.StatusOK, Response{
 		Data: NavigationResponse{
 			Modules:           modules,
+			Views:             views,
 			Branding:          branding,
 			User:              user,
 			AdminCapabilities: adminCapabilities,
@@ -849,8 +887,8 @@ func (h *Handler) HandleConfigVersionPreview(c *gin.Context) {
 				"roles_in_snapshot":       len(snapshot.Roles),
 				"permissions_in_snapshot": len(snapshot.Permissions),
 				"workflows_in_snapshot":   len(snapshot.Workflows),
-				"diff_summary":            fullDiff.Doctypes.Summary(),
-				"is_breaking":             fullDiff.Doctypes.IsBreaking,
+				"diff_summary":            fullDiff.Summary(),
+				"is_breaking":             fullDiff.Doctypes != nil && fullDiff.Doctypes.IsBreaking,
 				"newer_active_versions":   newerActiveCount,
 				"section_changes":         fullDiff.SectionChanges,
 				"change_list_version":     "v1",
@@ -859,7 +897,7 @@ func (h *Handler) HandleConfigVersionPreview(c *gin.Context) {
 			if newerActiveCount > 0 {
 				preview["warning"] = fmt.Sprintf("Activating this version will REVERT %d newer active version(s). Changes made since this version was created will be lost.", newerActiveCount)
 			}
-			if fullDiff.Doctypes.IsBreaking {
+			if fullDiff.Doctypes != nil && fullDiff.Doctypes.IsBreaking {
 				if preview["warning"] != "" {
 					preview["warning"] = preview["warning"].(string) + " This version has BREAKING changes (field removals, type changes)."
 				} else {
@@ -1018,7 +1056,11 @@ func (h *Handler) HandleConfigVersionActivate(c *gin.Context) {
 		var fullDiff doctype.ConfigDiffFull
 		if parseErr := json.Unmarshal([]byte(changeList), &fullDiff); parseErr == nil {
 			slog.Info("activation: generating DDL from stored change_list", "version", versionID)
-			changes := doctype.ConvertConfigChanges(fullDiff.Doctypes.Changes, fullDiff.SectionChanges, snapshot)
+			var doctypeChanges []doctype.ConfigChange
+			if fullDiff.Doctypes != nil {
+				doctypeChanges = fullDiff.Doctypes.Changes
+			}
+			changes := doctype.ConvertConfigChanges(doctypeChanges, fullDiff.SectionChanges, snapshot)
 			ddlStatements, _ = doctype.GenerateDDLFromDiff(changes, h.TxManager.Dialect)
 			for _, stmt := range ddlStatements {
 				slog.Info("activation DDL (change_list)", "sql", stmt)

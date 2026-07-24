@@ -8,10 +8,10 @@ import (
 type ChangeType string
 
 const (
-	ChangeFieldAdded      ChangeType = "field_added"
-	ChangeFieldRemoved    ChangeType = "field_removed"
-	ChangeFieldTypeChanged ChangeType = "field_type_changed"
-	ChangeFieldRenamed    ChangeType = "field_renamed"
+	ChangeFieldAdded        ChangeType = "field_added"
+	ChangeFieldRemoved      ChangeType = "field_removed"
+	ChangeFieldTypeChanged  ChangeType = "field_type_changed"
+	ChangeFieldRenamed      ChangeType = "field_renamed"
 	ChangeConstraintAdded   ChangeType = "constraint_added"
 	ChangeConstraintRemoved ChangeType = "constraint_removed"
 	ChangeDocTypeAdded      ChangeType = "doctype_added"
@@ -305,7 +305,7 @@ type ConfigDiffFull struct {
 
 // SectionChange describes a change to a non-doctype config section.
 type SectionChange struct {
-	Section string `json:"section"` // "roles", "permissions", "workflows", "analytics_metrics", "scripts"
+	Section string `json:"section"` // "roles", "permissions", "workflows", "views", "analytics_metrics", "scripts"
 	Change  string `json:"change"`  // "added", "removed", "modified"
 	Name    string `json:"name"`    // name of the changed entity
 	Details string `json:"details"` // human-readable description
@@ -479,13 +479,49 @@ func DiffFullSnapshots(old, new *ConfigSnapshot) *ConfigDiffFull {
 		}
 	}
 
+	// Compare Views by name.
+	oldViewNames := make(map[string]bool)
+	for _, v := range old.Views {
+		oldViewNames[v.Name] = true
+	}
+	for _, v := range new.Views {
+		if !oldViewNames[v.Name] {
+			result.SectionChanges = append(result.SectionChanges, SectionChange{
+				Section: "views",
+				Change:  "added",
+				Name:    v.Name,
+				Details: fmt.Sprintf("View %q added", v.Name),
+			})
+		}
+	}
+	newViewNames := make(map[string]bool)
+	for _, v := range new.Views {
+		newViewNames[v.Name] = true
+	}
+	for _, v := range old.Views {
+		if !newViewNames[v.Name] {
+			result.SectionChanges = append(result.SectionChanges, SectionChange{
+				Section: "views",
+				Change:  "removed",
+				Name:    v.Name,
+				Details: fmt.Sprintf("View %q removed", v.Name),
+			})
+		}
+	}
+
 	return result
 }
 
 // Summary returns a human-readable summary of the full diff.
 func (d *ConfigDiffFull) Summary() string {
-	dtSummary := d.Doctypes.Summary()
-	sectionCount := len(d.SectionChanges)
+	dtSummary := "0 added, 0 removed, 0 changed (0 breaking)"
+	if d != nil && d.Doctypes != nil {
+		dtSummary = d.Doctypes.Summary()
+	}
+	sectionCount := 0
+	if d != nil {
+		sectionCount = len(d.SectionChanges)
+	}
 	if sectionCount > 0 {
 		return fmt.Sprintf("%s, %d section changes", dtSummary, sectionCount)
 	}
@@ -494,6 +530,9 @@ func (d *ConfigDiffFull) Summary() string {
 
 // BreakingChanges returns all breaking changes across doctypes and sections.
 func (d *ConfigDiffFull) BreakingChanges() []ConfigChange {
+	if d == nil || d.Doctypes == nil {
+		return nil
+	}
 	return d.Doctypes.BreakingChanges()
 }
 func (d *ConfigDiff) BreakingChanges() []ConfigChange {

@@ -29,8 +29,8 @@ type scriptProvider struct {
 	httpClient *http.Client
 }
 
-// newScriptProvider creates a provider with a scoped HTTP client.
-func newScriptProvider(tx *orm.TxManager, registry *doctype.Registry, site string, secretStore *secret.Store, httpAllowlist []string) *scriptProvider {
+// NewScriptProvider creates a provider with a scoped HTTP client.
+func NewScriptProvider(tx *orm.TxManager, registry *doctype.Registry, site string, secretStore *secret.Store, httpAllowlist []string) script.KoraProvider {
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout:   10 * time.Second,
@@ -68,7 +68,7 @@ func (p *scriptProvider) GetDoc(doctypeName, name string) (map[string]any, error
 	if doc == nil {
 		return nil, nil
 	}
-	return doc.Fields, nil
+	return doc.ToMap(), nil
 }
 
 // GetList fetches documents with optional filters, ordering, and pagination.
@@ -94,7 +94,7 @@ func (p *scriptProvider) GetList(doctypeName string, filters map[string]any, ord
 
 	result := make([]map[string]any, len(docs))
 	for i, doc := range docs {
-		result[i] = doc.Fields
+		result[i] = doc.ToMap()
 	}
 	return result, nil
 }
@@ -141,6 +141,9 @@ func (p *scriptProvider) SaveDoc(doctypeName string, doc map[string]any, modifie
 	if existing == nil {
 		return fmt.Errorf("document %q not found", name)
 	}
+	oldDoc := cloneScriptDocument(existing)
+
+	doc = normalizeScriptDocumentInput(dt, p.registry, doc)
 
 	// Merge changes into existing document.
 	for k, v := range doc {
@@ -149,7 +152,7 @@ func (p *scriptProvider) SaveDoc(doctypeName string, doc map[string]any, modifie
 		}
 	}
 
-	return p.tx.Save(dt, existing, modifiedBy, "", existing)
+	return p.tx.Save(dt, existing, modifiedBy, "", oldDoc)
 }
 
 // CreateDoc creates a new document.
@@ -159,11 +162,11 @@ func (p *scriptProvider) CreateDoc(doctypeName string, doc map[string]any, owner
 		return nil, fmt.Errorf("doctype %q not found", doctypeName)
 	}
 
-	d := &doctype.Document{Fields: doc, IsNew: true}
+	d := &doctype.Document{DocType: dt.Name, Fields: normalizeScriptDocumentInput(dt, p.registry, doc), IsNew: true}
 	if err := p.tx.Insert(dt, d, owner, modifiedBy); err != nil {
 		return nil, err
 	}
-	return d.Fields, nil
+	return d.ToMap(), nil
 }
 
 // DeleteDoc deletes a document by doctype and name.
@@ -303,4 +306,127 @@ func isPrivateHost(host string) bool {
 		return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
 	}
 	return false
+}
+
+func normalizeScriptDocumentInput(dt *doctype.DocType, registry *doctype.Registry, fields map[string]any) map[string]any {
+	if dt == nil || fields == nil {
+		return fields
+	}
+	out := make(map[string]any, len(fields))
+	for key, value := range fields {
+		out[key] = value
+	}
+	for _, field := range dt.TableFields() {
+		value, ok := out[field.Fieldname]
+		if !ok || value == nil {
+			continue
+		}
+		childDT := registry.Get(field.Options)
+		if childDT == nil {
+			continue
+		}
+		children, ok := scriptValueToChildDocuments(value, childDT, registry)
+		if ok {
+			out[field.Fieldname] = children
+		}
+	}
+	return out
+}
+
+func scriptValueToChildDocuments(value any, childDT *doctype.DocType, registry *doctype.Registry) ([]*doctype.Document, bool) {
+	switch rows := value.(type) {
+	case []*doctype.Document:
+		return rows, true
+	case []map[string]any:
+		children := make([]*doctype.Document, 0, len(rows))
+		for _, row := range rows {
+			children = append(children, scriptMapToDocument(row, childDT))
+		}
+		return children, true
+	case []any:
+		children := make([]*doctype.Document, 0, len(rows))
+		for _, item := range rows {
+			row, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			children = append(children, scriptMapToDocument(row, childDT))
+		}
+		return children, true
+	default:
+		return nil, false
+	}
+}
+
+func scriptMapToDocument(row map[string]any, dt *doctype.DocType) *doctype.Document {
+	child := doctype.NewDocument(dt.Name)
+	if name, ok := row["name"].(string); ok {
+		child.Name = name
+		child.IsNew = name == ""
+	}
+	if status, ok := row["doc_status"]; ok {
+		child.DocStatus = intFromScriptValue(status)
+	}
+	for key, value := range row {
+		if key == "name" || key == "doc_status" || key == "owner" || key == "creation" || key == "modified" || key == "modified_by" {
+			continue
+		}
+		child.Set(key, value)
+	}
+	return child
+}
+
+func intFromScriptValue(value any) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
+}
+
+func cloneScriptDocument(doc *doctype.Document) *doctype.Document {
+	if doc == nil {
+		return nil
+	}
+	clone := &doctype.Document{
+		DocType:   doc.DocType,
+		Name:      doc.Name,
+		Fields:    make(map[string]any, len(doc.Fields)),
+		IsNew:     doc.IsNew,
+		DocStatus: doc.DocStatus,
+	}
+	for key, value := range doc.Fields {
+		clone.Fields[key] = cloneScriptValue(value)
+	}
+	return clone
+}
+
+func cloneScriptValue(value any) any {
+	switch v := value.(type) {
+	case []*doctype.Document:
+		children := make([]*doctype.Document, len(v))
+		for i, child := range v {
+			children[i] = cloneScriptDocument(child)
+		}
+		return children
+	case []any:
+		items := make([]any, len(v))
+		for i, item := range v {
+			items[i] = cloneScriptValue(item)
+		}
+		return items
+	case map[string]any:
+		m := make(map[string]any, len(v))
+		for key, item := range v {
+			m[key] = cloneScriptValue(item)
+		}
+		return m
+	default:
+		return value
+	}
 }

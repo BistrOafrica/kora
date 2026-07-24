@@ -660,11 +660,13 @@ func (s *Store) CollectSnapshot(reg *doctype.Registry, site string) (*doctype.Co
 	workflows, _ := s.LoadWorkflows(site)
 	analyticsMetrics, _ := s.LoadAnalyticsMetrics(site)
 	scripts, _ := s.LoadScriptSnapshots(site)
+	views, _ := s.LoadViews(site)
 	return &doctype.ConfigSnapshot{
 		DocTypes:         doctypes,
 		Roles:            roles,
 		Permissions:      permissions,
 		Workflows:        workflows,
+		Views:            views,
 		AnalyticsMetrics: analyticsMetrics,
 		Scripts:          scripts,
 	}, nil
@@ -747,6 +749,31 @@ func (s *Store) LoadScriptSnapshots(site string) ([]*doctype.ScriptSnapshot, err
 	return scripts, rows.Err()
 }
 
+// SaveScripts upserts active scripts from a config snapshot during site provisioning.
+// Existing scripts with the same name are updated; new ones are inserted.
+func (s *Store) SaveScripts(scripts []*doctype.ScriptSnapshot, scriptBodyByHash map[string]string, site string) error {
+	if len(scripts) == 0 {
+		return nil
+	}
+	for _, ss := range scripts {
+		if ss == nil {
+			continue
+		}
+		scriptBody := scriptBodyByHash[ss.ScriptHash]
+		upsertSQL := `INSERT INTO _kora_script (name, site, script_type, doctype, event, method_path, workflow_action, schedule,
+			priority, is_active, run_as, timeout_ms, script)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			` + s.Dialect.UpsertClause([]string{"name"}, []string{"script_type", "doctype", "event", "method_path", "workflow_action", "schedule",
+			"priority", "is_active", "run_as", "timeout_ms", "script"})
+		_, err := s.DB.Exec(upsertSQL, ss.Name, site, ss.ScriptType, ss.DocType, ss.Event, ss.MethodPath,
+			ss.WorkflowAction, ss.Schedule, ss.Priority, ss.IsActive, ss.RunAs, ss.TimeoutMs, scriptBody)
+		if err != nil {
+			return fmt.Errorf("saving script %s: %w", ss.Name, err)
+		}
+	}
+	return nil
+}
+
 // LoadWorkflows loads all workflows from the database.
 func (s *Store) LoadWorkflows(site string) ([]*doctype.Workflow, error) {
 	rows, err := s.DB.Query("SELECT config_json FROM _kora_workflow WHERE is_active = 1 AND (site = ? OR site = '')", site)
@@ -804,10 +831,16 @@ func (s *Store) ActivateSnapshot(tx *sql.Tx, snapshot *doctype.ConfigSnapshot, r
 			return fmt.Errorf("saving analytics metrics during activation: %w", err)
 		}
 	}
+	if len(snapshot.Views) > 0 {
+		if err := s.SaveViewsTx(tx, snapshot.Views, siteName); err != nil {
+			return fmt.Errorf("saving views during activation: %w", err)
+		}
+	}
 
 	// Step 3: Rebuild registry from snapshot (in-memory, no DB needed).
 	reg.LoadFull(snapshot.DocTypes, snapshot.Roles, snapshot.Permissions)
 	reg.Workflows.LoadFromDB(snapshot.Workflows)
+	reg.Views.LoadFromDB(snapshot.Views)
 
 	return nil
 }

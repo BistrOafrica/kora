@@ -4,7 +4,7 @@ import { fetchNavigation } from '@/lib/api/system'
 import { useAuthStore } from '@/lib/auth-store'
 import { useUIStore } from '@/lib/ui-store'
 import { cn } from '@/lib/utils'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   LayoutDashboard,
   LogOut,
@@ -17,6 +17,7 @@ import {
   Star,
   Clock,
   Boxes,
+  Eye,
   Search,
   X,
 } from 'lucide-react'
@@ -72,24 +73,37 @@ function FlyoutMenu({ label, items, collapsed, icon: Icon, isOpen, onOpen, onClo
   collapsed: boolean
   icon?: typeof Star
   isOpen: boolean
-  onOpen: () => void   // open this menu (close others)
-  onClose: () => void  // close this menu (mouse leave)
+  onOpen: () => void
+  onClose: () => void
   onItemClick?: (item: FlyoutItem) => void
 }) {
-  let closeTimer: ReturnType<typeof setTimeout> | null = null
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clickedRef = useRef(false)
 
   const handleMouseEnter = () => {
-    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null }
     onOpen()
   }
   const handleMouseLeave = () => {
-    closeTimer = setTimeout(() => onClose(), 200)
+    // Don't auto-close if the user clicked to open this menu.
+    if (clickedRef.current) return
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null
+      onClose()
+    }, 200)
   }
-  // Click toggles: if open → close, if closed → open
   const handleClick = () => {
-    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
-    isOpen ? onClose() : onOpen()
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null }
+    clickedRef.current = true
+    onOpen()
   }
+
+  // Reset clicked flag when menu closes.
+  useEffect(() => {
+    if (!isOpen) {
+      clickedRef.current = false
+    }
+  }, [isOpen])
 
   return (
     <div
@@ -156,11 +170,12 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
     setOpenMenu(prev => prev === label ? null : prev)
   }
 
+  // Persist activeModule into openMenu on navigation changes only.
   useEffect(() => {
-    if (activeModule && (!openMenu || openMenu.startsWith('module:'))) {
+    if (activeModule && !openMenu) {
       setOpenMenu(`module:${activeModule}`)
     }
-  }, [activeModule, openMenu])
+  }, [activeModule])
 
   useEffect(() => {
     const onStorage = () => {
@@ -187,6 +202,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
     { name: 'extensions', label: 'Extensions', to: '/workspace/admin/extensions' },
     { name: 'secrets', label: 'Secrets', to: '/workspace/admin/secrets' },
     { name: 'analytics', label: 'Analytics', to: '/workspace/admin/analytics' },
+    { name: 'views', label: 'Views', to: '/workspace/admin/views' },
   ]), [])
   const adminItems = useMemo(() => {
     if (adminCapabilities.length === 0) return []
@@ -199,6 +215,21 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
       item.name.toLowerCase().includes(normalizedQuery),
     )
   }, [adminItems, normalizedQuery])
+  const filteredViews = useMemo(() => {
+    const views = data?.views ?? []
+    const items = views.map((view) => ({
+      name: view.name,
+      label: view.label || view.name,
+      icon: view.icon || '◫',
+      to: `/workspace/pages/${encodeURIComponent(view.route.replace(/^\//, ''))}`,
+    }))
+    if (!normalizedQuery) return items
+    return items.filter((item) =>
+      item.label.toLowerCase().includes(normalizedQuery) ||
+      item.name.toLowerCase().includes(normalizedQuery),
+    )
+  }, [data?.views, normalizedQuery])
+
   const filteredModules = useMemo(() => {
     if (!normalizedQuery) return data?.modules ?? []
     return (data?.modules ?? [])
@@ -296,7 +327,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
               </div>
               {normalizedQuery && (
                 <p className="mt-1 px-1 text-[11px] text-muted-foreground">
-                  Filtering modules, favorites, recent items, and admin links.
+                  Filtering views, modules, favorites, recent items, and admin links.
                 </p>
               )}
             </div>
@@ -328,6 +359,20 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
             />
           )}
 
+
+          {filteredViews.length > 0 && (
+            <FlyoutMenu
+              label="Views"
+              items={filteredViews}
+              collapsed={collapsed}
+              icon={Eye}
+              isOpen={openMenu === 'Views'}
+              onOpen={() => handleMenuOpen('Views')}
+              onClose={() => handleMenuClose('Views')}
+              onItemClick={() => setSidebarOpen(false)}
+            />
+          )}
+
           {filteredModules.length > 0 && (
             <div className="space-y-0.5">
               {!collapsed && (
@@ -354,7 +399,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
             </div>
           )}
 
-          {normalizedQuery && !filteredModules.length && !filteredFavorites.length && !filteredRecent.length && !filteredAdminItems.length && (
+          {normalizedQuery && !filteredViews.length && !filteredModules.length && !filteredFavorites.length && !filteredRecent.length && !filteredAdminItems.length && (
             <div className="px-3 py-4 text-center text-xs text-muted-foreground">
               No navigation matches.
             </div>

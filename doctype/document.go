@@ -103,3 +103,45 @@ func (d *Document) GetTable(field string) []*Document {
 func (d *Document) SetTable(field string, docs []*Document) {
 	d.Fields[field] = docs
 }
+
+// ToMap returns a script/API friendly representation of the document.
+// Child table rows are recursively converted from *Document values to maps.
+func (d *Document) ToMap() map[string]any {
+	if d == nil {
+		return nil
+	}
+	out := make(map[string]any, len(d.Fields)+2)
+	for key, value := range d.Fields {
+		out[key] = documentValueToMap(value)
+	}
+	if d.Name != "" {
+		out["name"] = d.Name
+	}
+	out["doc_status"] = d.DocStatus
+	return out
+}
+
+func documentValueToMap(value any) any {
+	switch v := value.(type) {
+	case []*Document:
+		rows := make([]map[string]any, len(v))
+		for i, child := range v {
+			rows[i] = child.ToMap()
+		}
+		return rows
+	case []any:
+		rows := make([]any, len(v))
+		for i, item := range v {
+			rows[i] = documentValueToMap(item)
+		}
+		return rows
+	case map[string]any:
+		m := make(map[string]any, len(v))
+		for key, item := range v {
+			m[key] = documentValueToMap(item)
+		}
+		return m
+	default:
+		return value
+	}
+}

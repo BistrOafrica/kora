@@ -463,6 +463,24 @@ func sanitizeName(name string) string {
 	return s
 }
 
+// argsToJSON extracts a key from args and returns it as a JSON string.
+func argsToJSON(args map[string]any, key string) string {
+	v, ok := args[key]
+	if !ok {
+		return ""
+	}
+	// If already a string, return as-is.
+	if s, ok := v.(string); ok {
+		return s
+	}
+	// Marshal object to JSON.
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(data)
+}
+
 // ---------------------------------------------------------------------------
 // System-level tools — doctype creation, validation, dry-run.
 // These always create as Draft. Only a human can activate a draft.
@@ -713,13 +731,74 @@ fields:
 			"type": "function",
 			"function": map[string]any{
 				"name":        "script_executions",
-				"description": "View the last 10 execution logs for a script. Shows timestamps, status, duration, and error messages. Use to debug failing scripts.",
+				"description": "View the last 10 execution logs for a script.",
 				"parameters": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"name": map[string]any{"type": "string", "description": "Script name"},
 					},
 					"required": []string{"name"},
+				},
+			},
+		},
+
+		// View management tools.
+		{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "list_views",
+				"description": "List all views (screens) configured for this site. Shows name, route, type, layout, and component count.",
+				"parameters":  map[string]any{"type": "object", "properties": map[string]any{}},
+			},
+		},
+		{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "get_view",
+				"description": "Get the full JSON configuration of a view by name. Use this before updating a view to see current state.",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{"name": map[string]any{"type": "string", "description": "View name"}},
+					"required":   []string{"name"},
+				},
+			},
+		},
+		{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "validate_view",
+				"description": "Validate a view configuration WITHOUT saving. Checks source doctypes, field bindings, and component structure.",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{"view": map[string]any{"type": "object", "description": "View config to validate"}},
+					"required":   []string{"view"},
+				},
+			},
+		},
+		{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "create_view",
+				"description": "Create a new view as DRAFT. Always call validate_view first. Available component types: record_table, record_list, record_cards, record_form, record_detail, filter_bar, search_box, workflow_actions, split_view, kanban_board, approval_queue, calendar_view, dashboard_grid, metric_card, chart, scanner_input, product_grid, cart_panel, payment_panel, scanner_count, document_preview, confirmation_step, receipt_preview, drawer, category_tabs, tabs, line_item_builder, wizard, checklist, recent_records, public_form, workspace_dashboard, print_layout. Use JSON format: {\"name\":\"...\",\"route\":\"/...\",\"type\":\"workspace\",\"layout\":\"two_panel\",\"components\":[...]}",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{"view": map[string]any{"type": "object", "description": "View config JSON"}},
+					"required":   []string{"view"},
+				},
+			},
+		},
+		{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "update_view",
+				"description": "Update an existing view as DRAFT. Get current state via get_view first, modify the JSON, then pass the full config here.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"name": map[string]any{"type": "string", "description": "View name"},
+						"view": map[string]any{"type": "object", "description": "Complete updated view config"},
+					},
+					"required": []string{"name", "view"},
 				},
 			},
 		},
@@ -802,6 +881,21 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 		return executeScriptGet(tx, args, siteName)
 	case "script_executions":
 		return executeScriptExecutions(tx, args, siteName)
+	case "list_views":
+		return executeListViews(reg, siteName, tx)
+	case "get_view":
+		name, _ := args["name"].(string)
+		return executeGetView(reg, name)
+	case "validate_view":
+		viewJSON := argsToJSON(args, "view")
+		return executeValidateView(viewJSON, reg)
+	case "create_view":
+		viewJSON := argsToJSON(args, "view")
+		return executeCreateViewDraft(tx, reg, viewJSON, owner, siteName)
+	case "update_view":
+		name, _ := args["name"].(string)
+		viewJSON := argsToJSON(args, "view")
+		return executeUpdateViewDraft(tx, reg, name, viewJSON, owner, siteName)
 	}
 
 	// Parse tool name using suffix matching (handles multi-word doctype names like "Work Order").

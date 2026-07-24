@@ -1,4 +1,4 @@
-import { useEffect, Suspense, lazy } from 'react'
+import { useEffect, Suspense, lazy, useState } from 'react'
 import { createRouter, createRoute, createRootRoute, Outlet, Navigate } from '@tanstack/react-router'
 import { RootLayout } from '@/components/layout/RootLayout'
 import { ConsoleLayout } from '@/components/layout/ConsoleLayout'
@@ -6,11 +6,14 @@ import { AuthGuard } from '@/components/layout/AuthGuard'
 import { useConsoleAuthStore } from '@/lib/console-auth-store'
 import { Loader2 } from 'lucide-react'
 
+// Eagerly loaded core routes — always needed, no lazy-load flicker.
+import ListPage from '@/routes/workspace/$doctype/index'
+import NewFormPage from '@/routes/workspace/$doctype/new'
+import EditFormPage from '@/routes/workspace/$doctype/$name'
+
+// Lazy-loaded admin + secondary routes.
 const LoginPage = lazy(() => import('@/routes/workspace/auth/login'))
 const DashboardPage = lazy(() => import('@/routes/workspace/index'))
-const ListPage = lazy(() => import('@/routes/workspace/$doctype/index'))
-const NewFormPage = lazy(() => import('@/routes/workspace/$doctype/new'))
-const EditFormPage = lazy(() => import('@/routes/workspace/$doctype/$name'))
 const AdminDoctypesPage = lazy(() => import('@/routes/workspace/admin/doctypes'))
 const AdminDoctypeEditorPage = lazy(() => import('@/routes/workspace/admin/doctypes/editor'))
 const AdminVersionsPage = lazy(() => import('@/routes/workspace/admin/versions'))
@@ -21,14 +24,27 @@ const AdminSecretsPage = lazy(() => import('@/routes/workspace/admin/secrets'))
 const AdminScriptsPage = lazy(() => import('@/routes/workspace/admin/scripts'))
 const AdminExtensionsPage = lazy(() => import('@/routes/workspace/admin/extensions'))
 const AdminAnalyticsPage = lazy(() => import('@/routes/workspace/admin/analytics'))
+const AdminViewsPage = lazy(() => import('@/routes/workspace/admin/views'))
+const AdminViewEditorPage = lazy(() => import('@/routes/workspace/admin/views/editor'))
+const PageView = lazy(() => import('@/routes/workspace/pages/$viewName'))
 const ConsoleLoginPage = lazy(() => import('@/routes/console/login'))
 const ConsoleDashboard = lazy(() => import('@/routes/console/index'))
+
+function DelayedFallback() {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    const id = window.setTimeout(() => setShow(true), 200)
+    return () => window.clearTimeout(id)
+  }, [])
+  if (!show) return null
+  return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+}
 
 // Root — just auth guard, no layout.
 const rootRoute = createRootRoute({
   component: () => (
     <AuthGuard>
-      <Suspense fallback={<div className="flex items-center justify-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+      <Suspense fallback={<DelayedFallback />}>
         <Outlet />
       </Suspense>
     </AuthGuard>
@@ -78,6 +94,18 @@ const doctypeEditRoute = createRoute({
   getParentRoute: () => doctypeRoute,
   path: '$name',
   component: EditFormPage,
+})
+
+// Dynamic view routes — /workspace/pages/$viewName
+const pagesRoute = createRoute({
+  getParentRoute: () => workspaceLayout,
+  path: 'pages',
+})
+
+const pageViewRoute = createRoute({
+  getParentRoute: () => pagesRoute,
+  path: '$viewName',
+  component: PageView,
 })
 
 // Admin routes.
@@ -152,6 +180,24 @@ const adminAnalyticsRoute = createRoute({
   component: AdminAnalyticsPage,
 })
 
+const adminViewsListRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: 'views',
+  component: AdminViewsPage,
+})
+
+const adminViewsNewRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: 'views/new',
+  component: AdminViewEditorPage,
+})
+
+const adminViewsEditRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: 'views/$name',
+  component: AdminViewEditorPage,
+})
+
 // Settings (placeholder).
 const settingsRoute = createRoute({
   getParentRoute: () => workspaceLayout,
@@ -210,8 +256,12 @@ const routeTree = rootRoute.addChildren([
       adminExtensionsRoute,
       adminSecretsRoute,
       adminAnalyticsRoute,
+      adminViewsListRoute,
+      adminViewsNewRoute,
+      adminViewsEditRoute,
     ]),
     doctypeRoute.addChildren([doctypeListRoute, doctypeNewRoute, doctypeEditRoute]),
+    pagesRoute.addChildren([pageViewRoute]),
     settingsRoute,
   ]),
 ])

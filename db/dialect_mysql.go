@@ -492,6 +492,14 @@ func (d *MySQLDialect) SystemTableSQL() []string {
 
 		// _kora_secret
 		"CREATE TABLE IF NOT EXISTS _kora_secret (\n\t\t\tsite VARCHAR(140) NOT NULL,\n\t\t\tkey_name VARCHAR(140) NOT NULL,\n\t\t\tencrypted_value BLOB NOT NULL,\n\t\t\tcreated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),\n\t\t\tupdated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),\n\t\t\tPRIMARY KEY (site, key_name)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+		// _kora_view
+		"CREATE TABLE IF NOT EXISTS _kora_view (\n\t\t\tname VARCHAR(140) NOT NULL,\n\t\t\tsite VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\troute VARCHAR(255) NOT NULL,\n\t\t\ttype VARCHAR(50) NOT NULL DEFAULT 'custom',\n\t\t\tlayout VARCHAR(50) NOT NULL DEFAULT 'single',\n\t\t\tlabel VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tmodule VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\tsource_doctype VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\tpublic_enabled TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\tpublic_components TEXT,\n\t\t\tpublic_allow_mutations TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\tconfig_json JSON,\n\t\t\tidx INT NOT NULL DEFAULT 0,\n\t\t\tcreation DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),\n\t\t\tmodified DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),\n\t\t\tPRIMARY KEY (name),\n\t\t\tINDEX idx_view_site (site),\n\t\t\tUNIQUE INDEX idx_view_route_unique (site, route)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+		// Backward compat: existing _kora_view tables may lack idx and PRIMARY KEY.
+		"ALTER TABLE _kora_view ADD COLUMN idx INT NOT NULL DEFAULT 0",
+		"ALTER TABLE _kora_view DROP PRIMARY KEY",
+		"ALTER TABLE _kora_view ADD PRIMARY KEY (name)",
 	}
 }
 

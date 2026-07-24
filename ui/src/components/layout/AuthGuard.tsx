@@ -1,5 +1,6 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuthStore } from '@/lib/auth-store'
+import { useRouter } from '@tanstack/react-router'
 import { sitePath } from '@/lib/basepath'
 import { Loader2 } from 'lucide-react'
 
@@ -9,19 +10,34 @@ interface AuthGuardProps {
 
 const PUBLIC_PATHS = ['/workspace/auth/login', '/console/login', '/console']
 
+function DelayedAuthSpinner() {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    const id = window.setTimeout(() => setShow(true), 200)
+    return () => window.clearTimeout(id)
+  }, [])
+  if (!show) return null
+  return (
+    <div className="flex h-screen items-center justify-center bg-background">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  )
+}
+
 export function AuthGuard({ children }: AuthGuardProps) {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore()
+  const router = useRouter()
+  const hasChecked = useRef(false)
 
   useEffect(() => {
+    // Skip re-check if already authenticated or already checked.
+    if (hasChecked.current || isAuthenticated) return
+    hasChecked.current = true
     checkAuth()
   }, [])
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <DelayedAuthSpinner />
   }
 
   const currentPath = window.location.pathname
@@ -36,7 +52,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   if (isPublic) {
     const isConsolePath = pathWithoutPrefix.startsWith('/console')
     if (isAuthenticated && !isConsolePath) {
-      window.location.href = sitePath('/workspace')
+      router.navigate({ to: '/workspace' })
       return null
     }
     return <>{children}</>
@@ -44,7 +60,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   // Protected paths: require auth.
   if (!isAuthenticated) {
-    window.location.href = sitePath('/workspace/auth/login')
+    router.navigate({ to: '/workspace/auth/login' })
     return null
   }
 

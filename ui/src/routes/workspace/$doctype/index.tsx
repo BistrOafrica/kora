@@ -21,12 +21,16 @@ export default function ListPage() {
   const navigate = useNavigate()
 
   const [page, setPage] = useState(0)
-  const [sorting, setSorting] = useState<{ field: string; order: string } | null>(null)
+  const [sorting, setSortingState] = useState<{ field: string; order: string } | null>(null)
   const [activeTab, setActiveTab] = useState<string>('list')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [filterValues, setFilterValues] = useState<Record<string, string>>({})
+  const [filterValues, setFilterValuesState] = useState<Record<string, string>>({})
   const limit = 50
+
+  // Reset page to 0 when sort/filter/search changes.
+  const setSorting = (s: { field: string; order: string } | null) => { setPage(0); setSortingState(s) }
+  const setFilterValues = (f: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => { setPage(0); setFilterValuesState(f) }
 
   const schemaQuery = useQuery({
     queryKey: ['doctype', doctype],
@@ -71,10 +75,6 @@ export default function ListPage() {
     const handle = window.setTimeout(() => setDebouncedSearch(search), 250)
     return () => window.clearTimeout(handle)
   }, [search])
-
-  useEffect(() => {
-    setPage(0)
-  }, [doctype, debouncedSearch, filtersJson, sorting?.field, sorting?.order, activeTab])
 
   if (schemaQuery.isLoading || listQuery.isLoading) {
     return (

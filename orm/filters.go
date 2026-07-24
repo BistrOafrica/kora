@@ -112,36 +112,32 @@ func filterValidColumns(dt *doctype.DocType) map[string]bool {
 
 func buildClause(field, op string, value any) (string, []any, error) {
 	switch strings.ToLower(op) {
-	case "=", "!=", ">", ">=", "<", "<=":
-		return fmt.Sprintf("%s %s ?", field, op), []any{value}, nil
+	case "=", "equals":
+		return fmt.Sprintf("%s = ?", field), []any{value}, nil
+	case "!=", "not_equals":
+		return fmt.Sprintf("%s != ?", field), []any{value}, nil
+	case ">", "gt":
+		return fmt.Sprintf("%s > ?", field), []any{value}, nil
+	case ">=", "gte":
+		return fmt.Sprintf("%s >= ?", field), []any{value}, nil
+	case "<", "lt":
+		return fmt.Sprintf("%s < ?", field), []any{value}, nil
+	case "<=", "lte":
+		return fmt.Sprintf("%s <= ?", field), []any{value}, nil
 	case "like":
 		return fmt.Sprintf("%s LIKE ?", field), []any{value}, nil
 	case "not like":
 		return fmt.Sprintf("%s NOT LIKE ?", field), []any{value}, nil
+	case "contains":
+		return fmt.Sprintf("%s LIKE ?", field), []any{"%" + fmt.Sprint(value) + "%"}, nil
+	case "starts_with":
+		return fmt.Sprintf("%s LIKE ?", field), []any{fmt.Sprint(value) + "%"}, nil
+	case "ends_with":
+		return fmt.Sprintf("%s LIKE ?", field), []any{"%" + fmt.Sprint(value)}, nil
 	case "in":
-		values, ok := value.([]any)
-		if !ok {
-			return "", nil, fmt.Errorf("IN operator requires an array value")
-		}
-		placeholders := make([]string, len(values))
-		args := make([]any, len(values))
-		for i, v := range values {
-			placeholders[i] = "?"
-			args[i] = v
-		}
-		return fmt.Sprintf("%s IN (%s)", field, strings.Join(placeholders, ", ")), args, nil
-	case "not in":
-		values, ok := value.([]any)
-		if !ok {
-			return "", nil, fmt.Errorf("NOT IN operator requires an array value")
-		}
-		placeholders := make([]string, len(values))
-		args := make([]any, len(values))
-		for i, v := range values {
-			placeholders[i] = "?"
-			args[i] = v
-		}
-		return fmt.Sprintf("%s NOT IN (%s)", field, strings.Join(placeholders, ", ")), args, nil
+		return buildInClause(field, "IN", value)
+	case "not in", "not_in":
+		return buildInClause(field, "NOT IN", value)
 	case "between":
 		values, ok := value.([]any)
 		if !ok || len(values) != 2 {
@@ -158,7 +154,25 @@ func buildClause(field, op string, value any) (string, []any, error) {
 			return fmt.Sprintf("%s IS NOT NULL", field), nil, nil
 		}
 		return "", nil, fmt.Errorf("IS NOT operator only supports NULL")
+	case "is_set":
+		return fmt.Sprintf("%s IS NOT NULL", field), nil, nil
+	case "is_not_set":
+		return fmt.Sprintf("%s IS NULL", field), nil, nil
 	default:
 		return "", nil, fmt.Errorf("unknown operator: %s", op)
 	}
+}
+
+func buildInClause(field, op string, value any) (string, []any, error) {
+	values, ok := value.([]any)
+	if !ok {
+		return "", nil, fmt.Errorf("%s operator requires an array value", op)
+	}
+	placeholders := make([]string, len(values))
+	args := make([]any, len(values))
+	for i, v := range values {
+		placeholders[i] = "?"
+		args[i] = v
+	}
+	return fmt.Sprintf("%s %s (%s)", field, op, strings.Join(placeholders, ", ")), args, nil
 }

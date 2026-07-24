@@ -16,6 +16,7 @@ type Registry struct {
 	doctypes      map[string]*DocType // keyed by doctype name
 	Permissions   *PermissionMatrix
 	Workflows     *WorkflowMap
+	Views         *ViewRegistry
 	ComputedHooks ComputedHookFunc // optional — runs script-based computed fields
 }
 
@@ -25,6 +26,7 @@ func NewRegistry() *Registry {
 		doctypes:    make(map[string]*DocType),
 		Permissions: NewPermissionMatrix(),
 		Workflows:   NewWorkflowMap(),
+		Views:       NewViewRegistry(),
 	}
 }
 

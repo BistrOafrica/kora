@@ -44,9 +44,10 @@ type ConfigSnapshot struct {
 	Roles            []*Role                  `json:"roles"`
 	Permissions      []*Permission            `json:"permissions"`
 	Workflows        []*Workflow              `json:"workflows"`
+	Views            []*View                  `json:"views,omitempty"`
 	AnalyticsMetrics []*AnalyticsMetricConfig `json:"analytics_metrics,omitempty"`
 	Scripts          []*ScriptSnapshot        `json:"scripts,omitempty"`
-	MinKoraVersion   string                   `json:"min_kora_version,omitempty"` // Kora binary version that created this snapshot
+	MinKoraVersion   string                   `json:"min_kora_version,omitempty"`
 }
 
 // ParseSnapshot parses a config snapshot from stored JSON, handling both:

@@ -13,6 +13,7 @@ kora
 # IDE
 .vscode/
 .idea/
+.zed/
 *.swp
 *.swo
 

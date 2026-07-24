@@ -1,6 +1,7 @@
 package doctype
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -31,6 +32,7 @@ func ToSExpr(snapshot *ConfigSnapshot) string {
 	writeRolesSection(&b, snapshot.Roles)
 	writePermissionsSection(&b, snapshot.Permissions)
 	writeWorkflowsSection(&b, snapshot.Workflows)
+	writeViewsSection(&b, snapshot.Views)
 	writeAnalyticsMetricsSection(&b, snapshot.AnalyticsMetrics)
 	writeScriptsSection(&b, snapshot.Scripts)
 
@@ -1098,9 +1100,9 @@ func isNumber(s string) bool {
 
 // sNode is a parsed s-expression node.
 type sNode struct {
-	IsList   bool     // true = list with Children; false = atom
-	Children []*sNode // for lists
-	Atom     string   // for atoms: the text value
+	IsList   bool       // true = list with Children; false = atom
+	Children []*sNode   // for lists
+	Atom     string     // for atoms: the text value
 	AtomType sTokenType // for atoms: sTokSymbol, sTokString, sTokBool, sTokInt, sTokFloat, sTokKeyword
 }
 
@@ -1227,6 +1229,12 @@ func buildSnapshot(children []*sNode) (*ConfigSnapshot, error) {
 					return nil, err
 				}
 				snapshot.Scripts = scripts
+			case "views":
+				views, err := parseViews(child.Children[1:])
+				if err != nil {
+					return nil, err
+				}
+				snapshot.Views = views
 			}
 		} else if child.AtomType == sTokKeyword {
 			// Config-level keyword
@@ -1873,4 +1881,276 @@ func CanonicalizeSExpr(sexpr string) string {
 		return sexpr
 	}
 	return ToSExpr(snapshot)
+}
+
+// ---------------------------------------------------------------------------
+// View S-Expression Parser
+// ---------------------------------------------------------------------------
+
+// parseViews parses a list of view s-expressions.
+func parseViews(nodes []*sNode) ([]*View, error) {
+	var result []*View
+	for _, n := range nodes {
+		v, err := parseView(n)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, v)
+	}
+	return result, nil
+}
+
+// parseView parses a single view s-expression.
+func parseView(node *sNode) (*View, error) {
+	if !node.IsList || len(node.Children) < 2 {
+		return nil, fmt.Errorf("expected (view <name> ...)")
+	}
+
+	v := &View{
+		Name:   nodeStr(node.Children[1]),
+		Layout: "single",
+		Module: "Workspace",
+	}
+
+	kw := make(map[string]string)
+	for i := 2; i < len(node.Children); i++ {
+		child := node.Children[i]
+		if child.IsList {
+			if len(child.Children) == 0 {
+				continue
+			}
+			head := nodeStr(child.Children[0])
+			switch head {
+			case "component":
+				comp, err := parseViewComponent(child)
+				if err != nil {
+					return nil, err
+				}
+				v.Components = append(v.Components, *comp)
+			case "public-access":
+				pa := parseViewPublicAccess(child)
+				v.PublicAccess = pa
+			}
+		} else if child.AtomType == sTokKeyword {
+			if i+1 < len(node.Children) {
+				kw[child.Atom] = nodeStr(node.Children[i+1])
+				i++
+			}
+		}
+	}
+
+	applyViewKeywords(v, kw)
+	return v, nil
+}
+
+func applyViewKeywords(v *View, kw map[string]string) {
+	if s, ok := kw["route"]; ok {
+		v.Route = s
+	}
+	if s, ok := kw["type"]; ok {
+		v.Type = s
+	}
+	if s, ok := kw["layout"]; ok {
+		v.Layout = s
+	}
+	if s, ok := kw["label"]; ok {
+		v.Label = s
+	}
+	if s, ok := kw["module"]; ok {
+		v.Module = s
+	}
+	if s, ok := kw["source-doctype"]; ok {
+		v.SourceDocType = s
+	}
+}
+
+func parseViewComponent(node *sNode) (*ViewComponent, error) {
+	if len(node.Children) < 3 {
+		return nil, fmt.Errorf("expected (component <id> ...)")
+	}
+
+	c := &ViewComponent{
+		ID:     nodeStr(node.Children[1]),
+		Region: "main",
+	}
+
+	kw := make(map[string]string)
+	for i := 2; i < len(node.Children); i++ {
+		child := node.Children[i]
+		if child.IsList {
+			if len(child.Children) == 0 {
+				continue
+			}
+			head := nodeStr(child.Children[0])
+			switch head {
+			case "component":
+				// Nested child
+				nested, err := parseViewComponent(child)
+				if err != nil {
+					return nil, err
+				}
+				c.Components = append(c.Components, *nested)
+			case "bindings":
+				c.Bindings = parseBindings(child)
+			case "filters":
+				c.Filters = parseViewFilters(child)
+			case "action":
+				a := parseViewAction(child)
+				if a != nil {
+					c.Actions = append(c.Actions, *a)
+				}
+			case "rule":
+				r := parseViewRule(child)
+				if r != nil {
+					c.Rules = append(c.Rules, *r)
+				}
+			case "desktop-columns":
+				c.DesktopColumns = parseStringList(child)
+			case "mobile-columns":
+				c.MobileColumns = parseStringList(child)
+			}
+		} else if child.AtomType == sTokKeyword {
+			if i+1 < len(node.Children) {
+				kw[child.Atom] = nodeStr(node.Children[i+1])
+				i++
+			}
+		}
+	}
+
+	if s, ok := kw["type"]; ok {
+		c.Type = s
+	}
+	if s, ok := kw["region"]; ok {
+		c.Region = s
+	}
+	if s, ok := kw["label"]; ok {
+		c.Label = s
+	}
+	if s, ok := kw["source-doctype"]; ok {
+		c.SourceDocType = s
+	}
+	if s, ok := kw["span"]; ok {
+		if n, err := strconv.Atoi(s); err == nil {
+			c.Span = n
+		}
+	}
+
+	return c, nil
+}
+
+func parseBindings(node *sNode) map[string]string {
+	bindings := make(map[string]string)
+	// Format: (bindings (key value) (key value) ...)
+	for _, child := range node.Children[1:] {
+		if child.IsList && len(child.Children) >= 2 {
+			key := nodeStr(child.Children[0])
+			value := nodeStr(child.Children[1])
+			if key != "" && !strings.HasPrefix(key, ":") {
+				bindings[key] = value
+			}
+		}
+	}
+	return bindings
+}
+
+func parseViewFilters(node *sNode) []ViewFilter {
+	var filters []ViewFilter
+	for _, child := range node.Children[1:] {
+		if child.IsList && len(child.Children) > 0 && nodeStr(child.Children[0]) == "filter" {
+			f := ViewFilter{}
+			for i := 1; i < len(child.Children); i++ {
+				c := child.Children[i]
+				if c.AtomType == sTokKeyword && i+1 < len(child.Children) {
+					val := nodeStr(child.Children[i+1])
+					switch c.Atom {
+					case "field":
+						f.Field = val
+					case "op":
+						f.Op = val
+					case "value":
+						f.Value = val
+					}
+					i++
+				}
+			}
+			filters = append(filters, f)
+		}
+	}
+	return filters
+}
+
+func parseViewAction(node *sNode) *ViewAction {
+	if len(node.Children) < 2 {
+		return nil
+	}
+	a := &ViewAction{ID: nodeStr(node.Children[1])}
+	for i := 2; i < len(node.Children); i++ {
+		c := node.Children[i]
+		if c.AtomType == sTokKeyword && i+1 < len(node.Children) {
+			val := nodeStr(node.Children[i+1])
+			switch c.Atom {
+			case "trigger":
+				a.Trigger = val
+			case "type":
+				a.Type = val
+			case "config":
+				var cfg map[string]any
+				if err := json.Unmarshal([]byte(val), &cfg); err == nil {
+					a.Config = cfg
+				}
+			}
+			i++
+		}
+	}
+	return a
+}
+
+func parseViewRule(node *sNode) *ViewRule {
+	r := &ViewRule{}
+	for i := 1; i < len(node.Children); i++ {
+		c := node.Children[i]
+		if c.AtomType == sTokKeyword && i+1 < len(node.Children) {
+			val := nodeStr(node.Children[i+1])
+			switch c.Atom {
+			case "target":
+				r.Target = val
+			case "field":
+				r.Condition.Field = val
+			case "op":
+				r.Condition.Op = val
+			case "value":
+				r.Condition.Value = val
+			}
+			i++
+		}
+	}
+	return r
+}
+
+func parseViewPublicAccess(node *sNode) *ViewPublicAccess {
+	pa := &ViewPublicAccess{}
+	for i := 1; i < len(node.Children); i++ {
+		c := node.Children[i]
+		if c.AtomType == sTokKeyword && i+1 < len(node.Children) {
+			val := nodeStr(node.Children[i+1])
+			switch c.Atom {
+			case "components":
+				json.Unmarshal([]byte(val), &pa.Components)
+			case "allow-mutations":
+				pa.AllowMutations = val == "true"
+			}
+			i++
+		}
+	}
+	// Enabled is true when components are present.
+	pa.Enabled = len(pa.Components) > 0
+	return pa
+}
+
+func parseStringList(node *sNode) []string {
+	var result []string
+	for _, child := range node.Children[1:] {
+		result = append(result, nodeStr(child))
+	}
+	return result
 }

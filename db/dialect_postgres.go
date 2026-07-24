@@ -679,5 +679,29 @@ func (d *PostgresDialect) SystemTableSQL() []string {
 			"updated_at" TIMESTAMP NOT NULL DEFAULT NOW(),
 			PRIMARY KEY ("site", "key_name")
 		)`,
+
+		// _kora_view
+		`CREATE TABLE IF NOT EXISTS "_kora_view" (
+			"name" VARCHAR(140) NOT NULL PRIMARY KEY,
+			"site" VARCHAR(140) NOT NULL DEFAULT '',
+			"route" VARCHAR(255) NOT NULL,
+			"type" VARCHAR(50) NOT NULL DEFAULT 'custom',
+			"layout" VARCHAR(50) NOT NULL DEFAULT 'single',
+			"label" VARCHAR(255) NOT NULL DEFAULT '',
+			"module" VARCHAR(140) NOT NULL DEFAULT '',
+			"source_doctype" VARCHAR(140) NOT NULL DEFAULT '',
+			"public_enabled" SMALLINT NOT NULL DEFAULT 0,
+			"public_components" TEXT,
+			"public_allow_mutations" SMALLINT NOT NULL DEFAULT 0,
+			"config_json" JSONB,
+			"idx" INTEGER NOT NULL DEFAULT 0,
+			"creation" TIMESTAMP NOT NULL DEFAULT NOW(),
+			"modified" TIMESTAMP NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS "idx_view_site" ON "_kora_view" ("site")`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS "idx_view_route_unique" ON "_kora_view" ("site", "route")`,
+
+		// Backward compat: existing _kora_view tables may lack idx column.
+		`ALTER TABLE "_kora_view" ADD COLUMN IF NOT EXISTS "idx" INTEGER NOT NULL DEFAULT 0`,
 	}
 }

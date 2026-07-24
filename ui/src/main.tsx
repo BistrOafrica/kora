@@ -9,8 +9,11 @@ import './styles/index.css'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
+      staleTime: 5 * 60_000,           // 5 minutes — schemas and list data rarely change
+      gcTime: 30 * 60_000,              // 30 minutes cache retention
       retry: 1,
+      refetchOnWindowFocus: false,      // POS screens should not flicker on tab switch
+      structuralSharing: true,          // Prevents object identity changes on refetch
     },
   },
 })

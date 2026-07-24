@@ -44,6 +44,7 @@ export interface MagicLinkVerifyRequest {
 
 export interface NavigationConfig {
   modules: ModuleGroup[]
+  views?: ViewNavItem[]
   branding: Branding
   user: UserInfo
   admin_capabilities: string[]
@@ -60,6 +61,15 @@ export interface DocTypeNavItem {
   label: string
   icon?: string
   is_child: boolean
+}
+
+export interface ViewNavItem {
+  name: string
+  label: string
+  route: string
+  type: string
+  module: string
+  icon?: string
 }
 
 export interface Branding {
