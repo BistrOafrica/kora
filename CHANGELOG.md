@@ -1,3 +1,9 @@
+## v0.9.1-alpha — 2026-07-28
+
+### Features
+- feat(ai): expose channel update tools
+
+
 ## v0.8.20-alpha — 2026-07-22
 ### Fixes
 - fix: skip no-op resource updates
