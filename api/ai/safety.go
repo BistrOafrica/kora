@@ -262,6 +262,10 @@ func summarizeCompacted(messages []map[string]any) string {
 
 // unknownFields returns args keys that don't exist on the doctype.
 func unknownFields(args map[string]any, dt *doctype.DocType) []string {
+	return unknownFieldsExcept(args, dt, nil)
+}
+
+func unknownFieldsExcept(args map[string]any, dt *doctype.DocType, allowed map[string]bool) []string {
 	valid := make(map[string]bool)
 	for _, f := range dt.DataFields() {
 		if f.Fieldtype != "Table" {
@@ -270,6 +274,9 @@ func unknownFields(args map[string]any, dt *doctype.DocType) []string {
 	}
 	var unknown []string
 	for k := range args {
+		if allowed != nil && allowed[k] {
+			continue
+		}
 		if !valid[k] {
 			unknown = append(unknown, k)
 		}

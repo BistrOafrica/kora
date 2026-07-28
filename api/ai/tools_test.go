@@ -51,6 +51,31 @@ func TestBuildToolCatalogAllowsWhatsAppWithGuards(t *testing.T) {
 	}
 }
 
+func TestUpdateToolAllowsStableNameArgument(t *testing.T) {
+	dt := &doctype.DocType{
+		Name: "Task",
+		Fields: []doctype.Field{
+			{Fieldname: "title", Fieldtype: "Data", Label: "Title"},
+			{Fieldname: "status", Fieldtype: "Select", Label: "Status", Options: "Todo\nDone"},
+		},
+	}
+
+	unknown := unknownFieldsExcept(map[string]any{
+		"name":   "TASK-0001",
+		"status": "Done",
+	}, dt, map[string]bool{"name": true})
+	if len(unknown) != 0 {
+		t.Fatalf("expected update name argument to be allowed, got %#v", unknown)
+	}
+	unknown = unknownFieldsExcept(map[string]any{
+		"name":    "TASK-0001",
+		"missing": "value",
+	}, dt, map[string]bool{"name": true})
+	if len(unknown) != 1 || unknown[0] != "missing" {
+		t.Fatalf("expected only real unknown fields to be rejected, got %#v", unknown)
+	}
+}
+
 func TestBuildToolCatalogEmitsV2FindSchemaAndMetadata(t *testing.T) {
 	reg := doctype.NewRegistry()
 	reg.Register(&doctype.DocType{

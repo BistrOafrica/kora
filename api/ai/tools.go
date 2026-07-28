@@ -1024,7 +1024,7 @@ func executeUpdateTool(tx *orm.TxManager, reg *doctype.Registry, dt *doctype.Doc
 	if name == "" {
 		return fmt.Sprintf("Error updating %s: name is required.", dt.Name)
 	}
-	if unknown := unknownFields(args, dt); len(unknown) > 0 {
+	if unknown := unknownFieldsExcept(args, dt, map[string]bool{"name": true}); len(unknown) > 0 {
 		return fmt.Sprintf("Error updating %s: unknown fields: %s. Valid fields: %s", dt.Name, strings.Join(unknown, ", "), availableFieldNames(dt))
 	}
 	changes := map[string]any{}
