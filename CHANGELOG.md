@@ -1,3 +1,8 @@
+## v0.9.4-alpha — 2026-07-28
+### Fixes
+- fix: generate template pack hashes on save
+
+
 ## v0.9.3-alpha — 2026-07-28
 ### Fixes
 - fix(ai): allow channel update record names
