@@ -26,6 +26,21 @@ func TestBuildToolCatalogAllowsWhatsAppWithGuards(t *testing.T) {
 	if !create.RequiresConfirmation || !create.RequiresRecentAuth {
 		t.Fatalf("customer_create should remain guarded: %#v", create)
 	}
+	update := findTool(t, catalog.Tools, "customer_update")
+	if !allowsChannel(update.ChannelAllowlist, "whatsapp") {
+		t.Fatalf("customer_update should be allowed on whatsapp: %#v", update.ChannelAllowlist)
+	}
+	if !update.RequiresConfirmation || !update.RequiresRecentAuth || update.Operation != "update" || update.Doctype != "Customer" {
+		t.Fatalf("customer_update should be guarded update metadata: %#v", update)
+	}
+	props := update.InputSchema["properties"].(map[string]any)
+	if _, ok := props["name"]; !ok {
+		t.Fatalf("customer_update should require stable document name: %#v", update.InputSchema)
+	}
+	required := update.InputSchema["required"].([]string)
+	if len(required) != 1 || required[0] != "name" {
+		t.Fatalf("customer_update should only require name: %#v", update.InputSchema)
+	}
 
 	system := findTool(t, catalog.Tools, "script_create")
 	if !allowsChannel(system.ChannelAllowlist, "whatsapp") {

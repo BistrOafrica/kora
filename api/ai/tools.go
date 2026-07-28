@@ -214,11 +214,15 @@ func buildDoctypeToolDescriptors(dt *doctype.DocType) []ToolDescriptor {
 	create := common(lower+"_create", "create", "Create a new "+dt.Name+". Available fields: "+strings.Join(fieldNamesForDescription(dt), ", "), buildCreateSchema(dt))
 	create.RequiresConfirmation = true
 	create.RequiresRecentAuth = true
+	update := common(lower+"_update", "update", "Update an existing "+dt.Name+". Requires the stable document name and writable fields.", buildUpdateSchema(dt))
+	update.RequiresConfirmation = true
+	update.RequiresRecentAuth = true
 	return []ToolDescriptor{
 		common(lower+"_find", "find", "Find "+dt.Name+" records using typed filters.", buildFindSchema()),
 		common(lower+"_list", "list", "List "+dt.Name+" documents (recent first). Use find when filters are present.", buildListSchema()),
 		common(lower+"_get", "get", "Get a single "+dt.Name+" by name.", buildGetSchema()),
 		create,
+		update,
 	}
 }
 
@@ -313,6 +317,24 @@ func buildCreateSchema(dt *doctype.DocType) map[string]any {
 		schema["required"] = required
 	}
 	return schema
+}
+
+func buildUpdateSchema(dt *doctype.DocType) map[string]any {
+	props := map[string]any{
+		"name": map[string]any{"type": "string", "description": "Stable document name to update"},
+	}
+	for _, f := range dt.DataFields() {
+		if f.Fieldtype == "Table" || f.ReadOnly || f.Computed != "" {
+			continue
+		}
+		props[f.Fieldname] = aiFieldSchema(&f)
+	}
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties":           props,
+		"required":             []string{"name"},
+	}
 }
 
 func aiFieldSchema(f *doctype.Field) map[string]any {
@@ -989,9 +1011,62 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 			return fmt.Sprintf("Error creating %s: %v", dt.Name, err)
 		}
 		return fmt.Sprintf("Created %s %q.", dt.Name, doc.Name)
+	case "update":
+		return executeUpdateTool(tx, reg, dt, args, owner)
 	default:
 		return fmt.Sprintf("Unknown operation: %s", operation)
 	}
+}
+
+func executeUpdateTool(tx *orm.TxManager, reg *doctype.Registry, dt *doctype.DocType, args map[string]any, owner string) string {
+	name, _ := args["name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Sprintf("Error updating %s: name is required.", dt.Name)
+	}
+	if unknown := unknownFields(args, dt); len(unknown) > 0 {
+		return fmt.Sprintf("Error updating %s: unknown fields: %s. Valid fields: %s", dt.Name, strings.Join(unknown, ", "), availableFieldNames(dt))
+	}
+	changes := map[string]any{}
+	for key, value := range args {
+		if key == "name" || strings.TrimSpace(key) == "" {
+			continue
+		}
+		field := dt.GetField(key)
+		if field == nil {
+			continue
+		}
+		if field.Fieldtype == "Table" || field.ReadOnly || field.Computed != "" {
+			return fmt.Sprintf("Error updating %s: field %s is not writable.", dt.Name, key)
+		}
+		changes[key] = value
+	}
+	if len(changes) == 0 {
+		return fmt.Sprintf("Error updating %s: provide at least one writable field.", dt.Name)
+	}
+	oldDoc, err := tx.GetDoc(dt, name, "")
+	if err != nil {
+		return fmt.Sprintf("%s %q not found.", dt.Name, name)
+	}
+	doc := doctype.NewDocument(dt.Name)
+	doc.Name = name
+	doc.IsNew = false
+	for _, f := range dt.DataFields() {
+		doc.Set(f.Fieldname, oldDoc.Get(f.Fieldname))
+	}
+	for key, value := range changes {
+		doc.Set(key, value)
+	}
+	if err := tx.RunHooksForValidate(dt, doc, oldDoc); err != nil {
+		return fmt.Sprintf("Error updating %s: %v", dt.Name, err)
+	}
+	if validationErrs := doctype.ValidateDocument(dt, doc, reg, oldDoc); validationErrs.HasErrors() {
+		return fmt.Sprintf("Error updating %s: %v", dt.Name, validationErrs)
+	}
+	if err := tx.Save(dt, doc, "ai-assistant", "", oldDoc); err != nil {
+		return fmt.Sprintf("Error updating %s: %v", dt.Name, err)
+	}
+	return fmt.Sprintf("Updated %s %q.", dt.Name, doc.Name)
 }
 
 func formatDocSummary(dt *doctype.DocType, fields map[string]any, index int) string {
