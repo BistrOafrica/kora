@@ -1,3 +1,8 @@
+## v0.9.2-alpha — 2026-07-28
+### Fixes
+- fix(ai): include record IDs in channel summaries
+
+
 ## v0.9.1-alpha — 2026-07-28
 
 ### Features
