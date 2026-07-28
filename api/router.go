@@ -411,6 +411,7 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 			}
 		}
 	}
+	setTemplatePackHash(dt, doc)
 
 	// Run validate hooks (scripts can reject with throw).
 	if err := h.siteTx(c).RunHooksForValidate(dt, doc, nil); err != nil {
@@ -530,8 +531,13 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 			doc.Set(key, val)
 		}
 	}
+	setTemplatePackHash(dt, doc)
 
-	if h.canShortCircuitNoopUpdate() && !resourceUpdateChanged(dt, oldDoc, rawData) {
+	// Template Pack hashes are server-owned. A PUT that resubmits unchanged
+	// child rows must still persist a repaired/stale config_hash.
+	packHashNeedsSave := dt.Name == "Template Pack" &&
+		doc.GetString("config_hash") != oldDoc.GetString("config_hash")
+	if h.canShortCircuitNoopUpdate() && !resourceUpdateChanged(dt, oldDoc, rawData) && !packHashNeedsSave {
 		c.JSON(http.StatusOK, Response{
 			Data: docToMap(oldDoc, dt, h.siteRegistry(c), nil),
 			Meta: &Meta{DocType: doctypeName},
