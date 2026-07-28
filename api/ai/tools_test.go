@@ -94,17 +94,20 @@ func TestListFormattingUsesSchemaSummary(t *testing.T) {
 			{Fieldname: "creation", Fieldtype: "Datetime", Label: "Creation"},
 		},
 	}
-	out := formatDocSummary(dt, map[string]any{
+	doc := doctype.NewDocument("Task")
+	doc.Name = "TASK-0001"
+	doc.Fields = map[string]any{
 		"title":    "Call home",
 		"due_date": "2026-07-14 00:00:00 +0000 UTC",
 		"priority": "Medium",
 		"creation": "2026-07-13 20:49:53 +0000 UTC",
-	}, 1)
+	}
+	out := formatDocSummary(dt, doc, 1)
 
 	if strings.Contains(out, "map[") || strings.Contains(out, "+0000 UTC") || strings.Contains(out, "Creation") {
 		t.Fatalf("expected clean schema summary, got %q", out)
 	}
-	for _, want := range []string{"1. Call home", "Due Date: 2026-07-14", "Priority: Medium"} {
+	for _, want := range []string{"1. Call home", "ID: TASK-0001", "Due Date: 2026-07-14", "Priority: Medium"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in summary %q", want, out)
 		}

@@ -966,7 +966,7 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 			maxShow = len(docs)
 		}
 		for i := 0; i < maxShow; i++ {
-			summaries = append(summaries, formatDocSummary(dt, docs[i].Fields, i+1))
+			summaries = append(summaries, formatDocSummary(dt, docs[i], i+1))
 		}
 		if total > maxShow {
 			summaries = append(summaries, fmt.Sprintf("... and %d more", total-maxShow))
@@ -986,7 +986,7 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 		}
 		var summaries []string
 		for i, doc := range docs {
-			summaries = append(summaries, formatDocSummary(dt, doc.Fields, i+1))
+			summaries = append(summaries, formatDocSummary(dt, doc, i+1))
 		}
 		return fmt.Sprintf("%d %s found:\n%s", total, dt.Name, strings.Join(summaries, "\n"))
 	case "get":
@@ -1069,9 +1069,16 @@ func executeUpdateTool(tx *orm.TxManager, reg *doctype.Registry, dt *doctype.Doc
 	return fmt.Sprintf("Updated %s %q.", dt.Name, doc.Name)
 }
 
-func formatDocSummary(dt *doctype.DocType, fields map[string]any, index int) string {
+func formatDocSummary(dt *doctype.DocType, doc *doctype.Document, index int) string {
+	fields := map[string]any{}
+	if doc != nil && doc.Fields != nil {
+		fields = doc.Fields
+	}
 	primary := primaryDisplayValue(dt, fields)
 	parts := []string{fmt.Sprintf("%d. %s", index, primary)}
+	if doc != nil && strings.TrimSpace(doc.Name) != "" {
+		parts = append(parts, "ID: "+strings.TrimSpace(doc.Name))
+	}
 	for _, f := range summaryFields(dt) {
 		if f.Fieldname == dt.TitleField {
 			continue
