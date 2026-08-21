@@ -91,7 +91,7 @@ Unknown YAML keys are rejected with line numbers and Levenshtein-based suggestio
 
 ### DocType & Field Config (`config/{app}/doctypes/*.yaml`)
 
-Fields map to DB columns. Key field types: Data, Int, Float, Currency, Select, Link (autocomplete to target doctype), Table (child table — separate DB table with parent/parentfield/parenttype columns), Section Break, Column Break.
+Fields map to DB columns. Key field types: Data, Int, Float, Currency, Select, Link (autocomplete to target doctype), Table (child table — separate DB table with parent/parentfield/parenttype columns), Attach (file upload), Attach Image (image with thumbnail preview), Attach Audio (audio with player), Section Break, Column Break.
 
 **New config-driven properties:**
 - `computed: "quantity * unit_price"` — expression auto-calculated when dependencies change. Supports `+`, `-`, `*`, `/`, `SUM(table.field)`, `ROUND(expr, N)`
@@ -164,6 +164,7 @@ The `schema.AnalyzeImpact()` function compares old vs new doctype, counts affect
 | `workspace/` | SPA serving (go:embed dist/*), NoRoute handler, static file server, console SPA |
 | `scheduler/` | Cron-style background jobs |
 | `secret/` | Encrypted API key storage (AES-256-GCM) for AI provider keys (settable via UI at `/workspace/admin/secrets`) |
+| `storage/` | Pluggable attachment blob storage — local filesystem + S3-compatible (MinIO/AWS/R2/Garage) backends with AWS SigV4 signing, presigned URLs, range reads |
 | `analytics/` | EventBus + Worker + Query Engine — real-time CDC, daily/monthly rollup tables, time-series/funnel/duration queries, auto-generated metrics |
 | `mcp/` | Model Context Protocol server — auto-generates tools from doctype registry for Claude Desktop |
 | `api/ai/` | AI Chat handlers, AI config, tool execution loop, token accounting |
@@ -171,6 +172,25 @@ The `schema.AnalyzeImpact()` function compares old vs new doctype, counts affect
 | `webhook/` | Webhook dispatcher — outgoing and incoming webhook management |
 | `sdk/` | Go SDK client library for external integrations |
 | `ui/` | React SPA (Vite + TanStack + shadcn) with floating AI Chat Widget |
+
+### File Attachments & Storage
+
+Attachments are stored as blobs in a pluggable storage backend, with only a site-scoped file reference stored in the doctype field. Field types:
+
+- **`Attach`** — any file; renders as a filename link (PDF gets an inline preview).
+- **`Attach Image`** — images only; renders an inline thumbnail.
+- **`Attach Audio`** — audio only; renders an inline `<audio controls>` player with seeking.
+
+Endpoints (all behind SiteGuard):
+- `POST /api/v1/upload` — multipart upload; returns `{path, filename, key, mime_type, size, checksum}`.
+- `GET /api/v1/files/*path` — serves a stored blob with HTTP Range support (audio/video seeking).
+- `DELETE /api/v1/files/*path` — deletes a stored blob.
+
+Each attach field can restrict accepted formats with an optional `accept` property (comma/newline-separated extensions `.pdf` or MIME types `image/*`). When set, it takes precedence over the field-type defaults and is enforced both client-side and at upload time.
+
+The backend is resolved per site from the `file_storage` column in `_kora_site_registry` (overriding `KORA_STORAGE_BACKEND`), with S3 credentials/endpoint from env. Local backend persists a `.meta.json` sidecar (excluded from serving); the S3 backend stores metadata in object headers and supports SigV4 presigned GET URLs.
+
+**Multiple attachments** use the existing child-table pattern: create an `Attachment` child doctype with an `Attach`/`Attach Image`/`Attach Audio` field, then add a `Table` field pointing at it. Each child row renders the same upload/preview control.
 
 ### AI Chat System
 
@@ -385,6 +405,12 @@ Key environment variables for extensibility and analytics:
 - `KORA_SCRIPTS_ENABLED` — Enable the JS script engine (default: `false`)
 - `KORA_SCRIPTS_MAX_RAM` — Max RAM per script in MB (default: `64`)
 - `KORA_ANALYTICS` — Enable analytics event bus and rollup tables (default: `false`)
+- `KORA_STORAGE_BACKEND` — Attachment storage backend: `local` or `s3` (default: `local`)
+- `KORA_STORAGE_LOCAL_PATH` — Local storage root dir (default: `.`)
+- `KORA_STORAGE_S3_ENDPOINT` / `_REGION` / `_BUCKET` / `_ACCESS_KEY` / `_SECRET_KEY` — S3-compatible backend config
+- `KORA_STORAGE_S3_USE_SSL` — TLS to S3 endpoint (default: `true`)
+- `KORA_STORAGE_S3_PUBLIC_URL` — Optional public base URL (else presigned URLs are used)
+- `KORA_MAX_UPLOAD_MB` — Per-file upload cap (default: `50`)
 
 ## Release Workflow
 

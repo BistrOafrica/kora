@@ -1,0 +1,33 @@
+- doctype: Trip Plan
+  role: Fleet and Transport Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Trip Plan
+  role: Fleet and Transport Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Trip Plan
+  role: Fleet and Transport Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Vehicle
+  role: Fleet and Transport Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Incident
+  role: Fleet and Transport Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

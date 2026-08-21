@@ -1,0 +1,23 @@
+name: Logistics and Last-Mile Delivery Workspace
+route: /logistics
+type: workspace
+layout: two_panel
+label: Dispatch and Failed Stops
+module: Logistics and Last-Mile Delivery
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Dispatch
+    label: Dispatch and Failed Stops
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Dispatch
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

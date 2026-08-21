@@ -1,0 +1,101 @@
+name: Budget
+module: Finance
+is_submittable: true
+track_changes: true
+title_field: budget_name
+search_fields: budget_name, fiscal_period, department
+sort_field: modified
+sort_order: DESC
+
+fields:
+  - fieldname: budget_name
+    fieldtype: Data
+    label: Budget Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+    description: Name or title of the budget.
+
+  - fieldname: fiscal_period
+    fieldtype: Link
+    label: Fiscal Period
+    options: Fiscal Period
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+    description: Fiscal period this budget covers.
+
+  - fieldname: budget_type
+    fieldtype: Select
+    label: Budget Type
+    options: |
+      Operating
+      Capital
+      Cash Flow
+      Project
+    in_list_view: true
+    in_standard_filter: true
+    description: Classification of the budget.
+
+  - fieldname: department
+    fieldtype: Link
+    label: Department
+    options: Cost Center
+    in_list_view: true
+    description: Department or cost center this budget belongs to.
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Approved
+      Active
+      Closed
+    read_only: true
+    default: Draft
+    in_list_view: true
+    in_standard_filter: true
+    description: Current budget status.
+
+  - fieldname: total_budget
+    fieldtype: Currency
+    label: Total Budget (KES)
+    computed: "SUM(items.budget_amount)"
+    read_only: true
+    description: Auto-computed sum of all budget line amounts.
+
+  - fieldname: total_actual
+    fieldtype: Currency
+    label: Total Actual (KES)
+    computed: "SUM(items.actual_amount)"
+    read_only: true
+    description: Auto-computed sum of all actual amounts.
+
+  - fieldname: total_variance
+    fieldtype: Currency
+    label: Total Variance (KES)
+    computed: "total_budget - total_actual"
+    read_only: true
+    description: Auto-computed variance (budget - actual).
+
+  - fieldname: section_items
+    fieldtype: Section Break
+    label: Budget Lines
+
+  - fieldname: items
+    fieldtype: Table
+    label: Budget Items
+    options: Budget Item
+    reqd: true
+    constraints:
+      - type: min_rows
+        value: 1
+        message: "At least one budget line is required."
+    description: Budget line items.
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

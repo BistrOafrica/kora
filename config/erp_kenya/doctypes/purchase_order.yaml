@@ -1,0 +1,139 @@
+name: Purchase Order
+module: Purchasing
+is_submittable: true
+track_changes: true
+title_field: name
+search_fields: supplier, order_date
+sort_field: order_date
+sort_order: DESC
+
+fields:
+  - fieldname: column_left
+    fieldtype: Column Break
+
+  - fieldname: supplier
+    fieldtype: Link
+    label: Supplier
+    options: Supplier
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: order_date
+    fieldtype: Date
+    label: Order Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: expected_delivery
+    fieldtype: Date
+    label: Expected Delivery
+
+  - fieldname: purchase_request
+    fieldtype: Link
+    label: Purchase Request
+    options: Purchase Request
+
+  - fieldname: column_right
+    fieldtype: Column Break
+
+  - fieldname: currency
+    fieldtype: Link
+    label: Currency
+    options: Currency
+    default: "KES"
+
+  - fieldname: payment_terms
+    fieldtype: Select
+    label: Payment Terms
+    options: |
+      Net 30
+      Net 60
+      Net 90
+      Immediate
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Confirmed
+      Partially Received
+      Fully Received
+      Cancelled
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: section_items
+    fieldtype: Section Break
+    label: Items
+
+  - fieldname: items
+    fieldtype: Table
+    label: Items
+    options: Purchase Order Item
+    reqd: true
+    constraints:
+      - type: min_rows
+        value: 1
+        message: "At least one item is required."
+
+  - fieldname: section_totals
+    fieldtype: Section Break
+    label: Totals
+
+  - fieldname: subtotal
+    fieldtype: Currency
+    label: Subtotal (KES)
+    computed: "SUM(items.line_total)"
+    read_only: true
+    description: Auto-computed from all line totals.
+
+  - fieldname: tax_rate
+    fieldtype: Percent
+    label: Tax Rate (%)
+    default: "16"
+
+  - fieldname: tax_amount
+    fieldtype: Currency
+    label: Tax (KES)
+    computed: "ROUND(subtotal * tax_rate / 100, 2)"
+    read_only: true
+    description: Auto-computed VAT at the given tax rate.
+
+  - fieldname: total
+    fieldtype: Currency
+    label: Total (KES)
+    computed: "ROUND(subtotal + tax_amount, 2)"
+    read_only: true
+    description: Auto-computed grand total.
+
+  - fieldname: section_receiving
+    fieldtype: Section Break
+    label: Receiving
+
+  - fieldname: receipt_status
+    fieldtype: Select
+    label: Receipt Status
+    options: |
+      Not Received
+      Partially Received
+      Fully Received
+    default: Not Received
+    read_only: true
+    in_list_view: true
+
+  - fieldname: delivery_address
+    fieldtype: Text
+    label: Delivery Address
+
+  - fieldname: terms
+    fieldtype: Text
+    label: Terms & Conditions
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

@@ -1,0 +1,26 @@
+- doctype: Journal Entry
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Journal Entry
+  role: Controller
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Reconciliation
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Reconciliation
+  role: Controller
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false

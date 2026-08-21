@@ -15,6 +15,10 @@ export interface Metric {
   auto_generated: boolean;
 }
 
+export interface InsightsPayload {
+  [key: string]: number | Record<string, number>;
+}
+
 export interface QueryRequest {
   from?: string;
   to?: string;
@@ -40,7 +44,7 @@ export async function queryMetric(name: string, req?: QueryRequest): Promise<Que
   return api.post(`/api/v1/analytics/metrics/${encodeURIComponent(name)}/query`, req || {});
 }
 
-export async function fetchInsights(doctype: string): Promise<Record<string, any>> {
+export async function fetchInsights(doctype: string): Promise<InsightsPayload> {
   return api.get(`/api/v1/analytics/insights/${encodeURIComponent(doctype)}`);
 }
 

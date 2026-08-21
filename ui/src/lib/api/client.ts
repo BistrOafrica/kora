@@ -1,4 +1,6 @@
-import type { ApiResponse, ApiErrorResponse } from '@/types/api'
+import type { ApiResponse, ApiErrorResponse, OperationEnvelope, OperationStatus } from '@/types/api'
+import { sitePath } from '@/lib/basepath'
+import { loadRuntimeConfig } from '@/lib/runtime-config'
 
 function getCsrfToken(): string {
   const match = document.cookie.match(/(?:^|;\s*)kora_csrf=([^;]*)/)
@@ -19,13 +21,21 @@ export class KoraApiError extends Error {
   }
 }
 
+interface RequestOptions {
+  params?: Record<string, string | number | undefined>
+  headers?: Record<string, string>
+}
+
 async function apiRequest<T>(
   method: string,
   path: string,
   body?: unknown,
   params?: Record<string, string | number | undefined>,
 ): Promise<T> {
-  const url = new URL(path, window.location.origin)
+  const runtime = loadRuntimeConfig()
+  const apiBase = runtime.apiBaseUrl.replace(/\/$/, '')
+  const requestPath = path.startsWith('/api/') ? path.slice(4) : sitePath(path)
+  const url = new URL(apiBase + requestPath, window.location.origin)
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined) {
@@ -91,6 +101,36 @@ async function apiRequest<T>(
   return json.data
 }
 
+export async function apiRequestOperation<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  params?: Record<string, string | number | undefined>,
+  idempotencyKey: string = crypto.randomUUID(),
+): Promise<OperationEnvelope<T>> {
+  try {
+    const { response, json } = await rawApiRequest<unknown>(method, path, body, {
+      params,
+      headers: { 'Idempotency-Key': idempotencyKey },
+    })
+    return normalizeOperationEnvelope<T>(json, response, idempotencyKey)
+  } catch (error) {
+    if (error instanceof KoraApiError) {
+      return {
+        operation_id: idempotencyKey,
+        status: mapErrorStatus(error.status),
+        error: {
+          code: error.type || 'error',
+          message: error.message,
+          field: error.field,
+          retryable: error.status >= 500,
+        },
+      }
+    }
+    throw error
+  }
+}
+
 // Convenience methods.
 export const api = {
   get<T>(path: string, params?: Record<string, string | number | undefined>) {
@@ -109,6 +149,15 @@ export const api = {
   delete<T>(path: string) {
     return apiRequest<T>('DELETE', path)
   },
+  operation<T>(
+    method: 'POST' | 'PUT' | 'DELETE',
+    path: string,
+    body?: unknown,
+    params?: Record<string, string | number | undefined>,
+    idempotencyKey?: string,
+  ) {
+    return apiRequestOperation<T>(method, path, body, params, idempotencyKey)
+  },
 }
 
 // Like apiRequest but returns the full envelope.
@@ -117,8 +166,11 @@ async function apiRequestEnvelope<T>(
   path: string,
   body?: unknown,
   params?: Record<string, string | number | undefined>,
-): Promise<{ data: T; meta?: { total?: number; doctype?: string; config_version?: number } }> {
-  const url = new URL(path, window.location.origin)
+): Promise<{ data: T; meta?: { total?: number; doctype?: string; config_version?: number; capabilities_version?: string; next_cursor?: string | null; has_more?: boolean } }> {
+  const runtime = loadRuntimeConfig()
+  const apiBase = runtime.apiBaseUrl.replace(/\/$/, '')
+  const requestPath = path.startsWith('/api/') ? path.slice(4) : sitePath(path)
+  const url = new URL(apiBase + requestPath, window.location.origin)
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined) {
@@ -152,4 +204,122 @@ async function apiRequestEnvelope<T>(
   }
 
   return response.json()
+}
+
+async function rawApiRequest<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  options: RequestOptions = {},
+): Promise<{ response: Response; json: T | undefined }> {
+  const runtime = loadRuntimeConfig()
+  const apiBase = runtime.apiBaseUrl.replace(/\/$/, '')
+  const requestPath = path.startsWith('/api/') ? path.slice(4) : sitePath(path)
+  const url = new URL(apiBase + requestPath, window.location.origin)
+  if (options.params) {
+    for (const [key, value] of Object.entries(options.params)) {
+      if (value !== undefined) {
+        url.searchParams.set(key, String(value))
+      }
+    }
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  }
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+    const csrf = getCsrfToken()
+    if (csrf) headers['X-Kora-CSRF-Token'] = csrf
+  }
+
+  const response = await fetch(url.toString(), {
+    method,
+    headers,
+    credentials: 'same-origin',
+    body: body ? JSON.stringify(body) : undefined,
+  })
+
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+
+  if (response.status === 204) {
+    return { response, json: undefined }
+  }
+
+  return { response, json: await response.json() as T }
+}
+
+async function toApiError(response: Response): Promise<KoraApiError> {
+  let errorData: ApiErrorResponse
+  try {
+    errorData = await response.json()
+  } catch {
+    return new KoraApiError(`Request failed with status ${response.status}`, 'network_error', response.status)
+  }
+  if (typeof errorData.error === 'string') {
+    return new KoraApiError(errorData.error, 'error', response.status)
+  }
+  if (errorData.error && typeof errorData.error === 'object' && 'message' in errorData.error) {
+    const err = errorData.error as any
+    return new KoraApiError(err.message, err.type || 'error', response.status, err.field)
+  }
+  if (errorData.error && typeof errorData.error === 'object' && 'errors' in errorData.error) {
+    const err = (errorData.error as any).errors[0]
+    return new KoraApiError(err.message, err.type || 'error', response.status, err.field)
+  }
+  return new KoraApiError('Unknown error', 'unknown', response.status)
+}
+
+function normalizeOperationEnvelope<T>(
+  json: unknown,
+  response: Response,
+  idempotencyKey: string,
+): OperationEnvelope<T> {
+  if (isOperationEnvelope<T>(json)) {
+    return withOperationDefaults(json, response, idempotencyKey)
+  }
+
+  const apiResponse = json as ApiResponse<unknown> | undefined
+  if (isOperationEnvelope<T>(apiResponse?.data)) {
+    return withOperationDefaults(apiResponse.data, response, idempotencyKey)
+  }
+
+  return {
+    operation_id: readHeader(response, 'X-Kora-Operation-Id') || idempotencyKey,
+    correlation_id: readHeader(response, 'X-Kora-Correlation-Id'),
+    status: response.status === 202 ? 'accepted' : 'completed',
+    data: apiResponse && 'data' in apiResponse ? apiResponse.data as T : json as T,
+  }
+}
+
+function withOperationDefaults<T>(
+  envelope: OperationEnvelope<T>,
+  response: Response,
+  idempotencyKey: string,
+): OperationEnvelope<T> {
+  return {
+    ...envelope,
+    operation_id: envelope.operation_id || readHeader(response, 'X-Kora-Operation-Id') || idempotencyKey,
+    correlation_id: envelope.correlation_id || readHeader(response, 'X-Kora-Correlation-Id'),
+  }
+}
+
+function isOperationEnvelope<T>(value: unknown): value is OperationEnvelope<T> {
+  if (!value || typeof value !== 'object') return false
+  const status = (value as { status?: unknown }).status
+  return typeof (value as { operation_id?: unknown }).operation_id === 'string' &&
+    typeof status === 'string' &&
+    ['completed', 'accepted', 'rejected', 'conflict', 'failed'].includes(status)
+}
+
+function readHeader(response: Response, header: string): string | undefined {
+  return response.headers.get(header) || undefined
+}
+
+function mapErrorStatus(status: number): OperationStatus {
+  if (status === 409) return 'conflict'
+  if (status === 400 || status === 401 || status === 403 || status === 422) return 'rejected'
+  return 'failed'
 }

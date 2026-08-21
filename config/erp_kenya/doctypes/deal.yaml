@@ -1,0 +1,157 @@
+name: Deal
+module: CRM
+is_submittable: true
+track_changes: true
+title_field: deal_name
+search_fields: deal_name, contact, company
+sort_field: modified
+sort_order: DESC
+
+fields:
+  # --- Section: Deal Information ---
+  - fieldname: section_deal
+    fieldtype: Section Break
+    label: Deal Information
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: deal_name
+    fieldtype: Data
+    label: Deal Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: contact
+    fieldtype: Link
+    label: Primary Contact
+    options: Contact
+    reqd: true
+    in_list_view: true
+
+  - fieldname: company
+    fieldtype: Link
+    label: Company
+    options: Company
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: expected_close_date
+    fieldtype: Date
+    label: Expected Close Date
+    constraints:
+      - type: min_date
+        value: today
+        message: "Expected close date must be today or later."
+
+  - fieldname: probability
+    fieldtype: Percent
+    label: Probability (%)
+    constraints:
+      - type: min
+        value: 0
+        message: "Probability cannot be less than 0%."
+      - type: max
+        value: 100
+        message: "Probability cannot exceed 100%."
+
+  - fieldname: lead_source
+    fieldtype: Select
+    label: Lead Source
+    options: |
+      Website
+      Referral
+      Social Media
+      Event
+      Cold Call
+      Email Campaign
+      Partner
+      Existing Customer
+      Other
+    in_standard_filter: true
+
+  # --- Section: Financials ---
+  - fieldname: section_finance
+    fieldtype: Section Break
+    label: Financials
+
+  - fieldname: items
+    fieldtype: Table
+    label: Line Items
+    options: Deal Item
+    reqd: true
+    constraints:
+      - type: min_rows
+        value: 1
+        message: "At least one line item is required."
+
+  - fieldname: subtotal
+    fieldtype: Currency
+    label: Subtotal
+    computed: "SUM(items.line_total)"
+    read_only: true
+
+  - fieldname: discount
+    fieldtype: Currency
+    label: Discount
+    default: "0"
+    constraints:
+      - type: min
+        value: 0
+        message: "Discount cannot be negative."
+
+  - fieldname: tax_amount
+    fieldtype: Currency
+    label: Tax Amount (VAT)
+    computed: "ROUND((subtotal - discount) * tax_rate / 100, 2)"
+    read_only: true
+
+  - fieldname: tax_rate
+    fieldtype: Percent
+    label: Tax Rate (%)
+    default: "16"
+
+  - fieldname: total
+    fieldtype: Currency
+    label: Total
+    computed: "ROUND(subtotal - discount + tax_amount, 2)"
+    read_only: true
+
+  # --- Section: Pipeline ---
+  - fieldname: section_pipeline
+    fieldtype: Section Break
+    label: Pipeline
+
+  - fieldname: status
+    fieldtype: Select
+    label: Stage
+    options: |
+      Lead
+      Qualified
+      Proposal
+      Negotiation
+      Closed Won
+      Closed Lost
+    default: Lead
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  # --- Section: Notes ---
+  - fieldname: section_notes
+    fieldtype: Section Break
+    label: Notes
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes
+
+  - fieldname: loss_reason
+    fieldtype: Text
+    label: Loss Reason
+    depends_on: status

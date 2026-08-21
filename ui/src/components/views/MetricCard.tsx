@@ -1,27 +1,15 @@
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api/client'
 import type { ViewComponentProps } from './registry'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
 /**
  * MetricCard displays a single KPI metric with an optional trend indicator.
- * Fetches aggregate data from the view data endpoint.
+ * Uses resource data supplied by the PageManifest renderer.
  */
 export default function MetricCard(props: ViewComponentProps) {
-  const { config } = props
+  const { config, data: manifestData, isLoading: manifestLoading } = props
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['metric', config.id, config.bindings],
-    queryFn: async () => {
-      const result = await api.get<any>(`/api/v1/view/data?view=${encodeURIComponent(config.bindings?.view || '')}&component=${encodeURIComponent(config.id)}`)
-      return result
-    },
-    enabled: !!config.bindings?.view,
-    staleTime: 60_000,
-  })
-
-  if (isLoading) {
+  if (manifestLoading) {
     return (
       <div className="rounded-lg border p-4 space-y-2">
         <Skeleton className="h-4 w-20" />
@@ -30,7 +18,18 @@ export default function MetricCard(props: ViewComponentProps) {
     )
   }
 
-  const count = data?.count ?? 0
+  if (!manifestData) {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4" role="status">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{config.label || 'Metric'}</p>
+        <p className="mt-2 text-sm font-medium text-destructive">Metric needs a data source</p>
+        <p className="mt-1 text-xs text-muted-foreground">Bind this card to a PageManifest resource.</p>
+      </div>
+    )
+  }
+
+  const rows = Array.isArray(manifestData?.data) ? manifestData.data : []
+  const count = summarizeRows(rows, config.bindings)
   const label = config.label || config.bindings?.title || 'Metric'
   const trend = config.bindings?.trend
 
@@ -45,4 +44,16 @@ export default function MetricCard(props: ViewComponentProps) {
       </div>
     </div>
   )
+}
+
+function summarizeRows(rows: Array<Record<string, unknown>>, bindings?: Record<string, string>): number {
+  const filtered = bindings?.filter_field
+    ? rows.filter((row) => String(row[bindings.filter_field!] ?? '') === String(bindings.filter_value ?? ''))
+    : rows
+
+  if (bindings?.metric === 'sum' && bindings.value_field) {
+    return filtered.reduce((total, row) => total + Number(row[bindings.value_field!] ?? 0), 0)
+  }
+
+  return filtered.length
 }

@@ -4,21 +4,38 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 
 	"github.com/asenawritescode/kora/doctype"
 	"github.com/asenawritescode/kora/script"
 )
 
-// AsyncHookRequest is a deferred hook execution.
+// hookEnqueueFailed counts async after_* hooks that could not be handed to the
+// worker sink. Phase 1 requires async work to fail observably.
+var hookEnqueueFailed atomic.Int64
+
+// HookEnqueueFailedCount returns the number of async hooks that could not be
+// handed to the worker sink since process start.
+func HookEnqueueFailedCount() int64 { return hookEnqueueFailed.Load() }
+
+// AsyncHookRequest is a deferred hook execution. It is a serializable DTO: the
+// doctype and documents are carried by name and as maps rather than as pointers so
+// the request can cross a queue/process boundary and be reconstructed on the
+// worker side (RFC Phase 0).
 type AsyncHookRequest struct {
-	DT       *doctype.DocType
+	Doctype  string // doctype name, re-hydrated via the registry
 	Event    script.Event
-	Doc      *doctype.Document
-	OldDoc   *doctype.Document
+	Doc      map[string]any // serializable current document (may include child rows)
+	OldDoc   map[string]any // serializable previous document (nil for inserts)
 	Rec      script.ScriptRecord
 	User     string
 	UserRole string
 	Site     string
+}
+
+// AsyncHookSink hands deferred after_* hooks to the background worker system.
+type AsyncHookSink interface {
+	Enqueue(context.Context, AsyncHookRequest) error
 }
 
 // setupComputedHook sets the computed script hook before ComputeFields runs.
@@ -101,15 +118,19 @@ func (tx *TxManager) runHooks(dt *doctype.DocType, event script.Event, doc *doct
 	}
 
 	for _, rec := range scripts {
-		// Route after_* events to the async queue if available.
-		if script.IsAfterEvent(event) && tx.AsyncHookQueue != nil {
-			select {
-			case tx.AsyncHookQueue <- AsyncHookRequest{
-				DT: dt, Event: event, Doc: doc, OldDoc: oldDoc, Rec: rec,
+		// Route after_* events to the async sink if available.
+		if script.IsAfterEvent(event) && tx.AsyncHookSink != nil {
+			var docMap, oldDocMap map[string]any
+			docMap = doc.ToMap()
+			if oldDoc != nil {
+				oldDocMap = oldDoc.ToMap()
+			}
+			if err := tx.AsyncHookSink.Enqueue(ctx, AsyncHookRequest{
+				Doctype: dt.Name, Event: event, Doc: docMap, OldDoc: oldDocMap, Rec: rec,
 				User: tx.CurrentUser, UserRole: tx.CurrentUserRole, Site: tx.SiteName,
-			}:
-			default:
-				slog.Warn("async hook queue full, dropping hook", "script", rec.Name, "event", event)
+			}); err != nil {
+				hookEnqueueFailed.Add(1)
+				slog.Warn("async hook enqueue failed", "script", rec.Name, "event", event, "failed_total", hookEnqueueFailed.Load(), "error", err)
 			}
 			continue
 		}
@@ -205,6 +226,52 @@ func normalizeHookDocumentFields(dt *doctype.DocType, registry *doctype.Registry
 	delete(out, "modified")
 	delete(out, "modified_by")
 	return out
+}
+
+// DocumentFromMap reconstructs a *doctype.Document (including child tables) from a
+// serialized map produced by Document.ToMap. It is used by async hook workers to
+// re-hydrate an AsyncHookRequest DTO. Returns nil if m is nil.
+func DocumentFromMap(reg *doctype.Registry, doctypeName string, m map[string]any) *doctype.Document {
+	if m == nil {
+		return nil
+	}
+	dt := reg.Get(doctypeName)
+	doc := doctype.NewDocument(doctypeName)
+	if name, ok := m["name"].(string); ok {
+		doc.Name = name
+		doc.IsNew = name == ""
+	}
+	if status, ok := m["doc_status"]; ok {
+		doc.DocStatus = hookIntValue(status)
+	}
+	for key, value := range m {
+		if key == "name" || key == "doc_status" || key == "owner" || key == "creation" || key == "modified" || key == "modified_by" {
+			continue
+		}
+		// Rebuild child tables as typed []*doctype.Document where the doctype is known.
+		if dt != nil {
+			if field := findTableField(dt, key); field != nil {
+				if childDT := reg.Get(field.Options); childDT != nil {
+					if children, ok := hookValueToChildDocuments(value, childDT); ok {
+						doc.Set(key, children)
+						continue
+					}
+				}
+			}
+		}
+		doc.Set(key, value)
+	}
+	return doc
+}
+
+// findTableField returns the Table-type field with the given fieldname, or nil.
+func findTableField(dt *doctype.DocType, fieldname string) *doctype.Field {
+	for i := range dt.Fields {
+		if dt.Fields[i].Fieldname == fieldname && dt.Fields[i].Fieldtype == "Table" {
+			return &dt.Fields[i]
+		}
+	}
+	return nil
 }
 
 func hookValueToChildDocuments(value any, childDT *doctype.DocType) ([]*doctype.Document, bool) {

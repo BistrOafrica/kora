@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { AlertCircle, CheckCircle2, Loader2, Mail, KeyRound, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -25,7 +25,9 @@ interface LoginFormProps {
 export function LoginForm({ siteLabel, onSuccess, className }: LoginFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [mode, setMode] = useState<AuthMode>('magic')
+  // Existing teams usually have passwords; keep password sign-in as the
+  // primary path and leave passwordless sign-in available as an option.
+  const [mode, setMode] = useState<AuthMode>('password')
   const [magicSentTo, setMagicSentTo] = useState('')
   const { login, fetchProviders, requestMagicLink, requestEmailVerification, providers, isLoading, error, errorType, clearError } = useAuthStore()
 
@@ -34,15 +36,15 @@ export function LoginForm({ siteLabel, onSuccess, className }: LoginFormProps) {
   const hasMagic = availableProviders.some(p => p.name === 'magic_link')
 
   // Auto-select available mode
-  useState(() => {
+  useEffect(() => {
     if (!hasMagic && hasPassword) setMode('password')
     else if (hasMagic && !hasPassword) setMode('magic')
-  })
+  }, [hasMagic, hasPassword])
 
   // Fetch providers on mount
-  useState(() => {
+  useEffect(() => {
     void fetchProviders()
-  })
+  }, [fetchProviders])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -86,7 +88,7 @@ export function LoginForm({ siteLabel, onSuccess, className }: LoginFormProps) {
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold text-card-foreground">Sign in to {siteLabel}</h1>
           <p className="text-sm text-balance text-muted-foreground">
-            Your team, your data, your way.
+            Sign in to manage your work securely.
           </p>
         </div>
 
@@ -230,7 +232,7 @@ export function LoginForm({ siteLabel, onSuccess, className }: LoginFormProps) {
       </FieldGroup>
 
       <FieldDescription className="text-center text-xs">
-        First time here? Magic link is the quickest way in. Existing teams can use passwords too.
+        Need a passwordless sign-in? Choose Magic Link above.
       </FieldDescription>
 
       <div className="mt-4 text-center text-sm">

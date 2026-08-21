@@ -288,7 +288,7 @@ func TestGetSession_CacheHit(t *testing.T) {
 	sm.cacheMu.Unlock()
 
 	// GetSession from cache should NOT hit the database.
-	got, err := sm.GetSession("test-site", "cached-sid")
+	got, _, err := sm.GetSession("test-site", "cached-sid")
 	if err != nil {
 		t.Fatalf("GetSession error = %v", err)
 	}
@@ -497,9 +497,9 @@ func TestMagicLinks_ListRequiresSessionValidationWithinAuthRoutes(t *testing.T) 
 		t.Fatalf("marshal user json: %v", err)
 	}
 	expiresAt := time.Now().Add(time.Hour).Format("2006-01-02 15:04:05")
-	mock.ExpectQuery("SELECT data, expires_at FROM _kora_session WHERE site = \\? AND sid = \\?").
+	mock.ExpectQuery("SELECT data, expires_at, created_at FROM _kora_session WHERE site = \\? AND sid = \\?").
 		WithArgs("test.local", "valid-session").
-		WillReturnRows(sqlmock.NewRows([]string{"data", "expires_at"}).AddRow(string(userJSON), expiresAt))
+		WillReturnRows(sqlmock.NewRows([]string{"data", "expires_at", "created_at"}).AddRow(string(userJSON), expiresAt, time.Now().Add(-time.Minute)))
 	mock.ExpectQuery("SELECT id, email, created_at, expires_at, used_at, revoked_at FROM _kora_magic_link").
 		WithArgs("test.local", "john@test.com", sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "email", "created_at", "expires_at", "used_at", "revoked_at"}))
@@ -587,8 +587,8 @@ func TestMagicLinkLifecycle_EndToEnd(t *testing.T) {
 
 	magicLinkRows := sqlmock.NewRows([]string{"id", "email", "created_at", "expires_at", "used_at", "revoked_at"}).
 		AddRow("ml-1", "john@test.com", time.Now().Add(-time.Minute), time.Now().Add(time.Hour), nil, nil)
-	sessionRows := sqlmock.NewRows([]string{"data", "expires_at"}).
-		AddRow(`{"name":"john","email":"john@test.com","full_name":"John Doe","roles":["Administrator"]}`, time.Now().Add(time.Hour).Format("2006-01-02 15:04:05"))
+	sessionRows := sqlmock.NewRows([]string{"data", "expires_at", "created_at"}).
+		AddRow(`{"name":"john","email":"john@test.com","full_name":"John Doe","roles":["Administrator"]}`, time.Now().Add(time.Hour).Format("2006-01-02 15:04:05"), time.Now().Add(-time.Minute).Format("2006-01-02 15:04:05"))
 
 	mock.ExpectQuery("SELECT name, email, full_name, enabled, COALESCE\\(roles, ''\\) FROM _kora_user WHERE site = \\? AND email = \\?").
 		WithArgs("test.local", "john@test.com").
@@ -641,7 +641,7 @@ func TestMagicLinkLifecycle_EndToEnd(t *testing.T) {
 		t.Fatal("verify response did not include sid")
 	}
 
-	mock.ExpectQuery("SELECT data, expires_at FROM _kora_session WHERE site = \\? AND sid = \\?").
+	mock.ExpectQuery("SELECT data, expires_at, created_at FROM _kora_session WHERE site = \\? AND sid = \\?").
 		WithArgs("test.local", verifyResp.SID).
 		WillReturnRows(sessionRows)
 	mock.ExpectQuery("SELECT id, email, created_at, expires_at, used_at, revoked_at FROM _kora_magic_link").

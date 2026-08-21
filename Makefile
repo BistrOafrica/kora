@@ -22,8 +22,7 @@ build-ui-analyze: build-ui          ## Build UI and analyze bundle sizes
 build-ui:                          ## Build React SPA
 	cd ui && bun install --frozen-lockfile
 	cd ui && bun run build
-	rm -rf workspace/dist
-	cp -r ui/dist workspace/dist
+	rsync -a --delete ui/dist/ workspace/dist/
 
 VERSION ?= $(shell cat VERSION 2>/dev/null || echo "dev")
 LDFLAGS += -X github.com/asenawritescode/kora/cli.Version=$(VERSION)

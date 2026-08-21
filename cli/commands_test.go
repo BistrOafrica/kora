@@ -91,6 +91,23 @@ func TestSecretCommand_Exists(t *testing.T) {
 	}
 }
 
+func TestNATSCommand_Exists(t *testing.T) {
+	cmd := findSubCommand(rootCmd, "nats")
+	if cmd == nil {
+		t.Fatal("nats command not found under root")
+	}
+	for _, name := range []string{"validate", "bootstrap", "status"} {
+		if findSubCommand(cmd, name) == nil {
+			t.Fatalf("nats command missing subcommand %q", name)
+		}
+	}
+	for _, name := range []string{"backup-manifest", "drain"} {
+		if findSubCommand(cmd, name) == nil {
+			t.Fatalf("nats command missing subcommand %q", name)
+		}
+	}
+}
+
 func TestServeFlags(t *testing.T) {
 	serveCmd := findSubCommand(rootCmd, "serve")
 	if serveCmd == nil {
@@ -119,7 +136,7 @@ func TestRootCommand_SubCommands(t *testing.T) {
 		names[cmd.Use] = true
 	}
 
-	expected := []string{"serve", "migrate", "config", "secret"}
+	expected := []string{"serve", "migrate", "config", "secret", "nats"}
 	for _, name := range expected {
 		if !names[name] {
 			t.Errorf("expected subcommand %q not found under root", name)

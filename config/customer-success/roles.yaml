@@ -1,0 +1,9 @@
+- name: Customer Success and Renewals Operator
+  workspace_access: true
+  description: Creates and executes Customer Success and Renewals work.
+- name: Customer Success and Renewals Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Customer Success and Renewals Administrator
+  workspace_access: true
+  description: Configures Customer Success and Renewals and manages access.

@@ -5,10 +5,8 @@ import (
 	"strconv"
 )
 
-// Config holds analytics engine configuration. All values have sensible defaults;
-// analytics is disabled when Enabled is false.
+// Config holds analytics engine configuration. All values have sensible defaults.
 type Config struct {
-	Enabled       bool   // true when KORA_ANALYTICS=true
 	ChannelSize   int    // event bus buffer capacity (default 1000)
 	BatchSize     int    // flush worker deltas after N events (default 100)
 	FlushInterval string // flush worker deltas after duration (default "1s")
@@ -19,16 +17,11 @@ type Config struct {
 // LoadConfig reads analytics configuration from environment variables.
 func LoadConfig() *Config {
 	cfg := &Config{
-		Enabled:       false,
 		ChannelSize:   1000,
 		BatchSize:     100,
 		FlushInterval: "1s",
 		RetentionDays: 30,
 		WALDir:        "data/analytics/wal",
-	}
-
-	if v := os.Getenv("KORA_ANALYTICS"); v == "true" || v == "1" {
-		cfg.Enabled = true
 	}
 
 	if v := os.Getenv("KORA_ANALYTICS_CHANNEL_SIZE"); v != "" {

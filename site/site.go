@@ -434,6 +434,9 @@ func ReconstructSiteConfigFromDBInfo(info DBSiteInfo, common *CommonConfig) *Sit
 	if info.DBPassword != "" {
 		cfg.DBPassword = info.DBPassword
 	}
+	if info.FileStorage != "" {
+		cfg.FileStorage = info.FileStorage
+	}
 	return cfg
 }
 

@@ -1,0 +1,128 @@
+name: Payment Entry
+module: Finance
+is_submittable: true
+track_changes: true
+title_field: name
+search_fields: reference_no, party
+sort_field: payment_date
+sort_order: DESC
+fields:
+  # --- Left Column ---
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: payment_date
+    fieldtype: Date
+    label: Payment Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: payment_type
+    fieldtype: Select
+    label: Payment Type
+    options: |
+      Receive
+      Pay
+      Internal Transfer
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: party_type
+    fieldtype: Select
+    label: Party Type
+    options: |
+      Customer
+      Supplier
+      Employee
+    reqd: true
+
+  - fieldname: party
+    fieldtype: Link
+    label: Party
+    options: Customer
+    reqd: true
+    in_list_view: true
+    search_index: true
+
+  # --- Right Column ---
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: payment_method
+    fieldtype: Select
+    label: Payment Method
+    options: |
+      Cash
+      Bank Transfer
+      M-Pesa
+      Cheque
+      Credit Card
+    reqd: true
+    in_list_view: true
+
+  - fieldname: bank_account
+    fieldtype: Link
+    label: Bank Account
+    options: Bank Account
+
+  - fieldname: reference_no
+    fieldtype: Data
+    label: Reference No.
+    in_list_view: true
+    description: Cheque number, M-Pesa transaction code, or bank transfer reference.
+
+  - fieldname: currency
+    fieldtype: Link
+    label: Currency
+    options: Currency
+    default: KES
+
+  - fieldname: exchange_rate
+    fieldtype: Float
+    label: Exchange Rate
+    default: "1"
+
+  # --- Section: Invoices ---
+  - fieldname: section_invoices
+    fieldtype: Section Break
+    label: Invoices
+
+  - fieldname: invoices
+    fieldtype: Table
+    label: Invoices
+    options: Payment Entry Item
+    constraints:
+      - type: min_rows
+        value: 1
+        message: "At least one invoice must be selected."
+
+  # --- Section: Totals ---
+  - fieldname: section_totals
+    fieldtype: Section Break
+    label: Totals
+
+  - fieldname: total_invoice_amount
+    fieldtype: Currency
+    label: Total Invoice Amount (KES)
+    computed: "SUM(invoices.invoice_total)"
+    read_only: true
+
+  - fieldname: total_paid
+    fieldtype: Currency
+    label: Total Paid (KES)
+    computed: "SUM(invoices.paid_amount)"
+    read_only: true
+
+  - fieldname: unallocated_amount
+    fieldtype: Currency
+    label: Unallocated Amount (KES)
+    computed: "total_paid - total_invoice_amount"
+    read_only: true
+    description: Amount paid that exceeds invoice totals (overpayment or prepayment).
+
+  - fieldname: difference
+    fieldtype: Currency
+    label: Difference (KES)
+    default: "0"
+    description: Write-off difference if any.

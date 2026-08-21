@@ -1,0 +1,22 @@
+name: Purchase Request
+module: Purchasing and Supplier Management
+is_submittable: true
+title_field: reference
+fields:
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference
+    reqd: true
+    unique: true
+  - fieldname: supplier
+    fieldtype: Data
+    label: Supplier
+    reqd: true
+  - fieldname: required_date
+    fieldtype: Date
+    label: Required Date
+  - fieldname: status
+    fieldtype: Data
+    label: Status
+    default: Draft
+    read_only: true

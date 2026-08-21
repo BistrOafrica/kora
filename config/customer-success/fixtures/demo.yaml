@@ -1,0 +1,6 @@
+pack: customer-success
+seed_mode: demo
+records:
+  - doctype: Success Plan
+    reference: DEMO-CUSTOMER-SUCCESS-001
+    status: Draft

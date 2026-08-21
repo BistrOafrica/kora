@@ -1,0 +1,46 @@
+name: Currency
+module: Finance
+title_field: currency_code
+search_fields: currency_code, currency_name
+sort_field: currency_code
+sort_order: ASC
+fields:
+  - fieldname: currency_code
+    fieldtype: Data
+    label: Currency Code
+    reqd: true
+    unique: true
+    bold: true
+    in_list_view: true
+    search_index: true
+    description: ISO 4217 currency code (e.g., KES, USD, EUR).
+  - fieldname: currency_name
+    fieldtype: Data
+    label: Currency Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+    description: Full currency name (e.g., Kenyan Shilling, US Dollar).
+  - fieldname: symbol
+    fieldtype: Data
+    label: Symbol
+    in_list_view: true
+    description: Currency symbol (e.g., KSh, $, €).
+  - fieldname: exchange_rate
+    fieldtype: Float
+    label: Exchange Rate
+    default: "1"
+    in_list_view: true
+    description: Exchange rate relative to base currency. Base currency rate is always 1.
+    constraints:
+      - type: min
+        value: 0.000001
+        message: "Exchange rate must be greater than zero."
+  - fieldname: is_base_currency
+    fieldtype: Check
+    label: Is Base Currency
+    description: Only one currency can be the base. All exchange rates are relative to this.
+  - fieldname: enabled
+    fieldtype: Check
+    label: Enabled
+    default: "1"

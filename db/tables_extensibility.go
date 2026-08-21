@@ -268,6 +268,117 @@ func ExtensibilityTablesLibSQL() []string {
 			next_retry_at TEXT
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS _kora_ai_usage (
+			id TEXT PRIMARY KEY,
+			site TEXT NOT NULL DEFAULT '',
+			organization_id TEXT NOT NULL DEFAULT '',
+			user_id TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL DEFAULT '',
+			provider TEXT NOT NULL DEFAULT '',
+			run_id TEXT NOT NULL DEFAULT '',
+			step_id TEXT NOT NULL DEFAULT '',
+			channel TEXT NOT NULL DEFAULT '',
+			attempt INTEGER NOT NULL DEFAULT 1,
+			status TEXT NOT NULL DEFAULT 'completed',
+			tokens TEXT,
+			latency_ms INTEGER NOT NULL DEFAULT 0,
+			occurred_at TEXT NOT NULL DEFAULT (datetime('now')),
+			retry_of TEXT NOT NULL DEFAULT '',
+			attribution TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_usage_site ON _kora_ai_usage (site, occurred_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_usage_run ON _kora_ai_usage (run_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_usage_step ON _kora_ai_usage (step_id)`,
+
+		`CREATE TABLE IF NOT EXISTS _kora_ai_conversation (
+			id TEXT PRIMARY KEY,
+			site TEXT NOT NULL DEFAULT '',
+			channel TEXT NOT NULL DEFAULT 'chat',
+			subject_key TEXT NOT NULL DEFAULT '',
+			title TEXT NOT NULL DEFAULT '',
+			summary TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'active',
+			last_run_id TEXT NOT NULL DEFAULT '',
+			last_message_at TEXT,
+			retention_expires_at TEXT,
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_conversation_site ON _kora_ai_conversation (site, updated_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_conversation_subject ON _kora_ai_conversation (site, subject_key)`,
+
+		`CREATE TABLE IF NOT EXISTS _kora_ai_run (
+			id TEXT PRIMARY KEY,
+			site TEXT NOT NULL DEFAULT '',
+			conversation_id TEXT NOT NULL DEFAULT '',
+			channel TEXT NOT NULL DEFAULT 'chat',
+			status TEXT NOT NULL DEFAULT 'planning',
+			model TEXT NOT NULL DEFAULT '',
+			provider TEXT NOT NULL DEFAULT '',
+			current_step_id TEXT NOT NULL DEFAULT '',
+			summary TEXT NOT NULL DEFAULT '',
+			input_message TEXT NOT NULL DEFAULT '',
+			output_message TEXT NOT NULL DEFAULT '',
+			error_message TEXT NOT NULL DEFAULT '',
+			cancel_reason TEXT NOT NULL DEFAULT '',
+			resume_token TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+			completed_at TEXT,
+			cancelled_at TEXT,
+			retention_expires_at TEXT,
+			FOREIGN KEY (conversation_id) REFERENCES _kora_ai_conversation(id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_run_site ON _kora_ai_run (site, updated_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_run_conversation ON _kora_ai_run (conversation_id, updated_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_run_status ON _kora_ai_run (site, status)`,
+
+		`CREATE TABLE IF NOT EXISTS _kora_ai_message (
+			id TEXT PRIMARY KEY,
+			site TEXT NOT NULL DEFAULT '',
+			conversation_id TEXT NOT NULL DEFAULT '',
+			run_id TEXT NOT NULL DEFAULT '',
+			role TEXT NOT NULL DEFAULT '',
+			content TEXT NOT NULL DEFAULT '',
+			message_kind TEXT NOT NULL DEFAULT 'message',
+			step_id TEXT NOT NULL DEFAULT '',
+			sequence INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_message_conversation ON _kora_ai_message (conversation_id, sequence)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_message_run ON _kora_ai_message (run_id, sequence)`,
+
+		`CREATE TABLE IF NOT EXISTS _kora_ai_step (
+			id TEXT PRIMARY KEY,
+			site TEXT NOT NULL DEFAULT '',
+			run_id TEXT NOT NULL DEFAULT '',
+			conversation_id TEXT NOT NULL DEFAULT '',
+			step_key TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'planning',
+			summary TEXT NOT NULL DEFAULT '',
+			tool_name TEXT NOT NULL DEFAULT '',
+			input_json TEXT NOT NULL DEFAULT '',
+			output_json TEXT NOT NULL DEFAULT '',
+			error_message TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_step_run ON _kora_ai_step (run_id, created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_step_conversation ON _kora_ai_step (conversation_id, created_at)`,
+
+		`CREATE TABLE IF NOT EXISTS _kora_ai_budget_reservation (
+			id TEXT PRIMARY KEY,
+			site TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL DEFAULT '',
+			requested_tokens INTEGER NOT NULL DEFAULT 0,
+			consumed_tokens INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'reserved',
+			note TEXT NOT NULL DEFAULT '',
+			reserved_at TEXT NOT NULL DEFAULT (datetime('now')),
+			released_at TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_budget_res_site ON _kora_ai_budget_reservation (site, model, status)`,
+
 		// Add site column BEFORE site index (backwards compat for existing tables).
 		`ALTER TABLE _kora_webhook_delivery ADD COLUMN site TEXT NOT NULL DEFAULT ''`,
 

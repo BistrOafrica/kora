@@ -14,6 +14,7 @@ import type { DocTypeNavItem, ModuleGroup } from '@/types/api'
 import type { LucideIcon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { WORKSPACE_DASHBOARD_MANIFEST } from '@/lib/page-manifests'
 
 export default function DashboardPage() {
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -59,12 +60,12 @@ export default function DashboardPage() {
       .filter(Boolean) as ModuleGroup[]
   }, [modules, normalizedQuery])
 
-  const handleDoctypeClick = (doctype: DocTypeNavItem | { name: string; label: string; icon?: string }, module?: ModuleGroup) => {
+  const handleDoctypeClick = (doctype: DocTypeNavItem | { name: string; resource_name?: string; label: string; icon?: string }, module?: ModuleGroup) => {
     if (module) setActiveModule(module.module)
     recordDoctypeVisit(doctype)
   }
 
-  const QuickList = ({ items, icon: Icon, title }: { items: { name: string; label: string; icon?: string }[], icon: LucideIcon, title: string }) => {
+  const QuickList = ({ items, icon: Icon, title }: { items: { name: string; resource_name?: string; label: string; icon?: string }[], icon: LucideIcon, title: string }) => {
     if (items.length === 0) return null
     return (
       <div>
@@ -76,7 +77,7 @@ export default function DashboardPage() {
             <Link
               key={item.name}
               to="/workspace/$doctype"
-              params={{ doctype: item.name }}
+              params={{ doctype: item.resource_name ?? item.name }}
               onClick={() => handleDoctypeClick(item)}
               className="rounded-full bg-muted px-3 py-1.5 text-sm transition-colors hover:bg-muted/80"
             >
@@ -92,6 +93,9 @@ export default function DashboardPage() {
     <div className="space-y-8 p-6 md:p-8">
       {/* Welcome */}
       <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          {WORKSPACE_DASHBOARD_MANIFEST.label}
+        </p>
         <h1 className="text-3xl font-bold tracking-tight">
           Welcome{user?.full_name ? `, ${user.full_name}` : ''}
         </h1>
@@ -100,7 +104,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <Card className="border-dashed bg-card/60">
+      <Card className="border-dashed bg-card/60" data-manifest-section="search">
         <CardContent className="flex flex-col gap-4 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Workspace search</p>
@@ -119,7 +123,7 @@ export default function DashboardPage() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <Card className="border-primary/20 bg-primary/5">
+        <Card className="border-primary/20 bg-primary/5" data-manifest-section="hero">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
               <CheckCircle2 className="h-5 w-5 text-primary" />
@@ -133,7 +137,7 @@ export default function DashboardPage() {
             {firstDoctype && firstModule ? (
               <Link
                 to="/workspace/$doctype"
-                params={{ doctype: firstDoctype.name }}
+                params={{ doctype: firstDoctype.resource_name }}
                 onClick={() => handleDoctypeClick(firstDoctype, firstModule)}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
               >
@@ -155,7 +159,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-manifest-section="resume">
           <CardHeader>
             <CardTitle>Resume work</CardTitle>
             <CardDescription>Favorites, recent document types, and drafts stay one click away.</CardDescription>
@@ -210,7 +214,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-manifest-section="modules">
             {filteredModules.map((mod) => (
             <Card key={mod.module} className="h-full">
               <CardHeader>

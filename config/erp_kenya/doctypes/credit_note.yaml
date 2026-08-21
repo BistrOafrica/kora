@@ -1,0 +1,92 @@
+name: Credit Note
+module: Sales
+is_submittable: true
+title_field: customer
+search_fields: customer
+sort_field: credit_date
+sort_order: DESC
+fields:
+  - fieldname: customer
+    fieldtype: Link
+    label: Customer
+    options: Customer
+    reqd: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: invoice
+    fieldtype: Link
+    label: Invoice
+    options: Sales Invoice
+    description: Original sales invoice this credit note references.
+
+  - fieldname: credit_date
+    fieldtype: Date
+    label: Credit Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: reason
+    fieldtype: Select
+    label: Reason
+    options: |
+      Return
+      Price Adjustment
+      Damaged Goods
+      Other
+    reqd: true
+    in_list_view: true
+
+  # --- Section: Items ---
+  - fieldname: section_items
+    fieldtype: Section Break
+    label: Credit Note Items
+
+  - fieldname: items
+    fieldtype: Table
+    label: Items
+    options: Credit Note Item
+
+  # --- Section: Totals ---
+  - fieldname: section_totals
+    fieldtype: Section Break
+    label: Totals
+
+  - fieldname: subtotal
+    fieldtype: Currency
+    label: Subtotal (KES)
+    computed: "SUM(items.line_total)"
+    read_only: true
+
+  - fieldname: tax_rate
+    fieldtype: Percent
+    label: VAT Rate (%)
+    default: "16"
+
+  - fieldname: tax_amount
+    fieldtype: Currency
+    label: Tax Amount (KES)
+    computed: "ROUND(subtotal * tax_rate / 100, 2)"
+    read_only: true
+
+  - fieldname: total
+    fieldtype: Currency
+    label: Total (KES)
+    computed: "ROUND(subtotal + tax_amount, 2)"
+    read_only: true
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Cancelled
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

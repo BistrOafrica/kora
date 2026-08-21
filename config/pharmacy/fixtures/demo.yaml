@@ -1,0 +1,6 @@
+pack: pharmacy
+seed_mode: demo
+records:
+  - doctype: Dispense Request
+    reference: DEMO-PHARMACY-001
+    status: Draft

@@ -7,7 +7,9 @@ import {
   fetchConfigVersionPreview,
   fetchRollbackVersionPreview,
   fetchVersionSnapshot,
+  isImmutableConfigVersion,
   rollbackVersion,
+  selectRollbackTargetVersion,
 } from '@/lib/api/system'
 import type {
   ConfigVersion,
@@ -63,6 +65,9 @@ export default function AdminVersionsPage() {
     if (confirmAction.type === 'activateAll') {
       const sortedDrafts = drafts.slice().sort((a, b) => b.version - a.version)
       return sortedDrafts[0] || null
+    }
+    if (confirmAction.type === 'rollback') {
+      return selectRollbackTargetVersion(data)
     }
     return data.find(v => v.id === confirmAction.id) || null
   }, [confirmAction, data, drafts])
@@ -273,11 +278,16 @@ export default function AdminVersionsPage() {
     }
   }
 
+  const immutableCount = useMemo(() => (data || []).filter(isImmutableConfigVersion).length, [data])
+
   return (
     <div className="p-8 max-w-5xl">
       <div className="flex items-center gap-3 mb-6">
         <History className="h-6 w-6" />
         <h1 className="text-3xl font-bold tracking-tight">Config Versions</h1>
+      </div>
+      <div className="mb-4 text-sm text-muted-foreground">
+        Immutable versions available for rollback: <span className="font-medium text-foreground">{immutableCount}</span>
       </div>
 
       {isLoading && (

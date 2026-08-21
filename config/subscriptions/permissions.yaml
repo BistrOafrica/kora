@@ -1,0 +1,33 @@
+- doctype: Subscription
+  role: Subscription and Recurring Services Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Subscription
+  role: Subscription and Recurring Services Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Subscription
+  role: Subscription and Recurring Services Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Billing Schedule
+  role: Subscription and Recurring Services Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Recurring Invoice
+  role: Subscription and Recurring Services Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

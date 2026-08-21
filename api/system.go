@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/asenawritescode/kora/auth"
 	"github.com/asenawritescode/kora/configstore"
 	"github.com/asenawritescode/kora/doctype"
+	"github.com/asenawritescode/kora/natsprovider"
 	"github.com/asenawritescode/kora/schema"
 )
 
@@ -24,12 +27,15 @@ import (
 // HandleAuthProviders returns enabled authentication providers.
 // Public endpoint — no auth required.
 func (h *Handler) HandleAuthProviders(c *gin.Context) {
+	providers := []auth.AuthProvider(nil)
+	if h.AuthProviders != nil {
+		providers = h.AuthProviders.List()
+	} else {
+		providers = auth.NewProviderRegistry().List()
+	}
 	c.JSON(http.StatusOK, Response{
 		Data: map[string]any{
-			"providers": []map[string]any{
-				{"name": "password", "label": "Email & Password"},
-				{"name": "magic_link", "label": "Magic Link"},
-			},
+			"providers": providers,
 		},
 	})
 }
@@ -176,10 +182,11 @@ type ModuleGroup struct {
 
 // DocTypeNavItem is a single DocType entry in the navigation.
 type DocTypeNavItem struct {
-	Name    string `json:"name"`
-	Label   string `json:"label"`
-	Icon    string `json:"icon,omitempty"`
-	IsChild bool   `json:"is_child"`
+	Name         string `json:"name"`
+	ResourceName string `json:"resource_name"`
+	Label        string `json:"label"`
+	Icon         string `json:"icon,omitempty"`
+	IsChild      bool   `json:"is_child"`
 }
 
 // ViewNavItem is a configured workspace view entry in the navigation.
@@ -225,11 +232,12 @@ func (h *Handler) HandleSystemNavigation(c *gin.Context) {
 		if module == "" {
 			module = "System"
 		}
-		moduleMap[module] = append(moduleMap[module], DocTypeNavItem{
-			Name:    dt.Name,
-			Label:   dt.Name,
-			IsChild: false,
-		})
+			moduleMap[module] = append(moduleMap[module], DocTypeNavItem{
+				Name:         dt.Name,
+				ResourceName: dt.ResourceName,
+				Label:        dt.Name,
+				IsChild:      false,
+			})
 	}
 
 	// Sort modules deterministically.
@@ -254,21 +262,22 @@ func (h *Handler) HandleSystemNavigation(c *gin.Context) {
 	}
 
 	views := make([]ViewNavItem, 0)
-	if reg.Views != nil {
-		for _, view := range reg.Views.All() {
-			if view == nil || view.Route == "" {
+	if store := h.viewStore(c); store != nil {
+		manifests, _ := store.LoadPageManifests(siteName(c))
+		for _, manifest := range manifests {
+			if manifest == nil || manifest.Spec.Route == "" {
 				continue
 			}
-			label := view.Label
+			label := manifest.Metadata.Name
 			if label == "" {
-				label = view.Name
+				label = manifest.Spec.Route
 			}
 			views = append(views, ViewNavItem{
-				Name:   view.Name,
+				Name:   manifest.Metadata.Name,
 				Label:  label,
-				Route:  view.Route,
-				Type:   view.Type,
-				Module: view.Module,
+				Route:  manifest.Spec.Route,
+				Type:   "page_manifest",
+				Module: manifest.Metadata.Package,
 			})
 		}
 		sort.Slice(views, func(i, j int) bool {
@@ -1406,7 +1415,7 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 	}
 
 	// Generate YAML pack files ready for Template Pack File rows.
-	packFiles := make([]map[string]string, 0)
+	packFiles := make([]configVersionSnapshotFile, 0)
 
 	// Doctypes → doctypes/<name>.yaml
 	for _, dt := range snapshot.DocTypes {
@@ -1420,10 +1429,10 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 			})
 			return
 		}
-		packFiles = append(packFiles, map[string]string{
-			"path":         fmt.Sprintf("doctypes/%s.yaml", strings.ToLower(dt.Name)),
-			"content":      string(yamlBytes),
-			"content_type": "doctype",
+		packFiles = append(packFiles, configVersionSnapshotFile{
+			Path:        fmt.Sprintf("doctypes/%s.yaml", strings.ToLower(dt.Name)),
+			Content:     string(yamlBytes),
+			ContentType: "doctype",
 		})
 	}
 
@@ -1436,10 +1445,10 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 			})
 			return
 		}
-		packFiles = append(packFiles, map[string]string{
-			"path":         "roles.yaml",
-			"content":      string(yamlBytes),
-			"content_type": "roles",
+		packFiles = append(packFiles, configVersionSnapshotFile{
+			Path:        "roles.yaml",
+			Content:     string(yamlBytes),
+			ContentType: "roles",
 		})
 	}
 
@@ -1452,10 +1461,10 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 			})
 			return
 		}
-		packFiles = append(packFiles, map[string]string{
-			"path":         "permissions.yaml",
-			"content":      string(yamlBytes),
-			"content_type": "permissions",
+		packFiles = append(packFiles, configVersionSnapshotFile{
+			Path:        "permissions.yaml",
+			Content:     string(yamlBytes),
+			ContentType: "permissions",
 		})
 	}
 
@@ -1471,10 +1480,10 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 			})
 			return
 		}
-		packFiles = append(packFiles, map[string]string{
-			"path":         fmt.Sprintf("doctypes/%s_workflow.yaml", strings.ToLower(wf.Name)),
-			"content":      string(yamlBytes),
-			"content_type": "workflow",
+		packFiles = append(packFiles, configVersionSnapshotFile{
+			Path:        fmt.Sprintf("doctypes/%s_workflow.yaml", strings.ToLower(wf.Name)),
+			Content:     string(yamlBytes),
+			ContentType: "workflow",
 		})
 	}
 
@@ -1487,18 +1496,18 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, Response{Data: map[string]any{
-		"version_id":        versionID,
-		"version":           versionNum,
-		"site":              siteName,
-		"label":             label,
-		"doctype_names":     doctypeNames,
-		"doctype_count":     len(snapshot.DocTypes),
-		"roles_count":       len(snapshot.Roles),
-		"permissions_count": len(snapshot.Permissions),
-		"workflows_count":   len(snapshot.Workflows),
-		"snapshot":          json.RawMessage(snapshotJSON),
-		"pack_files":        packFiles,
+	c.JSON(http.StatusOK, Response{Data: configVersionSnapshotResponse{
+		VersionID:        versionID,
+		Version:          versionNum,
+		Site:             siteName,
+		Label:            label,
+		DoctypeNames:     doctypeNames,
+		DoctypeCount:     len(snapshot.DocTypes),
+		RolesCount:       len(snapshot.Roles),
+		PermissionsCount: len(snapshot.Permissions),
+		WorkflowsCount:   len(snapshot.Workflows),
+		Snapshot:         json.RawMessage(snapshotJSON),
+		PackFiles:        packFiles,
 	}})
 }
 
@@ -1627,7 +1636,7 @@ func (h *Handler) HandleSystemRoleDelete(c *gin.Context) {
 		internalError(c, "deleting role permissions", err)
 		return
 	}
-	c.JSON(http.StatusOK, Response{Data: map[string]any{"message": "deleted", "users_with_role": userCount}})
+	c.JSON(http.StatusOK, Response{Data: deletedResponse{Message: "deleted", UsersWithRole: userCount}})
 }
 
 // --- Permissions ---
@@ -1663,7 +1672,134 @@ func (h *Handler) HandleSystemPermissionsSave(c *gin.Context) {
 	reg := h.siteRegistry(c)
 	roles, _ := store.LoadRoles(c.GetString("site_name"))
 	reg.Permissions.LoadPermissionsFromDB(roles, permissions)
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"message": "saved"}})
+	c.JSON(http.StatusOK, Response{Data: savedResponse{Message: "saved"}})
+}
+
+// HandleSystemRealtime streams authenticated realtime connection events.
+// It supports WebSocket when the client upgrades, and SSE as a read-only fallback.
+func (h *Handler) HandleSystemRealtime(c *gin.Context) {
+	siteName := c.GetString("site_name")
+	provider := h.SiteRealtimeProviders[siteName]
+	slog.Info("realtime request received",
+		"site", siteName,
+		"method", c.Request.Method,
+		"path", c.Request.URL.Path,
+		"upgrade", c.GetHeader("Upgrade"),
+		"connection", c.GetHeader("Connection"),
+		"accept", c.GetHeader("Accept"),
+		"origin", c.GetHeader("Origin"),
+		"user_agent", c.Request.UserAgent(),
+	)
+	if isWebSocketUpgrade(c.Request) {
+		h.handleSystemRealtimeWebSocket(c, provider, siteName)
+		return
+	}
+	h.handleSystemRealtimeSSE(c, provider, siteName)
+}
+
+func (h *Handler) handleSystemRealtimeWebSocket(c *gin.Context, provider *natsprovider.Provider, siteName string) {
+	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		internalError(c, "realtime websocket upgrade failed", err)
+		return
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "closed")
+	h.streamRealtime(c, func(msg []byte) error {
+		return conn.Write(c.Request.Context(), websocket.MessageText, msg)
+	}, provider, siteName)
+}
+
+func (h *Handler) handleSystemRealtimeSSE(c *gin.Context, provider *natsprovider.Provider, siteName string) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "streaming unsupported"}})
+		return
+	}
+
+	writeEvent := func(eventType string, payload map[string]any) error {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(c.Writer, "event: %s\n", eventType); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", data); err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	}
+
+	h.streamRealtime(c, func(msg []byte) error {
+		var envelope map[string]any
+		if err := json.Unmarshal(msg, &envelope); err != nil {
+			envelope = map[string]any{"type": "heartbeat"}
+		}
+		eventType, _ := envelope["type"].(string)
+		if eventType == "" {
+			eventType = "message"
+		}
+		return writeEvent(eventType, envelope)
+	}, provider, siteName)
+}
+
+func (h *Handler) streamRealtime(c *gin.Context, send func([]byte) error, provider *natsprovider.Provider, siteName string) {
+	if provider == nil {
+		_ = send([]byte(`{"type":"connected","transport":"local","site":"` + siteName + `"}`))
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-c.Request.Context().Done():
+				return
+			case <-ticker.C:
+				if err := send([]byte(`{"type":"heartbeat","transport":"local"}`)); err != nil {
+					return
+				}
+			}
+		}
+	}
+
+	subject := provider.Config().SubjectPrefix + ".realtime." + siteName + ".>"
+	ch, drain, err := provider.Subscribe(c.Request.Context(), subject)
+	if err != nil {
+		_ = send([]byte(`{"type":"connected","transport":"local"}`))
+		return
+	}
+	defer drain()
+
+	_ = send([]byte(`{"type":"connected","transport":"nats","site":"` + siteName + `"}`))
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			if err := send(msg.Data); err != nil {
+				return
+			}
+		case <-ticker.C:
+			if err := send([]byte(`{"type":"heartbeat","transport":"nats"}`)); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func isWebSocketUpgrade(req *http.Request) bool {
+	return strings.EqualFold(req.Header.Get("Upgrade"), "websocket") && strings.Contains(strings.ToLower(req.Header.Get("Connection")), "upgrade")
 }
 
 // --- Workflows ---
@@ -1737,7 +1873,7 @@ func (h *Handler) HandleSystemWorkflowDelete(c *gin.Context) {
 		slog.Warn("workflow transition cleanup", "error", err)
 	}
 	reg.Workflows.Remove(doctypeName)
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"message": "deleted"}})
+	c.JSON(http.StatusOK, Response{Data: savedResponse{Message: "deleted"}})
 }
 
 // RegisterSystemRoutes registers system endpoints on the given API group.
@@ -1767,6 +1903,9 @@ func RegisterSystemRoutes(apiGroup *gin.RouterGroup, handler *Handler) {
 
 		// Config import.
 		system.POST("/config/import", handler.HandleConfigImport)
+
+		// Realtime stream.
+		system.GET("/realtime", handler.HandleSystemRealtime)
 
 		// Roles.
 		system.GET("/roles", handler.HandleSystemRoles)

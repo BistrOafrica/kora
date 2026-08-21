@@ -1,0 +1,39 @@
+name: Sales Workspace
+route: /sales
+type: workspace
+layout: two_panel
+label: Sales Management
+module: Sales
+components:
+  - id: sales_orders
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Sales Order
+    label: Sales Orders
+    desktop_columns: [name, customer, order_date, delivery_date, total, delivery_status, status]
+    mobile_columns: [name, customer, status]
+  - id: sales_invoices
+    type: record_table
+    region: main
+    position: 1
+    source_doctype: Sales Invoice
+    label: Invoices
+    desktop_columns: [name, customer, invoice_date, total, balance_due, status]
+    mobile_columns: [name, customer, status]
+  - id: leads
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Lead
+    label: Leads
+    desktop_columns: [name, lead_name, company_name, lead_source, status]
+    mobile_columns: [lead_name, status]
+  - id: opportunities
+    type: record_table
+    region: side
+    position: 1
+    source_doctype: Opportunity
+    label: Opportunities
+    desktop_columns: [name, opportunity_name, company, sales_stage, amount]
+    mobile_columns: [opportunity_name, sales_stage]

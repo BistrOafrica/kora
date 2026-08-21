@@ -36,7 +36,7 @@ export default function AdminAnalyticsPage() {
 
   const doctypes = nav.data?.modules?.flatMap((m: any) => m.doctypes || []) || [];
   const dataFields = schema.data?.doctype?.fields?.filter((f: any) =>
-    !["Section Break", "Column Break", "Heading", "Table", "Password", "Attach", "Attach Image", "JSON", "Text Editor"].includes(f.fieldtype)
+    !["Section Break", "Column Break", "Heading", "Table", "Password", "Attach", "Attach Image", "Attach Audio", "JSON", "Text Editor"].includes(f.fieldtype)
   ) || [];
   const linkFields = dataFields.filter((f: any) => f.fieldtype === "Link" || f.fieldtype === "Dynamic Link");
 

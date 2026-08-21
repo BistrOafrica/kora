@@ -5,6 +5,7 @@ package doctype
 // constraints, relationships, and UI hints for a document type.
 type DocType struct {
 	Name           string          `yaml:"name"          json:"name"`
+	ResourceName   string          `yaml:"resource_name" json:"resource_name,omitempty"`
 	Module         string          `yaml:"module"        json:"module"`
 	IsSubmittable  bool            `yaml:"is_submittable" json:"is_submittable"`
 	IsChildTable   bool            `yaml:"is_child_table" json:"is_child_table"`
@@ -179,6 +180,7 @@ type Field struct {
 	LinkedField        string       `yaml:"linked_field"        json:"linked_field,omitempty"`
 	Computed           string       `yaml:"computed"            json:"computed,omitempty"`
 	DependencyScope    string       `yaml:"dependency_scope"    json:"dependency_scope,omitempty"`
+	Accept             string       `yaml:"accept"              json:"accept,omitempty"`
 }
 
 // IsDataField returns true if this field maps to a database column.

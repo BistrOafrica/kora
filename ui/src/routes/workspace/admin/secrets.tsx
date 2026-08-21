@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { KeyRound, Plus, Pencil, Trash2, Loader2, AlertCircle, Sparkles } from 'lucide-react'
+import { HelpTooltip } from '@/components/ui/help-tooltip'
 
 const AI_PROVIDERS = [
   { key: 'openai_api_key', label: 'OpenAI', description: 'Used for GPT-4o, GPT-4.1, etc.' },
@@ -122,24 +123,15 @@ export default function AdminSecretsPage() {
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Secrets</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage API keys and configuration secrets</p>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+            Secrets
+            <HelpTooltip label="Secrets help">Manage API keys and configuration secrets for this site.</HelpTooltip>
+          </h1>
         </div>
         <Button onClick={() => openAdd()} size="sm">
           <Plus className="h-4 w-4 mr-1" />
           Add Secret
         </Button>
-      </div>
-
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-        <p className="mb-0.5 text-xs font-medium uppercase tracking-wide">AI key naming convention</p>
-        <p>
-          AI providers require exact key names:{' '}
-          <code className="rounded bg-blue-100 px-1 font-mono text-xs">openai_api_key</code>,{' '}
-          <code className="rounded bg-blue-100 px-1 font-mono text-xs">deepseek_api_key</code>, or{' '}
-          <code className="rounded bg-blue-100 px-1 font-mono text-xs">anthropic_api_key</code>.
-          Use the quick-configure card above — it sets the correct name automatically.
-        </p>
       </div>
 
       {/* AI Provider — single dropdown + key input */}
@@ -148,8 +140,10 @@ export default function AdminSecretsPage() {
           <CardTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4" />
             AI Provider
+            <HelpTooltip label="AI provider secret help">
+              Quick configure stores provider keys as openai_api_key, deepseek_api_key, or anthropic_api_key.
+            </HelpTooltip>
           </CardTitle>
-          <CardDescription>Select your AI provider and enter the API key. Only one provider is active at a time.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-3">

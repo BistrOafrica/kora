@@ -1,0 +1,23 @@
+name: Maintenance and Asset Service Workspace
+route: /maintenance
+type: workspace
+layout: two_panel
+label: Maintenance and Asset Service
+module: Maintenance and Asset Service
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Maintenance Work Order
+    label: Maintenance Work Order Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Asset
+    label: Asset Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

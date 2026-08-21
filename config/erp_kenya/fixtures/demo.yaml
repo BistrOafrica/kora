@@ -1,0 +1,561 @@
+pack: erp_kenya
+seed_mode: demo
+records:
+  # ── Currencies ──
+  - doctype: Currency
+    currency_code: KES
+    currency_name: Kenyan Shilling
+    symbol: KSh
+    exchange_rate: "1"
+    is_base_currency: "1"
+    enabled: "1"
+
+  - doctype: Currency
+    currency_code: USD
+    currency_name: US Dollar
+    symbol: $
+    exchange_rate: "135"
+    is_base_currency: "0"
+    enabled: "1"
+
+  # ── Tax Authority ──
+  - doctype: Tax Authority
+    authority_name: KRA
+    country: Kenya
+    description: Kenya Revenue Authority — the principal tax collection agency for the Government of Kenya.
+
+  # ── Tax Categories ──
+  - doctype: Tax Category
+    category_name: VAT 16
+    category_type: VAT
+    description: Standard VAT at 16% applicable to most goods and services.
+    is_default: "1"
+
+  - doctype: Tax Category
+    category_name: VAT 0
+    category_type: VAT
+    description: Zero-rated VAT for exports and exempt supplies (water supply, agricultural inputs).
+    is_default: "0"
+
+  - doctype: Tax Category
+    category_name: WHT
+    category_type: Withholding Tax
+    description: Withholding tax on supplier payments, consultancy fees, and professional services.
+    is_default: "0"
+
+  # ── Tax Rates ──
+  - doctype: Tax Rate
+    tax_name: Standard VAT 16%
+    tax_authority: KRA
+    tax_category: VAT 16
+    rate: "16"
+    effective_from: "2024-01-01"
+    is_active: "1"
+    description: Kenya standard VAT rate per the VAT Act 2013.
+
+  - doctype: Tax Rate
+    tax_name: Zero-Rated VAT 0%
+    tax_authority: KRA
+    tax_category: VAT 0
+    rate: "0"
+    effective_from: "2024-01-01"
+    is_active: "1"
+    description: Zero-rated supplies including water services, agricultural inputs, and exports.
+
+  - doctype: Tax Rate
+    tax_name: WHT 5%
+    tax_authority: KRA
+    tax_category: WHT
+    rate: "5"
+    effective_from: "2024-01-01"
+    is_active: "1"
+    description: Withholding tax at 5% on supplier payments for goods and consultancy services.
+
+  # ── Fiscal Period ──
+  - doctype: Fiscal Period
+    period_name: FY2024 Full Year
+    fiscal_year: "2024"
+    start_date: "2024-01-01"
+    end_date: "2024-12-31"
+    is_closed: "0"
+
+  # ── Cost Centers ──
+  - doctype: Cost Center
+    center_code: HO-001
+    center_name: Head Office
+    center_type: Department
+    is_active: "1"
+    description: Central administration, finance, HR, and executive management.
+
+  - doctype: Cost Center
+    center_code: OPS-001
+    center_name: Operations
+    center_type: Zone
+    is_active: "1"
+    description: Field operations, water treatment, distribution network maintenance, and meter reading.
+
+  # ── Warehouses ──
+  - doctype: Warehouse
+    warehouse_name: Main Warehouse
+    warehouse_code: WH-MAIN
+    location_type: Main Warehouse
+    address: Off Mombasa Road, Industrial Area, Nairobi
+    contact_person: James Kariuki
+    contact_phone: "+254722100100"
+    is_active: "1"
+
+  - doctype: Warehouse
+    warehouse_name: Field Depot
+    warehouse_code: WH-FIELD
+    location_type: Depot
+    address: Kiambu Road, Near Ndumberi Water Treatment Plant
+    contact_person: Mary Wanjiku
+    contact_phone: "+254733200200"
+    is_active: "1"
+
+  # ── Bank Accounts ──
+  - doctype: Bank Account
+    account_name: KCB Operating Account
+    bank_name: Kenya Commercial Bank
+    account_number: "1234567890"
+    branch: Moi Avenue, Nairobi
+    swift_code: KCBLKENX
+    currency: KES
+    opening_balance: "2500000"
+    is_company_account: "1"
+    bank_code: "01100"
+
+  - doctype: Bank Account
+    account_name: Equity Bank USD Account
+    bank_name: Equity Bank Kenya
+    account_number: "0987654321"
+    branch: Upper Hill, Nairobi
+    swift_code: EQBLKENA
+    currency: USD
+    opening_balance: "18500"
+    is_company_account: "1"
+    bank_code: "06800"
+
+  # ── Accounts (Chart of Accounts for Kenyan Water Utility) ──
+  - doctype: Account
+    account_number: "1000"
+    account_name: Assets
+    account_type: Asset
+    is_group: "1"
+    opening_balance: "0"
+    description: Top-level asset group account.
+
+  - doctype: Account
+    account_number: "1100"
+    account_name: Cash & Bank
+    account_type: Asset
+    parent_account: "Assets"
+    is_group: "1"
+    opening_balance: "0"
+    description: Cash on hand and bank balances.
+
+  - doctype: Account
+    account_number: "1101"
+    account_name: KCB Operating Account
+    account_type: Asset
+    parent_account: "Cash & Bank"
+    is_group: "0"
+    opening_balance: "2500000"
+    is_reconciliation_account: "1"
+    description: Main operating account with Kenya Commercial Bank.
+
+  - doctype: Account
+    account_number: "1400"
+    account_name: Accounts Receivable
+    account_type: Asset
+    parent_account: "Assets"
+    is_group: "0"
+    opening_balance: "850000"
+    description: Amounts due from customers for water supply and connection services.
+
+  - doctype: Account
+    account_number: "1500"
+    account_name: Inventory
+    account_type: Asset
+    parent_account: "Assets"
+    is_group: "0"
+    opening_balance: "1200000"
+    description: Water treatment chemicals, pipes, meters, and spare parts.
+
+  - doctype: Account
+    account_number: "2000"
+    account_name: Liabilities
+    account_type: Liability
+    is_group: "1"
+    opening_balance: "0"
+    description: Top-level liability group account.
+
+  - doctype: Account
+    account_number: "2100"
+    account_name: Accounts Payable
+    account_type: Liability
+    parent_account: "Liabilities"
+    is_group: "0"
+    opening_balance: "420000"
+    description: Amounts owed to suppliers for chemicals, pipes, and services.
+
+  - doctype: Account
+    account_number: "2200"
+    account_name: VAT Payable
+    account_type: Liability
+    parent_account: "Liabilities"
+    is_group: "0"
+    opening_balance: "156000"
+    description: VAT collected on sales net of input VAT credits.
+
+  - doctype: Account
+    account_number: "2300"
+    account_name: PAYE Payable
+    account_type: Liability
+    parent_account: "Liabilities"
+    is_group: "0"
+    opening_balance: "48500"
+    description: Pay-As-You-Earn tax deducted from employee salaries, payable to KRA.
+
+  - doctype: Account
+    account_number: "2400"
+    account_name: Withholding Tax Payable
+    account_type: Liability
+    parent_account: "Liabilities"
+    is_group: "0"
+    opening_balance: "12800"
+    description: Withholding tax deducted from suppliers, payable to KRA.
+
+  - doctype: Account
+    account_number: "3000"
+    account_name: Equity
+    account_type: Equity
+    is_group: "1"
+    opening_balance: "0"
+
+  - doctype: Account
+    account_number: "3100"
+    account_name: Share Capital
+    account_type: Equity
+    parent_account: "Equity"
+    is_group: "0"
+    opening_balance: "5000000"
+
+  - doctype: Account
+    account_number: "3200"
+    account_name: Retained Earnings
+    account_type: Equity
+    parent_account: "Equity"
+    is_group: "0"
+    opening_balance: "602700"
+
+  - doctype: Account
+    account_number: "4000"
+    account_name: Revenue
+    account_type: Income
+    is_group: "1"
+    opening_balance: "0"
+
+  - doctype: Account
+    account_number: "4100"
+    account_name: Water Sales Revenue
+    account_type: Income
+    parent_account: "Revenue"
+    is_group: "0"
+    opening_balance: "0"
+    description: Revenue from metered water consumption charges.
+
+  - doctype: Account
+    account_number: "4200"
+    account_name: Connection Fees
+    account_type: Income
+    parent_account: "Revenue"
+    is_group: "0"
+    opening_balance: "0"
+    description: Revenue from new water connection and reconnection fees.
+
+  - doctype: Account
+    account_number: "4300"
+    account_name: Meter Rent & Maintenance
+    account_type: Income
+    parent_account: "Revenue"
+    is_group: "0"
+    opening_balance: "0"
+    description: Revenue from water meter rental and maintenance charges.
+
+  - doctype: Account
+    account_number: "5000"
+    account_name: Expenses
+    account_type: Expense
+    is_group: "1"
+    opening_balance: "0"
+
+  - doctype: Account
+    account_number: "5100"
+    account_name: Staff Costs
+    account_type: Expense
+    parent_account: "Expenses"
+    is_group: "0"
+    opening_balance: "0"
+    description: Salaries, wages, allowances, NSSF, and other staff-related costs.
+
+  - doctype: Account
+    account_number: "5200"
+    account_name: Treatment Chemicals
+    account_type: Expense
+    parent_account: "Expenses"
+    is_group: "0"
+    opening_balance: "0"
+    description: Water treatment chemicals (chlorine, alum, soda ash, PAC).
+
+  - doctype: Account
+    account_number: "5300"
+    account_name: Electricity & Power
+    account_type: Expense
+    parent_account: "Expenses"
+    is_group: "0"
+    opening_balance: "0"
+    description: Electricity for pumping stations, treatment plants, and offices.
+
+  - doctype: Account
+    account_number: "5400"
+    account_name: Repairs & Maintenance
+    account_type: Expense
+    parent_account: "Expenses"
+    is_group: "0"
+    opening_balance: "0"
+    description: Pipe repairs, pump maintenance, vehicle servicing, and infrastructure upkeep.
+
+  # ── Customers ──
+  - doctype: Customer
+    customer_name: Umoja Apartments Ltd
+    customer_type: Corporate
+    email: accounts@umojaapartments.co.ke
+    phone: "+254700100200"
+    mobile: "+254700100200"
+    tax_id: P051234567X
+    credit_limit: "150000"
+    payment_terms: Net 30
+    currency: KES
+    billing_address: Umoja 1 Estate, House 45, Nairobi
+    status: Active
+
+  - doctype: Customer
+    customer_name: Riverside Mall
+    customer_type: Corporate
+    email: billing@riversidemall.co.ke
+    phone: "+254711300400"
+    mobile: "+254711300400"
+    tax_id: P052345678Y
+    credit_limit: "500000"
+    payment_terms: Net 30
+    currency: KES
+    billing_address: Riverside Drive, Westlands, Nairobi
+    status: Active
+
+  - doctype: Customer
+    customer_name: Peter Mwangi
+    customer_type: Individual
+    email: peter.mwangi@gmail.com
+    phone: "+254722500600"
+    mobile: "+254722500600"
+    tax_id: A001234567M
+    credit_limit: "5000"
+    payment_terms: Immediate
+    currency: KES
+    billing_address: Plot 12, Kikuyu Town, Kiambu County
+    status: Active
+
+  # ── Suppliers ──
+  - doctype: Supplier
+    supplier_name: ChemTreat Kenya Ltd
+    supplier_type: Corporate
+    email: sales@chemtreat.co.ke
+    phone: "+254733800900"
+    tax_id: P053456789Z
+    payment_terms: Net 30
+    currency: KES
+    bank_name: NCBA Bank
+    bank_account: "5566778899"
+    bank_branch: Westlands
+    address: Baba Dogo Road, Ruaraka, Nairobi
+    withholding_tax_applicable: "1"
+    withholding_tax_rate: "5"
+    status: Active
+    notes: Primary supplier of water treatment chemicals (chlorine, alum, soda ash).
+
+  - doctype: Supplier
+    supplier_name: Pipeline Solutions Africa
+    supplier_type: Corporate
+    email: orders@pipeline-solutions.africa
+    phone: "+254744100200"
+    tax_id: P054567890A
+    payment_terms: Net 60
+    currency: KES
+    bank_name: Standard Chartered Bank Kenya
+    bank_account: "3322110099"
+    bank_branch: Chiromo
+    address: Enterprise Road, Industrial Area, Nairobi
+    withholding_tax_applicable: "0"
+    status: Active
+    notes: Supplier of HDPE pipes, GI pipes, fittings, and water meters.
+
+  - doctype: Supplier
+    supplier_name: Lab Equipment Distributors
+    supplier_type: Corporate
+    email: info@labequip.co.ke
+    phone: "+254755300400"
+    tax_id: P055678901B
+    payment_terms: Net 30
+    currency: KES
+    bank_name: Co-operative Bank
+    bank_account: "1199887766"
+    bank_branch: Kimathi Street
+    address: Mfangano Street, Nairobi CBD
+    withholding_tax_applicable: "1"
+    withholding_tax_rate: "5"
+    status: Active
+    notes: Supplier of water quality testing equipment, reagents, and lab consumables.
+
+  # ── Items ──
+  - doctype: Item
+    item_code: CHEM-001
+    item_name: Chlorine Gas (Cylinder)
+    item_type: Stock Item
+    item_group: Chemicals
+    unit: Kilograms
+    unit_price: "850"
+    cost_price: "720"
+    selling_price: "0"
+    tax_category: VAT 16
+    reorder_level: "20"
+    current_stock: "45"
+    warehouse: Main Warehouse
+    barcode: CHM001234567
+    description: 68kg chlorine gas cylinder for water disinfection. Used at treatment plants.
+    is_active: "1"
+    has_expiry: "1"
+    default_expiry_days: "730"
+
+  - doctype: Item
+    item_code: CHEM-002
+    item_name: Aluminium Sulphate (Alum)
+    item_type: Stock Item
+    item_group: Chemicals
+    unit: Kilograms
+    unit_price: "380"
+    cost_price: "310"
+    selling_price: "0"
+    tax_category: VAT 16
+    reorder_level: "500"
+    current_stock: "1200"
+    warehouse: Main Warehouse
+    barcode: CHM002345678
+    description: 50kg bags of aluminium sulphate for coagulation in water treatment.
+    is_active: "1"
+    has_expiry: "1"
+    default_expiry_days: "365"
+
+  - doctype: Item
+    item_code: PIPE-001
+    item_name: HDPE Pipe 110mm (6m length)
+    item_type: Stock Item
+    item_group: Trading Goods
+    unit: Pieces
+    unit_price: "4200"
+    cost_price: "3500"
+    selling_price: "4200"
+    tax_category: VAT 16
+    reorder_level: "50"
+    current_stock: "180"
+    warehouse: Main Warehouse
+    barcode: PIP001567890
+    description: High-density polyethylene pipe, 110mm diameter, PN10 rating, 6-metre lengths.
+    is_active: "1"
+
+  - doctype: Item
+    item_code: METER-001
+    item_name: Domestic Water Meter 15mm
+    item_type: Stock Item
+    item_group: Spare Parts
+    unit: Pieces
+    unit_price: "2500"
+    cost_price: "1900"
+    selling_price: "3500"
+    tax_category: VAT 16
+    reorder_level: "100"
+    current_stock: "340"
+    warehouse: Main Warehouse
+    barcode: MET001678901
+    description: Multi-jet brass water meter, 15mm, Class B, for domestic connections.
+    is_active: "1"
+
+  - doctype: Item
+    item_code: SRVC-001
+    item_name: Water Connection (Domestic)
+    item_type: Service
+    item_group: Service
+    unit: Each
+    unit_price: "7500"
+    cost_price: "4500"
+    selling_price: "7500"
+    tax_category: VAT 0
+    reorder_level: "0"
+    current_stock: "0"
+    description: New domestic water connection service including trenching, tapping, and meter installation.
+    is_active: "1"
+
+  # ── Employees ──
+  - doctype: Employee
+    employee_id: EMP-001
+    first_name: David
+    last_name: Otieno
+    gender: Male
+    date_of_birth: "1985-03-15"
+    marital_status: Married
+    employment_type: Permanent
+    department: Head Office
+    designation: Finance Manager
+    grade: Manager
+    joining_date: "2019-06-01"
+    salary_mode: Bank
+    basic_salary: "180000"
+    housing_allowance: "35000"
+    transport_allowance: "15000"
+    nssf_number: "NS12345678"
+    nhif_number: "NH98765432"
+    kra_pin: A001234567Z
+    bank_name: KCB Bank
+    bank_account: "1177885566"
+    bank_branch: Moi Avenue
+    work_email: david.otieno@waterutil.co.ke
+    work_phone: "+254722111222"
+    employee_status: Active
+    notes: Heads the Finance department. Responsible for financial reporting, budgeting, and KRA compliance.
+
+  - doctype: Employee
+    employee_id: EMP-002
+    first_name: Faith
+    last_name: Nyambura
+    gender: Female
+    date_of_birth: "1990-08-22"
+    marital_status: Single
+    employment_type: Permanent
+    department: Operations
+    designation: Plant Operator
+    grade: Junior
+    joining_date: "2021-01-15"
+    salary_mode: Bank
+    basic_salary: "55000"
+    housing_allowance: "12000"
+    transport_allowance: "8000"
+    nssf_number: "NS23456789"
+    nhif_number: "NH87654321"
+    kra_pin: A002345678Y
+    bank_name: Equity Bank
+    bank_account: "2233445566"
+    bank_branch: Kiambu
+    work_email: faith.nyambura@waterutil.co.ke
+    work_phone: "+254733333444"
+    employee_status: Active
+    notes: Water treatment plant operator. Manages chemical dosing, filtration, and water quality monitoring.

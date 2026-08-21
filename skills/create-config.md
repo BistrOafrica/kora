@@ -54,6 +54,7 @@ config/<app-name>/
 | `linked_field` | no | string | `"link_field.source_field"` — auto-populates from linked doc |
 | `renamed_from` | no | string | Old column name for non-breaking rename during migration |
 | `constraints` | no | array | Validation rules (see constraints section) |
+| `accept` | no | string | Accepted file formats (attach fields only). Comma/newline-separated extensions (`.pdf`) or MIME types (`image/*`, `application/pdf`) |
 
 ### Valid Field Types
 
@@ -78,6 +79,9 @@ config/<app-name>/
 | `Section Break` | *(none)* | Section divider | Section title (label) |
 | `Column Break` | *(none)* | Column divider | — |
 | `Heading` | *(none)* | Bold heading | Heading text (label) |
+| `Attach` | TEXT | File upload (download link; PDF preview) | `accept` (optional) |
+| `Attach Image` | TEXT | Image upload (thumbnail preview) | `accept` (optional) |
+| `Attach Audio` | TEXT | Audio upload (`<audio controls>` player) | `accept` (optional) |
 
 ### Constraints
 

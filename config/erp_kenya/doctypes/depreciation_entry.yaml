@@ -1,0 +1,71 @@
+name: Depreciation Entry
+module: Finance
+is_submittable: true
+title_field: name
+search_fields: fiscal_period, entry_date
+sort_field: entry_date
+sort_order: DESC
+
+fields:
+  - fieldname: fiscal_period
+    fieldtype: Link
+    label: Fiscal Period
+    options: Fiscal Period
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+    description: Fiscal period for this depreciation run.
+
+  - fieldname: entry_date
+    fieldtype: Date
+    label: Entry Date
+    reqd: true
+    in_list_view: true
+    description: Date of the depreciation entry.
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Posted
+      Cancelled
+    read_only: true
+    default: Draft
+    in_list_view: true
+    in_standard_filter: true
+    description: Current status of the depreciation entry.
+
+  - fieldname: total_depreciation
+    fieldtype: Currency
+    label: Total Depreciation (KES)
+    computed: "SUM(items.depreciation_amount)"
+    read_only: true
+    description: Auto-computed sum of all item depreciation amounts.
+
+  - fieldname: journal_entry
+    fieldtype: Link
+    label: Journal Entry
+    options: Journal Entry
+    read_only: true
+    description: Journal entry created for this depreciation (read-only).
+
+  - fieldname: section_assets
+    fieldtype: Section Break
+    label: Assets
+
+  - fieldname: items
+    fieldtype: Table
+    label: Assets
+    options: Depreciation Entry Item
+    reqd: true
+    constraints:
+      - type: min_rows
+        value: 1
+        message: "At least one asset must be included."
+    description: Assets to depreciate in this entry.
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

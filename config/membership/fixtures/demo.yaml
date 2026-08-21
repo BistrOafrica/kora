@@ -1,0 +1,6 @@
+pack: membership
+seed_mode: demo
+records:
+  - doctype: Membership Application
+    reference: DEMO-MEMBERSHIP-001
+    status: Draft

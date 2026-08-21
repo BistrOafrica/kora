@@ -1,0 +1,23 @@
+name: Small Business Operations Workspace
+route: /small-business
+type: workspace
+layout: two_panel
+label: Small Business Operations
+module: Small Business Operations
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Sales Commitment
+    label: Sales Commitment Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Customer
+    label: Customer Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/asenawritescode/kora/auth"
+	"github.com/asenawritescode/kora/cloud"
 	sqlDialect "github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/net"
 	"github.com/asenawritescode/kora/site"
@@ -31,6 +33,9 @@ var (
 type ConsoleHandler struct {
 	SystemGuard        *auth.SystemGuard
 	SiteRouter         *net.SiteRouter
+	ProvisioningStore  *cloud.ProvisioningStore
+	queuedJobsMu       sync.Mutex
+	queuedJobs         map[string]bool
 	PlatformDBType     string
 	PlatformDBHost     string
 	PlatformDBPort     int
@@ -44,6 +49,8 @@ func NewConsoleHandler(guard *auth.SystemGuard, sr *net.SiteRouter, dbType, dbHo
 	return &ConsoleHandler{
 		SystemGuard:        guard,
 		SiteRouter:         sr,
+		ProvisioningStore:  cloud.NewProvisioningStore(platformDB),
+		queuedJobs:         make(map[string]bool),
 		PlatformDBType:     dbType,
 		PlatformDBHost:     dbHost,
 		PlatformDBPort:     dbPort,
@@ -63,6 +70,42 @@ func (h *ConsoleHandler) Start() {
 			onboardLimiterMu.Unlock()
 		}
 	}()
+	if h.ProvisioningStore != nil {
+		if err := h.ProvisioningStore.Bootstrap(); err != nil {
+			slog.Error("provisioning store bootstrap failed", "error", err)
+		}
+	}
+}
+
+func (h *ConsoleHandler) scheduleOnboard(job cloud.ProvisioningJob, req onboardRequest) {
+	h.queuedJobsMu.Lock()
+	if h.queuedJobs[job.ID] {
+		h.queuedJobsMu.Unlock()
+		return
+	}
+	h.queuedJobs[job.ID] = true
+	h.queuedJobsMu.Unlock()
+
+	go func() {
+		defer func() {
+			h.queuedJobsMu.Lock()
+			delete(h.queuedJobs, job.ID)
+			h.queuedJobsMu.Unlock()
+		}()
+		h.processOnboardJob(job, req)
+	}()
+}
+
+type onboardRequest struct {
+	Hostname      string `json:"hostname"`
+	AdminEmail    string `json:"admin_email"`
+	AdminPassword string `json:"admin_password"`
+	AdminFullName string `json:"admin_full_name"`
+	PlatformType  string `json:"platform_type"`
+	PlatformHost  string `json:"platform_host"`
+	PlatformPort  int    `json:"platform_port"`
+	PlatformUser  string `json:"platform_user"`
+	PlatformPass  string `json:"platform_password"`
 }
 
 // ---------------------------------------------------------------------------
@@ -88,13 +131,11 @@ func (h *ConsoleHandler) HandleLogin(c *gin.Context) {
 	}
 
 	token := h.SystemGuard.CreateSession(req.Email)
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"token":                 token,
-			"email":                 req.Email,
-			"needs_password_change": needsChange,
-		},
-	})
+	c.JSON(http.StatusOK, Response{Data: consoleLoginResponse{
+		Token:               token,
+		Email:               req.Email,
+		NeedsPasswordChange: needsChange,
+	}})
 }
 
 // HandleChangePassword forces a password change (required on first login with default creds).
@@ -117,7 +158,7 @@ func (h *ConsoleHandler) HandleChangePassword(c *gin.Context) {
 	}
 
 	h.SystemGuard.UpdatePassword(req.NewPassword)
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"message": "Password changed"}})
+	c.JSON(http.StatusOK, Response{Data: consoleMessageResponse{Message: "Password changed"}})
 }
 
 // ---------------------------------------------------------------------------
@@ -319,25 +360,19 @@ func (h *ConsoleHandler) HandleCreateSite(c *gin.Context) {
 	h.SiteRouter.AddSite(loaded)
 
 	slog.Info("site created via console", "hostname", req.Hostname, "db_name", result.Config.DBName)
-	c.JSON(http.StatusCreated, Response{
-		Data: map[string]any{
-			"hostname": req.Hostname,
-			"db_name":  result.Config.DBName,
-			"status":   "active",
-			"admin":    req.AdminEmail,
-		},
-	})
+	c.JSON(http.StatusCreated, Response{Data: consoleSiteCreateResponse{
+		Hostname: req.Hostname,
+		DBName:   result.Config.DBName,
+		Status:   "active",
+		Admin:    req.AdminEmail,
+	}})
 }
 
 // HandleOnboard creates a site via public self-service (no console auth).
 // POST /api/console/sites/onboard
 // Rate limited: 3 per hour per IP.
 func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
-	var req struct {
-		Hostname      string `json:"hostname"`
-		AdminEmail    string `json:"admin_email"`
-		AdminPassword string `json:"admin_password"`
-	}
+	var req onboardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request: " + err.Error()}})
 		return
@@ -373,32 +408,176 @@ func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
 		return
 	}
 
-	// Derive admin name from email.
-	adminFullName := strings.Split(req.AdminEmail, "@")[0]
+	opID := "onboard:" + req.Hostname
+	idempotencyKey := req.Hostname + ":" + req.AdminEmail
+	fingerprint := req.Hostname + "|" + req.AdminEmail
 
-	// Resolve platform DB credentials.
-	platformType := h.PlatformDBType
+	if h.ProvisioningStore != nil {
+		if err := h.ProvisioningStore.Bootstrap(); err != nil {
+			slog.Error("provisioning store bootstrap failed", "error", err)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to initialize provisioning store"}})
+			return
+		}
+		if existingJob, err := h.ProvisioningStore.LoadJob(req.Hostname, req.Hostname, opID, idempotencyKey, fingerprint); err == nil && existingJob != nil {
+			if existingJob.State == cloud.ProvisioningActive {
+				c.JSON(http.StatusCreated, Response{Data: consoleSiteCreateResponse{
+					Hostname:     req.Hostname,
+					WorkspaceURL: "/s/" + req.Hostname + "/workspace",
+					AdminEmail:   req.AdminEmail,
+					Status:       "active",
+				}})
+				return
+			}
+		}
+	}
+
+	job := cloud.ProvisioningJob{
+		ID:               "prov-" + req.Hostname,
+		Site:             req.Hostname,
+		Resource:         req.Hostname,
+		State:            cloud.ProvisioningRequested,
+		OperationID:      opID,
+		IdempotencyKey:   idempotencyKey,
+		InputFingerprint: fingerprint,
+		Attempt:          1,
+		CreatedAt:        time.Now().UTC(),
+	}
+	if h.ProvisioningStore != nil {
+		_ = h.ProvisioningStore.UpsertJob(job)
+		_ = h.ProvisioningStore.UpsertCheckpoint(cloud.ProvisioningCheckpoint{JobID: job.ID, Stage: "requested", Completed: true, RecordedAt: time.Now().UTC()})
+	}
+
+	h.scheduleOnboard(job, req)
+	c.JSON(http.StatusAccepted, Response{Data: map[string]any{
+		"job_id":        job.ID,
+		"hostname":      req.Hostname,
+		"admin_email":   req.AdminEmail,
+		"status":        "requested",
+		"workspace_url": "/s/" + req.Hostname + "/workspace",
+	}})
+}
+
+// HandleOnboardStatus returns the current state of a provisioning job.
+// GET /api/console/sites/onboard/:job_id
+func (h *ConsoleHandler) HandleOnboardStatus(c *gin.Context) {
+	jobID := c.Param("job_id")
+	if jobID == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "job_id required"}})
+		return
+	}
+	if h.ProvisioningStore == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Provisioning store unavailable"}})
+		return
+	}
+	job, err := h.ProvisioningStore.LoadJobByID(jobID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Provisioning job not found"}})
+			return
+		}
+		slog.Error("loading provisioning job failed", "job_id", jobID, "error", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to load provisioning job"}})
+		return
+	}
+	c.JSON(http.StatusOK, Response{Data: consoleProvisioningStatusResponse{
+		JobID:            job.ID,
+		Site:             job.Site,
+		State:            string(job.State),
+		Attempt:          job.Attempt,
+		OperationID:      job.OperationID,
+		IdempotencyKey:   job.IdempotencyKey,
+		InputFingerprint: job.InputFingerprint,
+		OutputID:         job.OutputID,
+		LastError:        job.LastError,
+		CreatedAt:        job.CreatedAt,
+		UpdatedAt:        job.UpdatedAt,
+		WorkspaceURL:     "/s/" + job.Site + "/workspace",
+	}})
+}
+
+// HandleOnboardJobs lists provisioning jobs for the console.
+// GET /api/console/sites/onboard
+func (h *ConsoleHandler) HandleOnboardJobs(c *gin.Context) {
+	if h.ProvisioningStore == nil {
+		c.JSON(http.StatusOK, Response{Data: consoleProvisioningListResponse{Jobs: []consoleProvisioningStatusResponse{}}})
+		return
+	}
+	jobs, err := h.ProvisioningStore.ListJobs()
+	if err != nil {
+		slog.Error("listing provisioning jobs failed", "error", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to list provisioning jobs"}})
+		return
+	}
+	out := make([]consoleProvisioningStatusResponse, 0, len(jobs))
+	for _, job := range jobs {
+		out = append(out, consoleProvisioningStatusResponse{
+			JobID:            job.ID,
+			Site:             job.Site,
+			State:            string(job.State),
+			Attempt:          job.Attempt,
+			OperationID:      job.OperationID,
+			IdempotencyKey:   job.IdempotencyKey,
+			InputFingerprint: job.InputFingerprint,
+			OutputID:         job.OutputID,
+			LastError:        job.LastError,
+			CreatedAt:        job.CreatedAt,
+			UpdatedAt:        job.UpdatedAt,
+			WorkspaceURL:     "/s/" + job.Site + "/workspace",
+		})
+	}
+	c.JSON(http.StatusOK, Response{Data: consoleProvisioningListResponse{Jobs: out}})
+}
+
+func (h *ConsoleHandler) processOnboardJob(job cloud.ProvisioningJob, req onboardRequest) {
+	adminFullName := req.AdminFullName
+	if adminFullName == "" {
+		adminFullName = strings.Split(req.AdminEmail, "@")[0]
+	}
+	platformType := req.PlatformType
+	if platformType == "" {
+		platformType = h.PlatformDBType
+	}
 	if platformType == "" {
 		platformType = os.Getenv("KORA_DB_TYPE")
 	}
 	if platformType == "" {
 		platformType = "mysql"
 	}
-	platformHost := h.PlatformDBHost
+	platformHost := req.PlatformHost
+	if platformHost == "" {
+		platformHost = h.PlatformDBHost
+	}
 	if platformHost == "" {
 		platformHost = os.Getenv("KORA_DB_HOST")
 	}
-	platformPort := h.PlatformDBPort
+	platformPort := req.PlatformPort
+	if platformPort == 0 {
+		platformPort = h.PlatformDBPort
+	}
 	if platformPort == 0 {
 		platformPort = envConsoleInt("KORA_DB_PORT")
 	}
-	platformUser := h.PlatformDBUser
+	platformUser := req.PlatformUser
+	if platformUser == "" {
+		platformUser = h.PlatformDBUser
+	}
 	if platformUser == "" {
 		platformUser = os.Getenv("KORA_DB_USER")
 	}
-	platformPass := h.PlatformDBPassword
+	platformPass := req.PlatformPass
+	if platformPass == "" {
+		platformPass = h.PlatformDBPassword
+	}
 	if platformPass == "" {
 		platformPass = os.Getenv("KORA_DB_PASSWORD")
+	}
+
+	job.State = cloud.ProvisioningValidating
+	job.Attempt++
+	job.UpdatedAt = time.Now().UTC()
+	if h.ProvisioningStore != nil {
+		_ = h.ProvisioningStore.UpsertJob(job)
+		_ = h.ProvisioningStore.UpsertCheckpoint(cloud.ProvisioningCheckpoint{JobID: job.ID, Stage: "validated", Completed: true, RecordedAt: time.Now().UTC()})
 	}
 
 	result, err := site.CreateSite(site.CreateSiteInput{
@@ -415,12 +594,24 @@ func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
 		PlatformDB:         h.PlatformDB,
 	})
 	if err != nil {
+		job.State = cloud.ProvisioningFailed
+		job.LastError = err.Error()
+		job.UpdatedAt = time.Now().UTC()
+		if h.ProvisioningStore != nil {
+			_ = h.ProvisioningStore.UpsertJob(job)
+		}
 		slog.Error("self-service site creation failed", "hostname", req.Hostname, "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to create site. Please try again."}})
 		return
 	}
 
-	// Hot-add site.
+	job.State = cloud.ProvisioningProvisioning
+	job.OutputID = result.Config.DBName
+	job.UpdatedAt = time.Now().UTC()
+	if h.ProvisioningStore != nil {
+		_ = h.ProvisioningStore.UpsertJob(job)
+		_ = h.ProvisioningStore.UpsertCheckpoint(cloud.ProvisioningCheckpoint{JobID: job.ID, Stage: "provisioned", Completed: true, RecordedAt: time.Now().UTC()})
+	}
+
 	domains := []string{req.Hostname}
 	loaded := &net.LoadedSite{
 		Name: req.Hostname,
@@ -433,15 +624,13 @@ func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
 	}
 	h.SiteRouter.AddSite(loaded)
 
+	job.State = cloud.ProvisioningActive
+	job.UpdatedAt = time.Now().UTC()
+	if h.ProvisioningStore != nil {
+		_ = h.ProvisioningStore.UpsertJob(job)
+		_ = h.ProvisioningStore.UpsertCheckpoint(cloud.ProvisioningCheckpoint{JobID: job.ID, Stage: "active", Completed: true, RecordedAt: time.Now().UTC()})
+	}
 	slog.Info("site created via self-service onboarding", "hostname", req.Hostname)
-	c.JSON(http.StatusCreated, Response{
-		Data: map[string]any{
-			"hostname":      req.Hostname,
-			"workspace_url": "/s/" + req.Hostname + "/workspace",
-			"admin_email":   req.AdminEmail,
-			"status":        "active",
-		},
-	})
 }
 
 // HandleUpdateSite updates site metadata (domains).
@@ -483,9 +672,9 @@ func (h *ConsoleHandler) HandleUpdateSite(c *gin.Context) {
 	}
 
 	slog.Info("site updated via console", "hostname", siteName, "domains", req.Domains)
-	c.JSON(http.StatusOK, Response{Data: map[string]any{
-		"hostname": siteName,
-		"domains":  site.Config.Domains,
+	c.JSON(http.StatusOK, Response{Data: consoleSiteUpdateResponse{
+		Hostname: siteName,
+		Domains:  site.Config.Domains,
 	}})
 }
 
@@ -544,9 +733,9 @@ func (h *ConsoleHandler) HandleDeleteSite(c *gin.Context) {
 	h.SiteRouter.RemoveSite(siteName)
 
 	slog.Info("site deleted via console", "hostname", siteName)
-	c.JSON(http.StatusOK, Response{Data: map[string]any{
-		"hostname": siteName,
-		"deleted":  true,
+	c.JSON(http.StatusOK, Response{Data: consoleSiteDeleteResponse{
+		Hostname: siteName,
+		Deleted:  true,
 	}})
 }
 
@@ -607,9 +796,7 @@ func (h *ConsoleHandler) HandleResetSitePassword(c *gin.Context) {
 	loaded.DB.Exec("DELETE FROM _kora_session WHERE user = (SELECT name FROM _kora_user WHERE email = ?)", req.Email)
 
 	slog.Info("site user password reset via console", "site", siteName, "email", req.Email)
-	c.JSON(http.StatusOK, Response{Data: map[string]any{
-		"message": "Password reset successfully. All existing sessions have been invalidated.",
-	}})
+	c.JSON(http.StatusOK, Response{Data: consoleMessageResponse{Message: "Password reset successfully. All existing sessions have been invalidated."}})
 }
 
 // ---------------------------------------------------------------------------

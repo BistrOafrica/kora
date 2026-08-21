@@ -1,0 +1,9 @@
+- name: Membership and Association Management Operator
+  workspace_access: true
+  description: Creates and executes Membership and Association Management work.
+- name: Membership and Association Management Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Membership and Association Management Administrator
+  workspace_access: true
+  description: Configures Membership and Association Management and manages access.

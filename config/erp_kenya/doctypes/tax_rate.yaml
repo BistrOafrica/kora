@@ -1,0 +1,56 @@
+name: Tax Rate
+module: Finance
+title_field: tax_name
+sort_field: tax_name
+sort_order: ASC
+fields:
+  - fieldname: tax_name
+    fieldtype: Data
+    label: Tax Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: tax_authority
+    fieldtype: Link
+    label: Tax Authority
+    options: Tax Authority
+    default: KRA
+    in_list_view: true
+  - fieldname: tax_category
+    fieldtype: Link
+    label: Tax Category
+    options: Tax Category
+    in_list_view: true
+  - fieldname: rate
+    fieldtype: Percent
+    label: Rate (%)
+    reqd: true
+    in_list_view: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Tax rate cannot be negative."
+      - type: max
+        value: 100
+        message: "Tax rate cannot exceed 100%."
+  - fieldname: effective_from
+    fieldtype: Date
+    label: Effective From
+  - fieldname: effective_to
+    fieldtype: Date
+    label: Effective To
+    description: Leave blank for indefinite. Set to archive old rates without deleting.
+  - fieldname: is_active
+    fieldtype: Check
+    label: Is Active
+    default: "1"
+    in_list_view: true
+  - fieldname: gl_account
+    fieldtype: Link
+    label: GL Account
+    options: Account
+    description: General ledger account for posting this tax.
+  - fieldname: description
+    fieldtype: Text
+    label: Description

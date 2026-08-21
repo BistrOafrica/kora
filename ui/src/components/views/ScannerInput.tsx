@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Search } from 'lucide-react'
 
 /**
- * ScannerInput is an always-focused text input that fires on_scan actions
+ * ScannerInput focuses on mount for keyboard-wedge scanners and fires on_scan actions
  * when the user types a barcode or product code and presses Enter.
  * Works with keyboard wedge barcode scanners (which send the code + Enter).
  */
@@ -36,8 +36,8 @@ export default function ScannerInput(props: ViewComponentProps) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        onBlur={() => inputRef.current?.focus()}
         placeholder={placeholder}
+        aria-label={config.label || 'Barcode scanner input'}
         className="pl-9 text-lg"
         autoFocus
       />

@@ -1,0 +1,6 @@
+pack: fieldwork
+seed_mode: demo
+records:
+  - doctype: Work Order
+    reference: DEMO-FIELDWORK-001
+    status: Draft

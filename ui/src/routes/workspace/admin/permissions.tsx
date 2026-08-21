@@ -19,6 +19,7 @@ import {
 import { Plus, Trash2, Save, ShieldCheck, UserPlus, Edit, ChevronDown, ChevronRight, X } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { HelpTooltip } from '@/components/ui/help-tooltip'
 
 const OPS = [
   { key: 'read', label: 'Read' },
@@ -146,8 +147,10 @@ export default function AdminPermissionsPage() {
       <div className="flex items-center gap-3 mb-6">
         <ShieldCheck className="h-6 w-6" />
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Permissions</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Manage roles and access control</p>
+          <h1 className="flex items-center gap-2 text-2xl sm:text-3xl font-bold tracking-tight">
+            Permissions
+            <HelpTooltip label="Permissions help">Grant role-based access. Backend permissions remain the source of truth.</HelpTooltip>
+          </h1>
         </div>
       </div>
 
@@ -157,7 +160,7 @@ export default function AdminPermissionsPage() {
         {roleNames.map((name) => (
           <span key={name} className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm">
             {name}
-            <button className="text-muted-foreground hover:text-destructive ml-1" onClick={() => handleDeleteRole(name)}>
+                  <button aria-label={`Delete role ${name}`} title={`Delete role ${name}`} className="text-muted-foreground hover:text-destructive ml-1" onClick={() => handleDeleteRole(name)}>
               <X className="h-3 w-3" />
             </button>
           </span>
@@ -286,7 +289,7 @@ export default function AdminPermissionsPage() {
                   <div className="text-xs text-muted-foreground">{rolePerms.length} doctype{rolePerms.length !== 1 ? 's' : ''}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setEditing({ ...EMPTY_PERMISSION, role }) }}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Add permission for ${role}`} title="Add permission" onClick={(e) => { e.stopPropagation(); setEditing({ ...EMPTY_PERMISSION, role }) }}>
                     <Plus className="h-4 w-4" />
                   </Button>
                   {isExpanded ? <ChevronDown className="h-5 w-5 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
@@ -305,10 +308,10 @@ export default function AdminPermissionsPage() {
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-sm">{p.doctype}</span>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditing({ ...p })}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Edit permission" title="Edit permission" onClick={() => setEditing({ ...p })}>
                               <Edit className="h-3.5 w-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeletePermission(p)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Delete permission" title="Delete permission" onClick={() => handleDeletePermission(p)}>
                               <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </Button>
                           </div>

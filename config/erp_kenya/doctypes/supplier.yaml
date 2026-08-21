@@ -1,0 +1,84 @@
+name: Supplier
+module: Purchasing
+title_field: supplier_name
+search_fields: supplier_name, phone, tax_id
+sort_field: supplier_name
+sort_order: ASC
+fields:
+  - fieldname: supplier_name
+    fieldtype: Data
+    label: Supplier Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: supplier_type
+    fieldtype: Select
+    label: Supplier Type
+    options: |
+      Individual
+      Corporate
+      Government
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+  - fieldname: email
+    fieldtype: Data
+    label: Email
+    options: Email
+  - fieldname: phone
+    fieldtype: Data
+    label: Phone
+    options: Phone
+    in_list_view: true
+  - fieldname: tax_id
+    fieldtype: Data
+    label: KRA PIN
+    description: Kenya Revenue Authority Personal Identification Number.
+  - fieldname: payment_terms
+    fieldtype: Select
+    label: Payment Terms
+    options: |
+      Net 30
+      Net 60
+      Net 90
+      Immediate
+    default: Net 30
+  - fieldname: currency
+    fieldtype: Link
+    label: Currency
+    options: Currency
+    default: KES
+  - fieldname: bank_name
+    fieldtype: Data
+    label: Bank Name
+  - fieldname: bank_account
+    fieldtype: Data
+    label: Bank Account Number
+  - fieldname: bank_branch
+    fieldtype: Data
+    label: Bank Branch
+  - fieldname: address
+    fieldtype: Text
+    label: Address
+  - fieldname: withholding_tax_applicable
+    fieldtype: Check
+    label: Withholding Tax Applicable
+    description: Check if withholding tax is deducted from supplier payments.
+  - fieldname: withholding_tax_rate
+    fieldtype: Percent
+    label: Withholding Tax Rate (%)
+    default: "5"
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Active
+      Inactive
+      Blocked
+    default: Active
+    in_list_view: true
+    in_standard_filter: true
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

@@ -1,0 +1,23 @@
+name: Recruitment and Applicant Tracking Workspace
+route: /recruitment
+type: workspace
+layout: two_panel
+label: Recruiter Queue
+module: Recruitment and Applicant Tracking
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Candidate
+    label: Recruiter Queue
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Candidate
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

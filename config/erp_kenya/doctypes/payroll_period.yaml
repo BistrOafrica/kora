@@ -1,0 +1,78 @@
+name: Payroll Period
+module: HR
+is_submittable: true
+title_field: period_name
+search_fields: period_name, start_date
+sort_field: start_date
+sort_order: DESC
+
+fields:
+  # --- Section: Period Details ---
+  - fieldname: section_period
+    fieldtype: Section Break
+    label: Period Details
+
+  - fieldname: period_name
+    fieldtype: Data
+    label: Period Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: start_date
+    fieldtype: Date
+    label: Start Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: end_date
+    fieldtype: Date
+    label: End Date
+    reqd: true
+
+  - fieldname: payment_date
+    fieldtype: Date
+    label: Payment Date
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Processing
+      Completed
+      Closed
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  # --- Section: Summary ---
+  - fieldname: section_summary
+    fieldtype: Section Break
+    label: Summary
+
+  - fieldname: total_basic
+    fieldtype: Currency
+    label: Total Basic
+    read_only: true
+
+  - fieldname: total_allowances
+    fieldtype: Currency
+    label: Total Allowances
+    read_only: true
+
+  - fieldname: total_deductions
+    fieldtype: Currency
+    label: Total Deductions
+    read_only: true
+
+  - fieldname: total_net
+    fieldtype: Currency
+    label: Total Net Pay
+    read_only: true
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

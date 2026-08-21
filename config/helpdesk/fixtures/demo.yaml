@@ -1,0 +1,6 @@
+pack: helpdesk
+seed_mode: demo
+records:
+  - doctype: Ticket
+    reference: DEMO-HELPDESK-001
+    status: Draft

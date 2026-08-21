@@ -81,12 +81,12 @@ func (h *Handler) HandleChannelSessionIssue(c *gin.Context) {
 		internalError(c, "issue channel session", err)
 		return
 	}
-	c.JSON(http.StatusCreated, Response{Data: map[string]any{
-		"session_id":       session.ID,
-		"access_token":     token,
-		"trusted_until":    session.TrustedUntil,
-		"sensitive_until":  optionalTime(session.SensitiveUntil),
-		"conversation_key": session.ConversationKey,
+	c.JSON(http.StatusCreated, Response{Data: channelSessionIssueResponse{
+		SessionID:       session.ID,
+		AccessToken:     token,
+		TrustedUntil:    session.TrustedUntil,
+		SensitiveUntil:  optionalTime(session.SensitiveUntil),
+		ConversationKey: session.ConversationKey,
 	}})
 }
 
@@ -108,7 +108,7 @@ func (h *Handler) HandleChannelSessionRevoke(c *gin.Context) {
 		internalError(c, "revoke channel session", err)
 		return
 	}
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "revoked"}})
+	c.JSON(http.StatusOK, Response{Data: channelSessionRevokeResponse{Status: "revoked"}})
 }
 
 func (h *Handler) HandleChannelTools(c *gin.Context) {
@@ -133,7 +133,7 @@ func (h *Handler) HandleChannelTools(c *gin.Context) {
 		return
 	}
 	c.Header("ETag", version.Version)
-	c.JSON(http.StatusOK, Response{Data: map[string]any{"version": version.Version, "tools": version.Tools}})
+	c.JSON(http.StatusOK, Response{Data: channelToolsResponse{Version: version.Version, Tools: version.Tools}})
 }
 
 func (h *Handler) HandleChannelQuery(c *gin.Context) {
@@ -203,7 +203,7 @@ func (h *Handler) handleChannelTool(c *gin.Context, readOnly bool) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": result}})
 		return
 	}
-	c.JSON(http.StatusOK, Response{Data: map[string]any{"result": result}})
+	c.JSON(http.StatusOK, Response{Data: channelToolResponse{Result: result}})
 }
 
 func (h *Handler) insertChannelAudit(c *gin.Context, toolName, operationKind, status, requestSummary, responseSummary, errorMessage string) error {
@@ -291,9 +291,10 @@ func sanitizeToolDoctypeName(name string) string {
 	return value
 }
 
-func optionalTime(value sql.NullTime) any {
+func optionalTime(value sql.NullTime) *time.Time {
 	if !value.Valid {
 		return nil
 	}
-	return value.Time
+	t := value.Time
+	return &t
 }

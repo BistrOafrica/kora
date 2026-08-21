@@ -10,12 +10,13 @@ import { applyComputedFields } from '@/lib/computed-fields'
 import type { Field, DocType } from '@/types/kora'
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
 import { FormSection, isLayoutField } from '@/components/forms/FormSection'
-import { buildFormSections } from '@/components/forms/form-runtime'
+import { buildDefaultFormData, buildFormSections } from '@/components/forms/form-runtime'
 import { toast } from '@/components/ui/Toast'
 import { clearDocumentDraft, loadDocumentDraft, saveDocumentDraft } from '@/lib/draft-storage'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { titleCase } from '../admin/doctypes/editor-helpers'
 
 export default function NewFormPage() {
   const { doctype } = useParams({ from: '/workspace/$doctype/new' })
@@ -27,6 +28,14 @@ export default function NewFormPage() {
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null)
   const [draftRestored, setDraftRestored] = useState(false)
 
+  if (doctype === 'pages') {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-muted-foreground">The /workspace/pages route has been removed.</p>
+      </div>
+    )
+  }
+
   const schemaQuery = useQuery({
     queryKey: ['doctype', doctype],
     queryFn: () => fetchDoctypeSchema(doctype),
@@ -34,9 +43,11 @@ export default function NewFormPage() {
   })
 
   const dt: DocType | undefined = schemaQuery.data?.doctype
+  const displayName = dt ? titleCase(dt.name.replace(/_/g, ' ')) : ''
   const fields = dt?.fields?.filter((f: Field) => !isLayoutField(f.fieldtype)) ?? []
   const layoutFields = dt?.fields ?? []
   const draftLoadedRef = useRef(false)
+  const firstFieldFocusedRef = useRef(false)
   const sections = useMemo(() => buildFormSections(layoutFields), [layoutFields])
   const hasSections = sections.length > 1
   const requiredFields = useMemo(() => fields.filter((f: Field) => f.reqd), [fields])
@@ -65,8 +76,10 @@ export default function NewFormPage() {
       const draft = await loadDocumentDraft<Record<string, any>>({ doctype })
       if (cancelled) return
       if (draft?.value) {
-        setFormData(applyComputedFields(fields, draft.value))
+        setFormData(applyComputedFields(fields, { ...buildDefaultFormData(fields), ...draft.value }))
         setDraftRestored(true)
+      } else {
+        setFormData(applyComputedFields(fields, buildDefaultFormData(fields)))
       }
       draftLoadedRef.current = true
     })()
@@ -75,6 +88,17 @@ export default function NewFormPage() {
       cancelled = true
     }
   }, [dt, doctype, fields])
+
+  useEffect(() => {
+    if (!draftLoadedRef.current || firstFieldFocusedRef.current || Object.keys(formData).length === 0) return
+    const firstField = document.querySelector<HTMLElement>(
+      '#section-0 input:not([type="hidden"]), #section-0 textarea, #section-0 [role="combobox"]',
+    )
+    if (firstField) {
+      firstField.focus()
+      firstFieldFocusedRef.current = true
+    }
+  }, [formData, dt])
 
   useEffect(() => {
     if (!draftLoadedRef.current) return
@@ -136,6 +160,17 @@ export default function NewFormPage() {
     }
   }
 
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault()
+        if (!saving) void handleSubmit()
+      }
+    }
+    window.addEventListener('keydown', handleShortcut)
+    return () => window.removeEventListener('keydown', handleShortcut)
+  }, [saving, formData])
+
   if (schemaQuery.isLoading) {
     return (
       <div className="space-y-4 p-8">
@@ -158,8 +193,8 @@ export default function NewFormPage() {
       <Breadcrumbs
         items={[
           { label: dt.module },
-          { label: dt.name, to: `/workspace/${encodeURIComponent(doctype)}` },
-          { label: `New ${dt.name}` },
+          { label: displayName, to: `/workspace/${encodeURIComponent(doctype)}` },
+          { label: `New ${displayName}` },
         ]}
         className="mb-4"
       />
@@ -173,8 +208,8 @@ export default function NewFormPage() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold">New {dt.name}</h1>
-          <p className="text-sm text-muted-foreground">Create a new {dt.name.toLowerCase()} document</p>
+          <h1 className="truncate text-2xl font-bold">New {displayName}</h1>
+          <p className="text-sm text-muted-foreground">Create a new {displayName.toLowerCase()} document</p>
         </div>
         <Badge variant="outline">{filledRequired}/{requiredFields.length || 0} required</Badge>
       </div>
@@ -269,9 +304,12 @@ export default function NewFormPage() {
             </Button>
             <Button onClick={handleSubmit} disabled={saving} size="lg">
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create {dt.name}
+              Create {displayName}
             </Button>
           </div>
+          <p className="text-right text-xs text-muted-foreground">
+            Tip: press Ctrl/⌘ + S to create this document.
+          </p>
         </div>
 
         <aside className="space-y-4 xl:sticky xl:top-20 h-fit">

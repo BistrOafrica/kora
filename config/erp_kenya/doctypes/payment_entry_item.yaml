@@ -1,0 +1,40 @@
+name: Payment Entry Item
+module: Finance
+is_child_table: true
+title_field: invoice
+sort_field: idx
+sort_order: ASC
+fields:
+  - fieldname: invoice_type
+    fieldtype: Select
+    label: Invoice Type
+    options: |
+      Sales Invoice
+      Supplier Invoice
+    reqd: true
+    in_list_view: true
+  - fieldname: invoice
+    fieldtype: Link
+    label: Invoice
+    options: Sales Invoice
+    reqd: true
+    in_list_view: true
+  - fieldname: invoice_total
+    fieldtype: Currency
+    label: Invoice Total (KES)
+    read_only: true
+    description: Total amount of the selected invoice.
+  - fieldname: outstanding
+    fieldtype: Currency
+    label: Outstanding (KES)
+    computed: "invoice_total - paid_amount"
+    read_only: true
+    description: Remaining balance on this invoice.
+  - fieldname: paid_amount
+    fieldtype: Currency
+    label: Paid Amount (KES)
+    reqd: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Paid amount cannot be negative."

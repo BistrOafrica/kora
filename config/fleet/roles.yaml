@@ -1,0 +1,9 @@
+- name: Fleet and Transport Operator
+  workspace_access: true
+  description: Creates and executes Fleet and Transport work.
+- name: Fleet and Transport Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Fleet and Transport Administrator
+  workspace_access: true
+  description: Configures Fleet and Transport and manages access.

@@ -274,7 +274,7 @@ func (d *MySQLDialect) ColumnType(f *doctype.Field) string {
 		return "TIME(6)"
 	case "Datetime":
 		return "DATETIME(6)"
-	case "Attach", "Attach Image":
+	case "Attach", "Attach Image", "Attach Audio":
 		return "TEXT"
 	case "JSON":
 		return "JSON"
@@ -433,6 +433,7 @@ func (d *MySQLDialect) SystemTableSQL() []string {
 		// Add columns for backwards compat.
 		"ALTER TABLE _kora_field ADD COLUMN linked_field VARCHAR(255) NOT NULL DEFAULT ''",
 		"ALTER TABLE _kora_field ADD COLUMN computed TEXT",
+		"ALTER TABLE _kora_field ADD COLUMN accept TEXT",
 		"ALTER TABLE _kora_field ADD COLUMN site VARCHAR(140) NOT NULL DEFAULT ''",
 
 		// _kora_role
@@ -457,13 +458,14 @@ func (d *MySQLDialect) SystemTableSQL() []string {
 		"UPDATE _kora_config_version SET status = 'Active' WHERE is_active = 1 AND status = 'Superseded'",
 
 		// _kora_site_registry
-		"CREATE TABLE IF NOT EXISTS _kora_site_registry (\n\t\t\tsite VARCHAR(140) PRIMARY KEY,\n\t\t\tdb_type VARCHAR(20) NOT NULL DEFAULT 'mysql',\n\t\t\tdb_host VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_port INT NOT NULL DEFAULT 0,\n\t\t\tdb_name VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_user VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_password TEXT,\n\t\t\tdb_password_encrypted TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\tdomains_json JSON,\n\t\t\tstatus VARCHAR(20) NOT NULL DEFAULT 'active',\n\t\t\tcreated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),\n\t\t\tupdated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),\n\t\t\tINDEX idx_site_registry_status (status)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+		"CREATE TABLE IF NOT EXISTS _kora_site_registry (\n\t\t\tsite VARCHAR(140) PRIMARY KEY,\n\t\t\tdb_type VARCHAR(20) NOT NULL DEFAULT 'mysql',\n\t\t\tdb_host VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_port INT NOT NULL DEFAULT 0,\n\t\t\tdb_name VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_user VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_password TEXT,\n\t\t\tdb_password_encrypted TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\tfile_storage VARCHAR(20) NOT NULL DEFAULT 'local',\n\t\t\tdomains_json JSON,\n\t\t\tstatus VARCHAR(20) NOT NULL DEFAULT 'active',\n\t\t\tcreated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),\n\t\t\tupdated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),\n\t\t\tINDEX idx_site_registry_status (status)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 		"ALTER TABLE _kora_site_registry ADD COLUMN db_password TEXT",
 		"ALTER TABLE _kora_site_registry ADD COLUMN db_password_encrypted TINYINT(1) NOT NULL DEFAULT 0",
 		"ALTER TABLE _kora_site_registry ADD COLUMN domains_json JSON",
 		"ALTER TABLE _kora_site_registry ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'",
 		"ALTER TABLE _kora_site_registry ADD COLUMN created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)",
 		"ALTER TABLE _kora_site_registry ADD COLUMN updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)",
+		"ALTER TABLE _kora_site_registry ADD COLUMN file_storage VARCHAR(20) NOT NULL DEFAULT 'local'",
 		"CREATE INDEX idx_site_registry_status ON _kora_site_registry (status)",
 
 		// _kora_user
@@ -482,13 +484,15 @@ func (d *MySQLDialect) SystemTableSQL() []string {
 
 		// _kora_workflow
 		"CREATE TABLE IF NOT EXISTS _kora_workflow (\n\t\t\tname VARCHAR(140) NOT NULL,\n\t\t\tsite VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\tdocument_type VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\tis_active TINYINT(1) NOT NULL DEFAULT 1,\n\t\t\tworkflow_state_field VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\tconfig_json JSON,\n\t\t\tPRIMARY KEY (name)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-		"ALTER TABLE _kora_workflow ADD COLUMN site VARCHAR(140) NOT NULL DEFAULT '',",
+		"ALTER TABLE _kora_workflow ADD COLUMN site VARCHAR(140) NOT NULL DEFAULT ''",
 
 		// _kora_workflow_state
 		"CREATE TABLE IF NOT EXISTS _kora_workflow_state (\n\t\t\tname VARCHAR(255) NOT NULL,\n\t\t\tworkflow VARCHAR(140) NOT NULL,\n\t\t\tstate VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\tdoc_status TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\tallow_edit TINYINT(1) NOT NULL DEFAULT 1,\n\t\t\tstyle VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tidx INT NOT NULL DEFAULT 0,\n\t\t\tPRIMARY KEY (name)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+		"ALTER TABLE _kora_workflow_state ADD COLUMN site VARCHAR(140) NOT NULL DEFAULT ''",
 
 		// _kora_workflow_transition
 		"CREATE TABLE IF NOT EXISTS _kora_workflow_transition (\n\t\t\tname VARCHAR(255) NOT NULL,\n\t\t\tworkflow VARCHAR(140) NOT NULL,\n\t\t\taction VARCHAR(140) NOT NULL DEFAULT '',\n\t\t\tfrom_state VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tto_state VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tallowed VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tcondition_expr TEXT,\n\t\t\trequire_fields TEXT,\n\t\t\tidx INT NOT NULL DEFAULT 0,\n\t\t\tPRIMARY KEY (name)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+		"ALTER TABLE _kora_workflow_transition ADD COLUMN site VARCHAR(140) NOT NULL DEFAULT ''",
 
 		// _kora_secret
 		"CREATE TABLE IF NOT EXISTS _kora_secret (\n\t\t\tsite VARCHAR(140) NOT NULL,\n\t\t\tkey_name VARCHAR(140) NOT NULL,\n\t\t\tencrypted_value BLOB NOT NULL,\n\t\t\tcreated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),\n\t\t\tupdated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),\n\t\t\tPRIMARY KEY (site, key_name)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",

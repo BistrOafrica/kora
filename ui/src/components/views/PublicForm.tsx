@@ -32,7 +32,8 @@ export default function PublicForm(props: ViewComponentProps) {
     setSubmitting(true)
     setError('')
     try {
-      await api.post(`/api/v1/public/resource/${config.source_doctype}`, formData)
+      const endpoint = config.bindings?.submit_endpoint || `/api/v?route=${encodeURIComponent(config.bindings?.route || '')}`
+      await api.post(endpoint, formData)
       setSubmitted(true)
     } catch (err: any) {
       setError(err.message || 'Submission failed')
@@ -58,15 +59,19 @@ export default function PublicForm(props: ViewComponentProps) {
 
       {fields.map((field: string) => (
         <div key={field} className="space-y-1.5">
-          <Label>{labels[field] || field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</Label>
+          <Label htmlFor={`public-form-${field}`}>{labels[field] || field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</Label>
           {field === 'message' || field === 'notes' || field === 'description' ? (
             <Textarea
+              id={`public-form-${field}`}
+              aria-label={labels[field] || field}
               value={formData[field] || ''}
               onChange={e => setFormData({ ...formData, [field]: e.target.value })}
               rows={3}
             />
           ) : (
             <Input
+              id={`public-form-${field}`}
+              aria-label={labels[field] || field}
               value={formData[field] || ''}
               onChange={e => setFormData({ ...formData, [field]: e.target.value })}
               type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}

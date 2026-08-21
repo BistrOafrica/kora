@@ -1,0 +1,23 @@
+name: Budgeting and Management Reporting Workspace
+route: /budgeting
+type: workspace
+layout: two_panel
+label: Budgeting and Management Reporting
+module: Budgeting and Management Reporting
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Budget
+    label: Budget Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Budget Line
+    label: Budget Line Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

@@ -19,6 +19,7 @@ import { buildFormSections, isFieldRequired } from '@/components/forms/form-runt
 import { toast } from '@/components/ui/Toast'
 import { clearDocumentDraft, loadDocumentDraft, saveDocumentDraft } from '@/lib/draft-storage'
 import { cn } from '@/lib/utils'
+import { titleCase } from '../admin/doctypes/editor-helpers'
 
 export default function EditFormPage() {
   const { doctype, name } = useParams({ from: '/workspace/$doctype/$name' })
@@ -29,6 +30,14 @@ export default function EditFormPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [draftLoaded, setDraftLoaded] = useState(false)
+
+  if (doctype === 'pages') {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-muted-foreground">The /workspace/pages route has been removed.</p>
+      </div>
+    )
+  }
 
   const schemaQuery = useQuery({
     queryKey: ['doctype', doctype],
@@ -42,6 +51,7 @@ export default function EditFormPage() {
   })
 
   const dt: DocType | undefined = schemaQuery.data?.doctype
+  const displayName = dt ? titleCase(dt.name.replace(/_/g, ' ')) : ''
   const perms = schemaQuery.data?.permissions
   const canWrite = perms?.write ?? false
   const fields = useMemo(
@@ -175,7 +185,7 @@ export default function EditFormPage() {
       <Breadcrumbs
         items={[
           { label: dt.module },
-          { label: dt.name, to: `/workspace/${encodeURIComponent(doctype)}` },
+          { label: displayName, to: `/workspace/${encodeURIComponent(doctype)}` },
           { label: name },
         ]}
         className="mb-4"
@@ -191,7 +201,7 @@ export default function EditFormPage() {
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-bold md:text-2xl">
-            {dt.name}: {name}
+            {displayName}: {name}
           </h1>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <Badge variant="outline">{String(statusLabel)}</Badge>

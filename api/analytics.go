@@ -14,7 +14,7 @@ import (
 // RegisterAnalyticsRoutes registers analytics API endpoints.
 // siteDB is the fallback DB; per-request DB is resolved from gin context.
 // registry is used to auto-generate metrics from DocType metadata.
-// siteBuses maps site name → EventBus; empty map = analytics disabled for all sites.
+// siteBuses maps site name → EventBus.
 func RegisterAnalyticsRoutes(apiGroup *gin.RouterGroup, registry *doctype.Registry, siteDB *sql.DB, siteBuses map[string]analytics.EventBus, dialect db.Dialect) {
 	ag := apiGroup.Group("/analytics")
 
@@ -26,16 +26,6 @@ func RegisterAnalyticsRoutes(apiGroup *gin.RouterGroup, registry *doctype.Regist
 			Data: analytics.GetStatus(bus),
 		})
 	})
-
-	// If analytics is disabled entirely, data endpoints return 503.
-	if len(siteBuses) == 0 {
-		ag.GET("/metrics", notAvailable)
-		ag.GET("/metrics/:name", notAvailable)
-		ag.POST("/metrics/:name/query", notAvailable)
-		ag.GET("/insights/:doctype", notAvailable)
-		return
-	}
-
 
 	// POST /metrics — create a custom metric.
 	ag.POST("/metrics", func(c *gin.Context) {
@@ -206,10 +196,4 @@ func getQueryEngine(c *gin.Context, fallbackDB *sql.DB) *analytics.QueryEngine {
 		return nil
 	}
 	return &analytics.QueryEngine{DB: db, SiteName: siteName}
-}
-
-func notAvailable(c *gin.Context) {
-	c.JSON(http.StatusServiceUnavailable, ErrorResponse{
-		Error: map[string]string{"message": "Analytics is not enabled. Set KORA_ANALYTICS=true"},
-	})
 }

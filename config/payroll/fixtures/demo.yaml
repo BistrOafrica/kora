@@ -1,0 +1,6 @@
+pack: payroll
+seed_mode: demo
+records:
+  - doctype: Payroll Period
+    reference: DEMO-PAYROLL-001
+    status: Draft

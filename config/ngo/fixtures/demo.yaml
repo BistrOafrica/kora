@@ -1,0 +1,6 @@
+pack: ngo
+seed_mode: demo
+records:
+  - doctype: Grant Award
+    reference: DEMO-NGO-001
+    status: Draft

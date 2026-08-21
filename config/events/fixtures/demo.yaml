@@ -1,0 +1,6 @@
+pack: events
+seed_mode: demo
+records:
+  - doctype: Event
+    reference: DEMO-EVENTS-001
+    status: Draft

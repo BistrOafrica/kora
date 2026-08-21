@@ -1,6 +1,9 @@
 package analytics
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // MultiBus wraps an EventBus and fans out events to multiple subscribers.
 // The primary subscriber continues using EventBus.Subscribe().
@@ -10,6 +13,7 @@ type MultiBus struct {
 	mu       sync.RWMutex
 	channels []chan ChangeEvent
 	closed   bool
+	dropped  atomic.Int64
 }
 
 // NewMultiBus creates a fan-out wrapper around an existing EventBus.
@@ -34,7 +38,7 @@ func NewMultiBus(inner EventBus) (*MultiBus, error) {
 				select {
 				case listener <- event:
 				default:
-					// Listener is too slow — drop the event for this listener.
+					mb.dropped.Add(1)
 				}
 			}
 			mb.mu.RUnlock()
@@ -70,6 +74,9 @@ func (mb *MultiBus) ListenerCount() int {
 	defer mb.mu.RUnlock()
 	return len(mb.channels)
 }
+
+// Dropped returns the number of fan-out events dropped for slow listeners.
+func (mb *MultiBus) Dropped() int64 { return mb.dropped.Load() }
 
 // Close shuts down the fan-out and closes the inner bus.
 func (mb *MultiBus) Close() error {

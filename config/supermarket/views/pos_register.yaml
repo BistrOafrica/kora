@@ -9,12 +9,14 @@ components:
     type: scanner_input
     region: main
     position: 0
+    label: Scan or search products
     bindings:
       search_fields: "barcode, sku, product_name"
   - id: categories
     type: category_tabs
     region: main
     position: 1
+    label: Product categories
     source_doctype: Product
     bindings:
       group_field: category
@@ -42,13 +44,34 @@ components:
     type: cart_panel
     region: side
     position: 0
+    label: Current basket
   - id: payments
     type: payment_panel
     region: side
     position: 1
+    label: Take payment
     bindings:
       methods: "cash, card, mobile_money, mpesa"
     actions:
+      - id: initiate_payment
+        trigger: on_click
+        type: initiate_external_operation
+        config:
+          operation_type: Payment
+          purpose: POS sale payment
+          source_doctype: Sale
+          provider: M-Pesa
+      - id: validate_payment
+        trigger: on_click
+        type: validate_external_operation
+      - id: complete_mobile
+        trigger: on_click
+        type: create_transaction
+        config:
+          target_doctype: Sale
+          child_table: Sale Item
+          line_source: cart
+          requires_operation_status: Succeeded
       - id: complete
         trigger: on_click
         type: create_transaction
@@ -56,4 +79,4 @@ components:
           target_doctype: Sale
           child_table: Sale Item
           line_source: cart
-                movement_date: parent.creation
+          movement_date: parent.creation

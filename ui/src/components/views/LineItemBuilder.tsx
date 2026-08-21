@@ -38,11 +38,12 @@ export default function LineItemBuilder(props: ViewComponentProps) {
                 value={row[col] ?? ''}
                 onChange={e => updateRow(i, col, col === 'quantity' || col === 'rate' ? parseFloat(e.target.value) || 0 : e.target.value)}
                 placeholder={col}
+                aria-label={`${col} for line ${i + 1}`}
                 className="h-8 text-sm"
               />
             ))}
             {rows.length > 1 && (
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeRow(i)}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={`Remove line ${i + 1}`} title="Remove line" onClick={() => removeRow(i)}>
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </Button>
             )}

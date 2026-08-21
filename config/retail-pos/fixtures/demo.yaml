@@ -1,0 +1,6 @@
+pack: retail-pos
+seed_mode: demo
+records:
+  - doctype: POS Order
+    reference: DEMO-RETAIL-POS-001
+    status: Draft

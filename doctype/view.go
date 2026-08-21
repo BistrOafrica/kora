@@ -91,6 +91,7 @@ type ViewComponent struct {
 	Region         string            `json:"region" yaml:"region"`
 	Label          string            `json:"label,omitempty" yaml:"label,omitempty"`
 	SourceDocType  string            `json:"source_doctype,omitempty" yaml:"source_doctype,omitempty"`
+	Data           string            `json:"data,omitempty" yaml:"data,omitempty"`
 	Bindings       map[string]string `json:"bindings,omitempty" yaml:"bindings,omitempty"`
 	Filters        []ViewFilter      `json:"filters,omitempty" yaml:"filters,omitempty"`
 	Actions        []ViewAction      `json:"actions,omitempty" yaml:"actions,omitempty"`
@@ -197,17 +198,19 @@ var validActionTriggers = map[string]bool{
 }
 
 var validActionTypes = map[string]bool{
-	"create_record":       true,
-	"update_record":       true,
-	"delete_record":       true,
-	"navigate":            true,
-	"workflow_transition": true,
-	"local_cart_add":      true,
-	"local_cart_remove":   true,
-	"local_state_set":     true,
-	"call_script":         true,
-	"call_webhook":        true,
-	"create_transaction":  true,
+	"create_record":               true,
+	"update_record":               true,
+	"delete_record":               true,
+	"navigate":                    true,
+	"workflow_transition":         true,
+	"local_cart_add":              true,
+	"local_cart_remove":           true,
+	"local_state_set":             true,
+	"call_script":                 true,
+	"call_webhook":                true,
+	"create_transaction":          true,
+	"initiate_external_operation": true,
+	"validate_external_operation": true,
 }
 
 // Validate checks structural validity of an action definition.
@@ -237,7 +240,7 @@ func (a *ViewAction) IsMutation() bool {
 	switch a.Type {
 	case "create_record", "update_record", "delete_record",
 		"workflow_transition", "create_transaction",
-		"call_script", "call_webhook":
+		"call_script", "call_webhook", "initiate_external_operation", "validate_external_operation":
 		return true
 	default:
 		return false

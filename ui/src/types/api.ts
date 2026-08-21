@@ -4,6 +4,7 @@ export interface ApiResponse<T = any> {
     config_version?: number
     doctype?: string
     total?: number
+    capabilities_version?: string
   }
 }
 
@@ -48,6 +49,8 @@ export interface NavigationConfig {
   branding: Branding
   user: UserInfo
   admin_capabilities: string[]
+  capabilities_version?: string
+  supported_capabilities?: string[]
 }
 
 export interface ModuleGroup {
@@ -58,6 +61,7 @@ export interface ModuleGroup {
 
 export interface DocTypeNavItem {
   name: string
+  resource_name: string
   label: string
   icon?: string
   is_child: boolean
@@ -97,7 +101,44 @@ export interface ListResponse<T = any> {
   meta: {
     doctype: string
     total: number
+    next_cursor?: string | null
+    has_more?: boolean
   }
+}
+
+export type OperationStatus = 'completed' | 'accepted' | 'rejected' | 'conflict' | 'failed'
+
+export interface OperationError {
+  code: string
+  message: string
+  field?: string
+  retryable?: boolean
+}
+
+export interface OperationEnvelope<T = any> {
+  operation_id: string
+  correlation_id?: string
+  status: OperationStatus
+  data?: T
+  error?: OperationError
+  next_cursor?: string | null
+  has_more?: boolean
+}
+
+export interface RealtimeConnectionState {
+  state: 'connecting' | 'connected' | 'degraded' | 'reconnecting' | 'offline' | 'unauthorized' | 'closed'
+  detail?: string
+  last_seen_at?: string
+}
+
+export interface CapabilitySnapshot {
+  version: string
+  capabilities: string[]
+  offline?: {
+    enabled: boolean
+    mode?: 'unsupported' | 'read_only' | 'queue_writes' | 'full_slice'
+  }
+  frontend_runtime?: string
 }
 
 export interface ConsoleSite {

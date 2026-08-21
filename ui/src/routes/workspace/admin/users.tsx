@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Users, Plus, Pencil, Trash2, KeyRound, Loader2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { HelpTooltip } from '@/components/ui/help-tooltip'
 
 export default function AdminUsersPage() {
   const queryClient = useQueryClient()
@@ -169,8 +170,10 @@ export default function AdminUsersPage() {
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage users for this site</p>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+            Users
+            <HelpTooltip label="Users help">Invite people and assign roles for this site.</HelpTooltip>
+          </h1>
         </div>
         <Button onClick={openCreate} size="sm">
           <Plus className="h-4 w-4 mr-1" />

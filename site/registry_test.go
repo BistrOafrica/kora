@@ -7,6 +7,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 )
 
+const registrySelect = `SELECT site, db_type, db_host, db_port, db_name, db_user, COALESCE(db_password, ''), db_password_encrypted, COALESCE(domains_json, '[]'), COALESCE(file_storage, 'local') FROM _kora_site_registry WHERE status = 'active' ORDER BY site`
+
 func TestDiscoverSitesFromDBUsesRegistryWhenAvailable(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -15,11 +17,11 @@ func TestDiscoverSitesFromDBUsesRegistryWhenAvailable(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{
-		"site", "db_type", "db_host", "db_port", "db_name", "db_user", "db_password", "db_password_encrypted", "domains_json",
+		"site", "db_type", "db_host", "db_port", "db_name", "db_user", "db_password", "db_password_encrypted", "domains_json", "file_storage",
 	}).AddRow(
-		"acme.kora.dev", "mysql", "db.internal", 3306, "acme_kora_dev", "tenant_user", "", 0, `["acme.kora.dev","app.acme.dev"]`,
+		"acme.kora.dev", "mysql", "db.internal", 3306, "acme_kora_dev", "tenant_user", "", 0, `["acme.kora.dev","app.acme.dev"]`, "local",
 	)
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT site, db_type, db_host, db_port, db_name, db_user, COALESCE(db_password, ''), db_password_encrypted, COALESCE(domains_json, '[]') FROM _kora_site_registry WHERE status = 'active' ORDER BY site`)).
+	mock.ExpectQuery(regexp.QuoteMeta(registrySelect)).
 		WillReturnRows(rows)
 
 	// DiscoverSitesFromDB always also queries the legacy config table and merges.
@@ -43,6 +45,9 @@ func TestDiscoverSitesFromDBUsesRegistryWhenAvailable(t *testing.T) {
 	if len(sites[0].Domains) != 2 {
 		t.Fatalf("Domains len = %d", len(sites[0].Domains))
 	}
+	if sites[0].FileStorage != "local" {
+		t.Fatalf("FileStorage = %q", sites[0].FileStorage)
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("ExpectationsWereMet: %v", err)
 	}
@@ -55,7 +60,7 @@ func TestDiscoverSitesFromDBFallsBackToLegacyConfigVersions(t *testing.T) {
 	}
 	defer db.Close()
 
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT site, db_type, db_host, db_port, db_name, db_user, COALESCE(db_password, ''), db_password_encrypted, COALESCE(domains_json, '[]') FROM _kora_site_registry WHERE status = 'active' ORDER BY site`)).
+	mock.ExpectQuery(regexp.QuoteMeta(registrySelect)).
 		WillReturnError(assertRegistryMissingError{})
 
 	rows := sqlmock.NewRows([]string{"site", "config"}).
@@ -89,11 +94,11 @@ func TestDiscoverSitesFromDBUsesRegistryWhenLegacyConfigTableMissing(t *testing.
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{
-		"site", "db_type", "db_host", "db_port", "db_name", "db_user", "db_password", "db_password_encrypted", "domains_json",
+		"site", "db_type", "db_host", "db_port", "db_name", "db_user", "db_password", "db_password_encrypted", "domains_json", "file_storage",
 	}).AddRow(
-		"partner", "mysql", "kora-mysql-lh5l6r", 3306, "partner", "root", "", 0, `["partner"]`,
+		"partner", "mysql", "kora-mysql-lh5l6r", 3306, "partner", "root", "", 0, `["partner"]`, "local",
 	)
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT site, db_type, db_host, db_port, db_name, db_user, COALESCE(db_password, ''), db_password_encrypted, COALESCE(domains_json, '[]') FROM _kora_site_registry WHERE status = 'active' ORDER BY site`)).
+	mock.ExpectQuery(regexp.QuoteMeta(registrySelect)).
 		WillReturnRows(rows)
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT DISTINCT site, config FROM _kora_config_version WHERE status = 'Active'`)).
 		WillReturnError(assertLegacyConfigMissingError{})
@@ -126,14 +131,15 @@ func TestReconstructSiteConfigFromDBInfoPrefersRegistryValues(t *testing.T) {
 	}
 
 	cfg := ReconstructSiteConfigFromDBInfo(DBSiteInfo{
-		Name:       "acme.kora.dev",
-		Domains:    []string{"acme.kora.dev", "app.acme.dev"},
-		DBType:     "mysql",
-		DBHost:     "tenant-db.internal",
-		DBPort:     3307,
-		DBName:     "acme_prod",
-		DBUser:     "tenant",
-		DBPassword: "secret",
+		Name:        "acme.kora.dev",
+		Domains:     []string{"acme.kora.dev", "app.acme.dev"},
+		DBType:      "mysql",
+		DBHost:      "tenant-db.internal",
+		DBPort:      3307,
+		DBName:      "acme_prod",
+		DBUser:      "tenant",
+		DBPassword:  "secret",
+		FileStorage: "s3",
 	}, common)
 
 	if cfg.DBHost != "tenant-db.internal" {
@@ -150,6 +156,9 @@ func TestReconstructSiteConfigFromDBInfoPrefersRegistryValues(t *testing.T) {
 	}
 	if cfg.DBPassword != "secret" {
 		t.Fatalf("DBPassword = %q", cfg.DBPassword)
+	}
+	if cfg.FileStorage != "s3" {
+		t.Fatalf("FileStorage = %q", cfg.FileStorage)
 	}
 }
 

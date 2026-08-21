@@ -1,0 +1,15 @@
+name: Purchasing Workspace
+route: /purchasing
+type: workspace
+layout: two_panel
+label: Purchasing
+module: Purchasing and Supplier Management
+components:
+  - id: purchase_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Purchase Request
+    label: Purchase Requests
+    desktop_columns: [name, reference, supplier, status]
+    mobile_columns: [reference, status]

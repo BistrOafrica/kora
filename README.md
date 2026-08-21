@@ -72,6 +72,25 @@ KORA_DB_TYPE=mysql KORA_DB_HOST=127.0.0.1 KORA_DB_USER=root KORA_DB_PASSWORD=kor
 - **API Versioning** — stable `/api/v1/` routes with backward compatibility guarantees
 - **Analytics** — automatic per-doctype metrics with daily/monthly rollups, time-series, funnel, and duration queries
 
+## Capability Status
+
+The public capability registry lives in `contract.BaselineCapabilities()`. It is
+the source of truth for what the current codebase supports, what remains
+experimental, and what is still planned.
+
+| Capability | Status |
+|---|---|
+| `contract.event_envelope` | supported |
+| `contract.command_envelope` | supported |
+| `contract.actor_context` | experimental |
+| `provider.nats` | supported |
+| `outbox.transactional` | supported |
+| `auth.oidc` | supported |
+| `ai.chat` | experimental |
+| `ai.mcp` | experimental |
+| `workflow.actor` | supported |
+| `offline.sync` | supported |
+
 ## Configuration
 
 All config via environment variables. No YAML config files needed.

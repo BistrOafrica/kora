@@ -1,0 +1,2553 @@
+# ============================================================================
+# Kora ERP Kenya — Permission Matrix
+# ============================================================================
+# Long format: can_read, can_write, can_create, can_delete, can_submit, can_cancel
+# Child tables (items) inherit their parent's permissions.
+# ============================================================================
+
+# --- Account ---
+- doctype: Account
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Account
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Account
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Account
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Account
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Activity ---
+- doctype: Activity
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Activity
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Activity
+  role: Sales Representative
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Activity
+  role: CRM Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Activity
+  role: Support Agent
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Activity
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Attendance ---
+- doctype: Attendance
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Attendance
+  role: HR Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Attendance
+  role: HR Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Attendance
+  role: Employee
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Attendance
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Bank Account ---
+- doctype: Bank Account
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Bank Account
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Bank Account
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Bank Account
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Bank Account
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Budget ---
+- doctype: Budget
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Budget
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Budget
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Budget
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Budget
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Budget Item ---
+- doctype: Budget Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Budget Item
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Budget Item
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Budget Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Company ---
+- doctype: Company
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Company
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Company
+  role: Sales Representative
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Company
+  role: CRM Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Company
+  role: Support Agent
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Company
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Contact ---
+- doctype: Contact
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Contact
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Contact
+  role: Sales Representative
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Contact
+  role: CRM Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Contact
+  role: Support Agent
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Contact
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Cost Center ---
+- doctype: Cost Center
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Cost Center
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Cost Center
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Cost Center
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Cost Center
+  role: HR Manager
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Cost Center
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Credit Note ---
+- doctype: Credit Note
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Credit Note
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Credit Note
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Credit Note
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Credit Note
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Credit Note
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Credit Note Item ---
+- doctype: Credit Note Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Credit Note Item
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Credit Note Item
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Credit Note Item
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Credit Note Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Currency ---
+- doctype: Currency
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Currency
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Currency
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Currency
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Currency
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Customer ---
+- doctype: Customer
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Customer
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Customer
+  role: Sales Representative
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Customer
+  role: Support Agent
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Customer
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Deal ---
+- doctype: Deal
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Deal
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Deal
+  role: Sales Representative
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+  can_cancel: true
+  if_owner: true
+
+- doctype: Deal
+  role: CRM Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Deal
+  role: Support Agent
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Deal
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Deal Item ---
+- doctype: Deal Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Deal Item
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Deal Item
+  role: Sales Representative
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Deal Item
+  role: CRM Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Deal Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Depreciation Entry ---
+- doctype: Depreciation Entry
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Depreciation Entry
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Depreciation Entry
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Depreciation Entry
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Depreciation Entry Item ---
+- doctype: Depreciation Entry Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Depreciation Entry Item
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Depreciation Entry Item
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Depreciation Entry Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Employee ---
+- doctype: Employee
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Employee
+  role: HR Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Employee
+  role: HR Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Employee
+  role: Employee
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Employee
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- eTIMS Invoice ---
+- doctype: eTIMS Invoice
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: eTIMS Invoice
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: eTIMS Invoice
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: eTIMS Invoice
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Fiscal Period ---
+- doctype: Fiscal Period
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Fiscal Period
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Fiscal Period
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Fiscal Period
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Fiscal Period
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Fixed Asset ---
+- doctype: Fixed Asset
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Fixed Asset
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Fixed Asset
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Fixed Asset
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Fixed Asset
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Goods Receipt ---
+- doctype: Goods Receipt
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Goods Receipt
+  role: Purchase Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Goods Receipt
+  role: Procurement Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Goods Receipt
+  role: Inventory Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Goods Receipt
+  role: Warehouse Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Goods Receipt
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Goods Receipt Item ---
+- doctype: Goods Receipt Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Goods Receipt Item
+  role: Purchase Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Goods Receipt Item
+  role: Procurement Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: false
+  can_cancel: false
+
+- doctype: Goods Receipt Item
+  role: Inventory Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Goods Receipt Item
+  role: Warehouse Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: false
+  can_cancel: false
+
+- doctype: Goods Receipt Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Invoice Item ---
+- doctype: Invoice Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Invoice Item
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Invoice Item
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Invoice Item
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Invoice Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Item ---
+- doctype: Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Item
+  role: Purchase Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Item
+  role: Procurement Officer
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Item
+  role: Inventory Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Item
+  role: Warehouse Operator
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Job Opening ---
+- doctype: Job Opening
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Job Opening
+  role: HR Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Job Opening
+  role: HR Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Job Opening
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Journal Entry ---
+- doctype: Journal Entry
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Journal Entry
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Journal Entry
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Journal Entry
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Journal Entry
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Journal Entry Item ---
+- doctype: Journal Entry Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Journal Entry Item
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Journal Entry Item
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Journal Entry Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- KRA Return ---
+- doctype: KRA Return
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: KRA Return
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: KRA Return
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: KRA Return
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Lead ---
+- doctype: Lead
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Lead
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Lead
+  role: Sales Representative
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+  can_cancel: true
+  if_owner: true
+
+- doctype: Lead
+  role: CRM Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Lead
+  role: Support Agent
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Lead
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Leave Application ---
+- doctype: Leave Application
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Leave Application
+  role: HR Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Leave Application
+  role: HR Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Leave Application
+  role: Employee
+  can_read: true
+  can_write: false
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Leave Application
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- M-Pesa Payment ---
+- doctype: M-Pesa Payment
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: M-Pesa Payment
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: M-Pesa Payment
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: M-Pesa Payment
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Opportunity ---
+- doctype: Opportunity
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Opportunity
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Opportunity
+  role: Sales Representative
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+  can_cancel: true
+  if_owner: true
+
+- doctype: Opportunity
+  role: CRM Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Opportunity
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Payment Entry ---
+- doctype: Payment Entry
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Payment Entry
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Payment Entry
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Payment Entry
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Payment Entry
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Payment Entry Item ---
+- doctype: Payment Entry Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Payment Entry Item
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Payment Entry Item
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Payment Entry Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Payroll Period ---
+- doctype: Payroll Period
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Payroll Period
+  role: HR Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Payroll Period
+  role: HR Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Payroll Period
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Petty Cash ---
+- doctype: Petty Cash
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Petty Cash
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Petty Cash
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Petty Cash
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Petty Cash
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Purchase Order ---
+- doctype: Purchase Order
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Purchase Order
+  role: Purchase Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Purchase Order
+  role: Procurement Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Purchase Order
+  role: Accountant
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Purchase Order
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Purchase Order Item ---
+- doctype: Purchase Order Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Purchase Order Item
+  role: Purchase Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Purchase Order Item
+  role: Procurement Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: false
+  can_cancel: false
+
+- doctype: Purchase Order Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Purchase Request ---
+- doctype: Purchase Request
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Purchase Request
+  role: Purchase Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Purchase Request
+  role: Procurement Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Purchase Request
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Purchase Request Item ---
+- doctype: Purchase Request Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Purchase Request Item
+  role: Purchase Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Purchase Request Item
+  role: Procurement Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: false
+  can_cancel: false
+
+- doctype: Purchase Request Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Reconciliation ---
+- doctype: Reconciliation
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Reconciliation
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Reconciliation
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Reconciliation
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Sales Invoice ---
+- doctype: Sales Invoice
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Sales Invoice
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Sales Invoice
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Sales Invoice
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Sales Invoice
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Sales Invoice
+  role: Sales Representative
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Sales Invoice
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Sales Order ---
+- doctype: Sales Order
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Sales Order
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Sales Order
+  role: Sales Representative
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+  if_owner: true
+
+- doctype: Sales Order
+  role: Accountant
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Sales Order
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Sales Order Item ---
+- doctype: Sales Order Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Sales Order Item
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Sales Order Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Stock Count ---
+- doctype: Stock Count
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Stock Count
+  role: Inventory Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Stock Count
+  role: Warehouse Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Stock Count
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Stock Count Item ---
+- doctype: Stock Count Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Stock Count Item
+  role: Inventory Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Stock Count Item
+  role: Warehouse Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: false
+  can_cancel: false
+
+- doctype: Stock Count Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Stock Movement ---
+- doctype: Stock Movement
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Stock Movement
+  role: Inventory Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Stock Movement
+  role: Warehouse Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Stock Movement
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Supplier ---
+- doctype: Supplier
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Supplier
+  role: Purchase Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Supplier
+  role: Procurement Officer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Supplier
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Supplier Invoice ---
+- doctype: Supplier Invoice
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Supplier Invoice
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Supplier Invoice
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Supplier Invoice
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: true
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Supplier Invoice
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Supplier Invoice Item ---
+- doctype: Supplier Invoice Item
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Supplier Invoice Item
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Supplier Invoice Item
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Supplier Invoice Item
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Tax Authority ---
+- doctype: Tax Authority
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Tax Authority
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Tax Authority
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Tax Authority
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Tax Authority
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Tax Category ---
+- doctype: Tax Category
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Tax Category
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Tax Category
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Tax Category
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Tax Category
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Tax Rate ---
+- doctype: Tax Rate
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Tax Rate
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Tax Rate
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Tax Rate
+  role: Accounts Clerk
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Tax Rate
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Ticket ---
+- doctype: Ticket
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Ticket
+  role: Sales Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Ticket
+  role: CRM Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Ticket
+  role: Support Agent
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+  can_cancel: true
+  if_owner: true
+
+- doctype: Ticket
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- Warehouse ---
+- doctype: Warehouse
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Warehouse
+  role: Inventory Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: Warehouse
+  role: Procurement Officer
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Warehouse
+  role: Warehouse Operator
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+- doctype: Warehouse
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false
+
+# --- WHT Certificate ---
+- doctype: WHT Certificate
+  role: Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: WHT Certificate
+  role: Finance Manager
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: WHT Certificate
+  role: Accountant
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+  can_cancel: true
+
+- doctype: WHT Certificate
+  role: Auditor
+  can_read: true
+  can_write: false
+  can_create: false
+  can_delete: false
+  can_submit: false
+  can_cancel: false

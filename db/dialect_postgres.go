@@ -291,7 +291,7 @@ func (d *PostgresDialect) ColumnType(f *doctype.Field) string {
 		return "TIME"
 	case "Datetime":
 		return "TIMESTAMP"
-	case "Attach", "Attach Image":
+	case "Attach", "Attach Image", "Attach Audio":
 		return "TEXT"
 	case "JSON":
 		return "JSONB"
@@ -505,6 +505,7 @@ func (d *PostgresDialect) SystemTableSQL() []string {
 		)`,
 		`ALTER TABLE "_kora_field" ADD COLUMN "linked_field" VARCHAR(255) NOT NULL DEFAULT ''`,
 		`ALTER TABLE "_kora_field" ADD COLUMN "computed" TEXT`,
+		`ALTER TABLE "_kora_field" ADD COLUMN "accept" TEXT`,
 		`ALTER TABLE "_kora_field" ADD COLUMN "site" VARCHAR(140) NOT NULL DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS "idx_parent" ON "_kora_field" ("parent")`,
 		`CREATE INDEX IF NOT EXISTS "idx_parent_fieldname" ON "_kora_field" ("parent", "fieldname")`,
@@ -574,6 +575,7 @@ func (d *PostgresDialect) SystemTableSQL() []string {
 			"db_user" VARCHAR(255) NOT NULL DEFAULT '',
 			"db_password" TEXT,
 			"db_password_encrypted" SMALLINT NOT NULL DEFAULT 0,
+			"file_storage" VARCHAR(20) NOT NULL DEFAULT 'local',
 			"domains_json" JSONB,
 			"status" VARCHAR(20) NOT NULL DEFAULT 'active',
 			"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -585,6 +587,7 @@ func (d *PostgresDialect) SystemTableSQL() []string {
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "status" VARCHAR(20) NOT NULL DEFAULT 'active'`,
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "created_at" TIMESTAMP NOT NULL DEFAULT NOW()`,
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()`,
+		`ALTER TABLE "_kora_site_registry" ADD COLUMN "file_storage" VARCHAR(20) NOT NULL DEFAULT 'local'`,
 		`CREATE INDEX IF NOT EXISTS "idx_site_registry_status" ON "_kora_site_registry" ("status")`,
 
 		// _kora_user

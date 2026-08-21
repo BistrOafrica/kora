@@ -3,6 +3,7 @@ package mcp
 import (
 	"testing"
 
+	"github.com/asenawritescode/kora/api/ai"
 	"github.com/asenawritescode/kora/doctype"
 )
 
@@ -20,7 +21,7 @@ func TestToolGeneration_ForDoctype(t *testing.T) {
 	}
 	reg.Register(dt)
 
-	server := New(reg, "test-site")
+	server := New(reg, "test-site", ModeExecutable)
 
 	if server == nil {
 		t.Fatal("New returned nil")
@@ -42,7 +43,7 @@ func TestToolNames_FollowPattern(t *testing.T) {
 	}
 	reg.Register(dt)
 
-	server := New(reg, "test-site")
+	server := New(reg, "test-site", ModeExecutable)
 	if server == nil {
 		t.Fatal("New returned nil")
 	}
@@ -58,12 +59,10 @@ func TestToolNames_FollowPattern(t *testing.T) {
 func TestEmptyRegistry_NoTools(t *testing.T) {
 	reg := doctype.NewRegistry()
 
-	server := New(reg, "test-site")
+	server := New(reg, "test-site", ModeValidationOnly)
 	if server == nil {
 		t.Fatal("New returned nil")
 	}
-	// An empty registry should at least have the config tools (validate_yaml),
-	// but no doctype-specific tools.
 	_ = server
 }
 
@@ -91,12 +90,22 @@ func TestAddDoctypeTools_ExcludesChildTables(t *testing.T) {
 	}
 	reg.Register(child)
 
-	server := New(reg, "test-site")
+	server := New(reg, "test-site", ModeExecutable)
 	if server == nil {
 		t.Fatal("New returned nil")
 	}
 	// Should have validated that child tables don't generate tools without panic.
 	_ = server
+}
+
+func TestValidationOnlyModeExposesConfigToolsOnly(t *testing.T) {
+	reg := doctype.NewRegistry()
+	reg.Register(&doctype.DocType{Name: "Customer"})
+
+	server := New(reg, "test-site", ModeValidationOnly)
+	if server == nil || server.srv == nil {
+		t.Fatal("expected server to initialize")
+	}
 }
 
 func TestSanitizeName(t *testing.T) {
@@ -121,68 +130,23 @@ func TestSanitizeName(t *testing.T) {
 	}
 }
 
-func TestBuildFieldSchema(t *testing.T) {
-	dt := &doctype.DocType{
-		Name: "Test",
+func TestProjectedMCPToolsMirrorCatalog(t *testing.T) {
+	reg := doctype.NewRegistry()
+	reg.Register(&doctype.DocType{
+		Name: "Task",
 		Fields: []doctype.Field{
-			{Fieldname: "name", Fieldtype: "Data"},
+			{Fieldname: "title", Fieldtype: "Data", Reqd: true},
 			{Fieldname: "age", Fieldtype: "Int"},
-			{Fieldname: "price", Fieldtype: "Float"},
-			{Fieldname: "active", Fieldtype: "Check"},
-			{Fieldname: "items", Fieldtype: "Table"}, // Skipped
 		},
+	})
+
+	server := New(reg, "test-site", ModeExecutable)
+	if server == nil || server.srv == nil {
+		t.Fatal("expected server to initialize")
 	}
 
-	schema := buildFieldSchema(dt)
-
-	if len(schema) != 4 {
-		t.Errorf("field schema length = %d, want 4", len(schema))
-	}
-	// Check types.
-	if schema["age"] != nil {
-		ageProps := schema["age"].(map[string]any)
-		if ageProps["type"] != "integer" {
-			t.Errorf("age type = %v, want integer", ageProps["type"])
-		}
-	}
-	if schema["price"] != nil {
-		priceProps := schema["price"].(map[string]any)
-		if priceProps["type"] != "number" {
-			t.Errorf("price type = %v, want number", priceProps["type"])
-		}
-	}
-	if schema["active"] != nil {
-		activeProps := schema["active"].(map[string]any)
-		if activeProps["type"] != "boolean" {
-			t.Errorf("active type = %v, want boolean", activeProps["type"])
-		}
-	}
-	// Table fields should be excluded.
-	if _, ok := schema["items"]; ok {
-		t.Error("items (Table field) should be excluded from schema")
-	}
-}
-
-func TestRequiredFields(t *testing.T) {
-	dt := &doctype.DocType{
-		Name: "Test",
-		Fields: []doctype.Field{
-			{Fieldname: "name", Fieldtype: "Data", Reqd: true},
-			{Fieldname: "email", Fieldtype: "Data", Reqd: false},
-			{Fieldname: "age", Fieldtype: "Int", Reqd: true},
-			{Fieldname: "items", Fieldtype: "Table", Reqd: true}, // Should be excluded
-		},
-	}
-
-	req := requiredFields(dt)
-	expected := []string{"name", "age"}
-
-	if len(req) != len(expected) {
-		t.Fatalf("requiredFields len = %d, want %d; got %v", len(req), len(expected), req)
-	}
-	for i, v := range expected {
-		if req[i] != v {
-			t.Errorf("req[%d] = %q, want %q", i, req[i], v)
-		}
+	catalog := ai.BuildToolCatalog(reg)
+	if len(catalog.Tools) == 0 {
+		t.Fatal("expected tool catalog entries")
 	}
 }

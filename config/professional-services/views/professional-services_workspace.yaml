@@ -1,0 +1,23 @@
+name: Professional Services and Timesheets Workspace
+route: /professional-services
+type: workspace
+layout: two_panel
+label: Professional Services and Timesheets
+module: Professional Services and Timesheets
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Engagement
+    label: Engagement Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Timesheet
+    label: Timesheet Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

@@ -1,0 +1,167 @@
+name: Ticket
+module: Help Desk
+is_submittable: true
+track_changes: true
+title_field: subject
+search_fields: subject, contact, company, category
+sort_field: modified
+sort_order: DESC
+
+fields:
+  # --- Section: Ticket Information ---
+  - fieldname: section_ticket
+    fieldtype: Section Break
+    label: Ticket Information
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: subject
+    fieldtype: Data
+    label: Subject
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: contact
+    fieldtype: Link
+    label: Contact
+    options: Contact
+    in_list_view: true
+
+  - fieldname: company
+    fieldtype: Link
+    label: Company
+    options: Company
+    in_list_view: true
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: priority
+    fieldtype: Select
+    label: Priority
+    options: |
+      Low
+      Medium
+      High
+      Critical
+    default: Medium
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: category
+    fieldtype: Select
+    label: Category
+    options: |
+      Billing
+      Service
+      Meter
+      Leakage
+      Connection
+      Complaint
+      Enquiry
+      Technical
+      Other
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: assigned_to
+    fieldtype: Data
+    label: Assigned To
+    in_list_view: true
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Open
+      In Progress
+      Waiting on Customer
+      Resolved
+      Closed
+    default: Open
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  # --- Section: Details ---
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: description
+    fieldtype: Text
+    label: Description
+    reqd: true
+
+  - fieldname: channel
+    fieldtype: Select
+    label: Channel
+    options: |
+      Phone
+      Email
+      Web
+      SMS
+      USSD
+      WhatsApp
+      Walk-in
+    default: Phone
+    in_standard_filter: true
+
+  # --- Section: Resolution ---
+  - fieldname: section_resolution
+    fieldtype: Section Break
+    label: Resolution
+
+  - fieldname: resolution
+    fieldtype: Text
+    label: Resolution
+
+  - fieldname: resolved_by
+    fieldtype: Data
+    label: Resolved By
+
+  - fieldname: resolved_on
+    fieldtype: Datetime
+    label: Resolved On
+    read_only: true
+
+  # --- Section: SLA ---
+  - fieldname: section_sla
+    fieldtype: Section Break
+    label: SLA
+
+  - fieldname: sla_breach
+    fieldtype: Check
+    label: SLA Breached
+    read_only: true
+    default: "0"
+
+  - fieldname: first_response_due
+    fieldtype: Datetime
+    label: First Response Due
+    read_only: true
+
+  - fieldname: resolution_due
+    fieldtype: Datetime
+    label: Resolution Due
+
+  - fieldname: sla_hours
+    fieldtype: Int
+    label: SLA Hours
+    default: "24"
+    constraints:
+      - type: min
+        value: 1
+        message: "SLA hours must be at least 1."
+
+  - fieldname: created_on
+    fieldtype: Datetime
+    label: Created On
+    read_only: true
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

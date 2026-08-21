@@ -1,0 +1,33 @@
+- doctype: Employee
+  role: Human Resources and Employee Lifecycle Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Employee
+  role: Human Resources and Employee Lifecycle Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Employee
+  role: Human Resources and Employee Lifecycle Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Onboarding Task
+  role: Human Resources and Employee Lifecycle Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Leave Request
+  role: Human Resources and Employee Lifecycle Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

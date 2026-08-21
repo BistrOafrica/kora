@@ -1,0 +1,9 @@
+- name: Wholesale and Distribution Operator
+  workspace_access: true
+  description: Executes Wholesale and Distribution work.
+- name: Wholesale and Distribution Reviewer
+  workspace_access: true
+  description: Reviews Wholesale and Distribution evidence.
+- name: Wholesale and Distribution Administrator
+  workspace_access: true
+  description: Configures Wholesale and Distribution.

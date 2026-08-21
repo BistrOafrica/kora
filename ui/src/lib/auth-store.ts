@@ -24,7 +24,10 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
-  isLoading: true,
+  // Route authentication is tracked by AuthGuard. This flag is reserved for
+  // sign-in, sign-out, and other user-triggered auth actions so public forms
+  // are usable immediately.
+  isLoading: false,
   error: null,
   errorType: null,
   providers: [],

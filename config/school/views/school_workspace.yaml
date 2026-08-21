@@ -1,0 +1,23 @@
+name: School Administration Workspace
+route: /school
+type: workspace
+layout: two_panel
+label: Registrar and Attendance
+module: School Administration
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Student
+    label: Registrar and Attendance
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Student
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

@@ -9,6 +9,7 @@ components:
     type: filter_bar
     region: main
     position: 0
+    label: Filter inventory
   - id: product_table
     type: record_table
     region: main

@@ -1,0 +1,9 @@
+- name: Expense and Reimbursement Operator
+  workspace_access: true
+  description: Creates and executes Expense and Reimbursement work.
+- name: Expense and Reimbursement Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Expense and Reimbursement Administrator
+  workspace_access: true
+  description: Configures Expense and Reimbursement and manages access.

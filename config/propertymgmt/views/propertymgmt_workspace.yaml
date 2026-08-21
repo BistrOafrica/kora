@@ -1,0 +1,23 @@
+name: Property and Rental Management Workspace
+route: /propertymgmt
+type: workspace
+layout: two_panel
+label: Property and Maintenance
+module: Property and Rental Management
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Lease
+    label: Property and Maintenance
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Lease
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

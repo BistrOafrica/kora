@@ -1,0 +1,23 @@
+name: Hotel and Guest Operations Workspace
+route: /hotel
+type: workspace
+layout: two_panel
+label: Hotel and Guest Operations
+module: Hotel and Guest Operations
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Reservation
+    label: Reservation Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Guest Stay
+    label: Guest Stay Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

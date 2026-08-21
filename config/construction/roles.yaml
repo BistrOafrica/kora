@@ -1,0 +1,9 @@
+- name: Construction and Site Projects Operator
+  workspace_access: true
+  description: Creates and executes Construction and Site Projects work.
+- name: Construction and Site Projects Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Construction and Site Projects Administrator
+  workspace_access: true
+  description: Configures Construction and Site Projects and manages access.

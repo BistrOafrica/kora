@@ -1,0 +1,23 @@
+name: Events and Ticketing Workspace
+route: /events
+type: workspace
+layout: two_panel
+label: Event Operations
+module: Events and Ticketing
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Event
+    label: Event Operations
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Event
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

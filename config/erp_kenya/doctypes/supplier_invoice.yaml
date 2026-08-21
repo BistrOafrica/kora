@@ -1,0 +1,130 @@
+name: Supplier Invoice
+module: Purchasing
+is_submittable: true
+track_changes: true
+title_field: supplier
+search_fields: supplier, supplier_invoice_no
+sort_field: invoice_date
+sort_order: DESC
+fields:
+  - fieldname: supplier
+    fieldtype: Link
+    label: Supplier
+    options: Supplier
+    reqd: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: invoice_date
+    fieldtype: Date
+    label: Invoice Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: due_date
+    fieldtype: Date
+    label: Due Date
+    reqd: true
+
+  - fieldname: supplier_invoice_no
+    fieldtype: Data
+    label: Supplier Invoice No.
+    in_list_view: true
+
+  - fieldname: purchase_order
+    fieldtype: Link
+    label: Purchase Order
+    options: Purchase Order
+
+  - fieldname: goods_receipt
+    fieldtype: Link
+    label: Goods Receipt
+    options: Goods Receipt
+
+  - fieldname: currency
+    fieldtype: Link
+    label: Currency
+    options: Currency
+    default: KES
+
+  # --- Section: Invoice Items ---
+  - fieldname: section_items
+    fieldtype: Section Break
+    label: Invoice Items
+
+  - fieldname: items
+    fieldtype: Table
+    label: Items
+    options: Supplier Invoice Item
+    reqd: true
+    constraints:
+      - type: min_rows
+        value: 1
+        message: "At least one invoice item is required."
+
+  # --- Section: Totals ---
+  - fieldname: section_totals
+    fieldtype: Section Break
+    label: Totals
+
+  - fieldname: subtotal
+    fieldtype: Currency
+    label: Subtotal (KES)
+    computed: "SUM(items.line_total)"
+    read_only: true
+    description: Auto-computed sum of all line totals.
+
+  - fieldname: tax_rate
+    fieldtype: Percent
+    label: VAT Rate (%)
+    default: "16"
+
+  - fieldname: tax_amount
+    fieldtype: Currency
+    label: Tax Amount (KES)
+    computed: "ROUND(subtotal * tax_rate / 100, 2)"
+    read_only: true
+    description: Auto-computed VAT amount.
+
+  - fieldname: wht_amount
+    fieldtype: Currency
+    label: Withholding Tax (KES)
+    default: "0"
+    constraints:
+      - type: min
+        value: 0
+        message: "Withholding tax cannot be negative."
+
+  - fieldname: total
+    fieldtype: Currency
+    label: Total (KES)
+    computed: "ROUND(subtotal + tax_amount - wht_amount, 2)"
+    read_only: true
+    description: Auto-computed invoice total after tax and withholding.
+
+  - fieldname: amount_paid
+    fieldtype: Currency
+    label: Amount Paid (KES)
+    default: "0"
+
+  - fieldname: balance_due
+    fieldtype: Currency
+    label: Balance Due (KES)
+    computed: "total - amount_paid"
+    read_only: true
+    description: Outstanding amount to be paid to supplier.
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Paid
+      Partially Paid
+      Overdue
+      Cancelled
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true

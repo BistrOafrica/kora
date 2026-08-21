@@ -1,0 +1,31 @@
+name: Reconciliation
+module: Accounting
+title_field: reference
+search_fields: reference, status
+fields:
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference
+    reqd: true
+    unique: true
+    in_list_view: true
+  - fieldname: bank_account
+    fieldtype: Data
+    label: Bank Account
+    reqd: true
+  - fieldname: statement_closing
+    fieldtype: Currency
+    label: Statement Closing
+    reqd: true
+  - fieldname: cleared_amount
+    fieldtype: Currency
+    label: Cleared Amount
+    reqd: true
+  - fieldname: variance
+    fieldtype: Currency
+    label: Variance
+    read_only: true
+  - fieldname: status
+    fieldtype: Data
+    label: Status
+    default: Draft

@@ -1,0 +1,63 @@
+- name: Administrator
+  workspace_access: true
+  description: Full system access. Can manage all modules, users, and system configuration.
+
+- name: Finance Manager
+  workspace_access: true
+  description: Full finance access. Can approve journal entries, payments, budgets, and view all financial reports.
+
+- name: Accountant
+  workspace_access: true
+  description: Day-to-day accounting. Can create journal entries, invoices, payments, reconciliations, and manage chart of accounts.
+
+- name: Accounts Clerk
+  workspace_access: true
+  description: Data entry. Can create invoices, payments, petty cash vouchers. Cannot approve or delete.
+
+- name: Sales Manager
+  workspace_access: true
+  description: Full sales access. Can manage customers, sales orders, invoices, and approve deals.
+
+- name: Sales Representative
+  workspace_access: true
+  description: Creates and manages own leads, opportunities, deals, and customer interactions.
+
+- name: Purchase Manager
+  workspace_access: true
+  description: Full purchasing access. Can approve purchase requests and purchase orders.
+
+- name: Procurement Officer
+  workspace_access: true
+  description: Creates purchase requests, purchase orders, and manages supplier relationships.
+
+- name: Inventory Manager
+  workspace_access: true
+  description: Full inventory access. Can manage items, warehouses, stock movements, stock counts.
+
+- name: Warehouse Operator
+  workspace_access: true
+  description: Handles goods receipts, stock movements, stock counts. Cannot delete or configure.
+
+- name: CRM Manager
+  workspace_access: true
+  description: Full CRM access. Can manage all contacts, companies, leads, deals, and tickets.
+
+- name: Support Agent
+  workspace_access: true
+  description: Handles tickets and customer inquiries. Can create activities and manage assigned tickets.
+
+- name: HR Manager
+  workspace_access: true
+  description: Full HR access. Can manage employees, payroll, leave, attendance, and recruitment.
+
+- name: HR Officer
+  workspace_access: true
+  description: Day-to-day HR. Can process leave, attendance, and basic employee records.
+
+- name: Employee
+  workspace_access: true
+  description: Self-service access. Can view own records, apply for leave, view payslips. Owner-scoped.
+
+- name: Auditor
+  workspace_access: true
+  description: Read-only access to all financial, inventory, and HR records. Cannot create, edit, or delete.

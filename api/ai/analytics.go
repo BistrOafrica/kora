@@ -42,7 +42,7 @@ func executeAnalyticsInsights(tx *orm.TxManager, reg *doctype.Registry, doctypeN
 			siteName,
 		)
 		if err != nil {
-			return "Analytics not available. Set KORA_ANALYTICS=true and create documents first."
+			return "Analytics not available. Create documents first."
 		}
 		defer rows.Close()
 		var dts []string

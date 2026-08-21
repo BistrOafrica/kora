@@ -1,0 +1,6 @@
+pack: marketing
+seed_mode: demo
+records:
+  - doctype: Campaign
+    reference: DEMO-MARKETING-001
+    status: Draft

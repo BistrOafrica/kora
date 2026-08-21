@@ -1,0 +1,199 @@
+name: eTIMS Invoice
+module: Finance
+track_changes: true
+title_field: sales_invoice
+search_fields: sales_invoice, etims_reference
+sort_field: submission_date
+sort_order: DESC
+
+fields:
+  - fieldname: sales_invoice
+    fieldtype: Link
+    label: Sales Invoice
+    options: Sales Invoice
+    reqd: true
+    in_list_view: true
+    description: The sales invoice being submitted to eTIMS.
+
+  - fieldname: submission_date
+    fieldtype: Datetime
+    label: Submission Date
+    read_only: true
+    in_list_view: true
+    description: Date and time the invoice was submitted to eTIMS.
+
+  - fieldname: provider
+    fieldtype: Select
+    label: eTIMS Provider
+    options: |
+      DigiTax
+    default: DigiTax
+    read_only: true
+    description: Integration partner used to submit this invoice.
+
+  - fieldname: trader_invoice_number
+    fieldtype: Data
+    label: Trader Invoice Number
+    read_only: true
+    in_list_view: true
+    search_index: true
+    description: Kora invoice reference sent to DigiTax. Generated from the Sales Invoice name.
+
+  - fieldname: provider_status
+    fieldtype: Select
+    label: Provider Status
+    options: |
+      pending
+      completed
+      failed
+      submitted
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+    description: Raw asynchronous status reported by DigiTax.
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Pending
+      Submitted
+      Accepted
+      Rejected
+      Failed
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+    description: Current eTIMS submission status.
+
+  - fieldname: etims_reference
+    fieldtype: Data
+    label: eTIMS Control Unit Serial
+    in_list_view: true
+    search_index: true
+    read_only: true
+    description: eTIMS control unit serial number from the DigiTax callback.
+
+  - fieldname: invoice_number
+    fieldtype: Data
+    label: Invoice Number
+    read_only: true
+    description: KRA invoice number from the DigiTax callback.
+
+  - fieldname: provider_sale_id
+    fieldtype: Data
+    label: DigiTax Sale ID
+    read_only: true
+    search_index: true
+    description: DigiTax sale identifier returned by the provider.
+
+  - fieldname: receipt_number
+    fieldtype: Data
+    label: Receipt Number
+    read_only: true
+    description: Receipt number assigned by eTIMS.
+
+  - fieldname: serial_number
+    fieldtype: Data
+    label: Control Unit Serial Number
+    read_only: true
+    description: Control unit serial number returned by DigiTax/eTIMS.
+
+  - fieldname: receipt_signature
+    fieldtype: Data
+    label: Receipt Signature
+    read_only: true
+    description: eTIMS receipt signature from the signed callback.
+
+  - fieldname: internal_data
+    fieldtype: Data
+    label: eTIMS Internal Data
+    read_only: true
+    description: eTIMS internal data used for receipt verification.
+
+  - fieldname: qr_code
+    fieldtype: Data
+    label: QR Code
+    read_only: true
+    description: eTIMS QR code data for invoice verification.
+
+  - fieldname: etims_url
+    fieldtype: Data
+    options: URL
+    label: eTIMS Verification URL
+    read_only: true
+    description: URL where the signed invoice can be verified.
+
+  - fieldname: sale_detail_url
+    fieldtype: Data
+    options: URL
+    label: DigiTax Sale URL
+    read_only: true
+    description: DigiTax detail page for this sale.
+
+  - fieldname: submission_response
+    fieldtype: JSON
+    label: Submission Response
+    read_only: true
+    description: Full initial response returned by DigiTax when the sale was queued.
+
+  - fieldname: callback_event
+    fieldtype: Data
+    label: Callback Event
+    read_only: true
+    description: Last provider event received, normally sale.sync.
+
+  - fieldname: webhook_received_at
+    fieldtype: Datetime
+    label: Webhook Received At
+    read_only: true
+    description: When Kora received the provider callback.
+
+  - fieldname: signed_at
+    fieldtype: Datetime
+    label: Signed At
+    read_only: true
+    description: Timestamp when DigiTax reported the invoice as signed.
+
+  - fieldname: customer_pin
+    fieldtype: Data
+    label: Callback Customer PIN
+    read_only: true
+    description: Customer PIN echoed by the provider callback.
+
+  - fieldname: tax_summary
+    fieldtype: JSON
+    label: Provider Tax Summary
+    read_only: true
+    description: Tax breakdown returned by DigiTax/eTIMS.
+
+  - fieldname: error_message
+    fieldtype: Text
+    label: Error Message
+    read_only: true
+    description: Provider error details if submission failed.
+
+  - fieldname: retry_count
+    fieldtype: Int
+    label: Retry Count
+    default: "0"
+    read_only: true
+    description: Number of retry attempts made by the integration.
+
+  - fieldname: last_retry
+    fieldtype: Datetime
+    label: Last Retry
+    read_only: true
+    description: Date and time of the last retry attempt.
+
+  - fieldname: submitted_by
+    fieldtype: Data
+    label: Submitted By
+    read_only: true
+    description: User or integration that submitted this invoice.
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

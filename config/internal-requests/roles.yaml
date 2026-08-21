@@ -1,0 +1,9 @@
+- name: Internal Requests and Approvals Operator
+  workspace_access: true
+  description: Creates and executes Internal Requests and Approvals work.
+- name: Internal Requests and Approvals Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Internal Requests and Approvals Administrator
+  workspace_access: true
+  description: Configures Internal Requests and Approvals and manages access.

@@ -1,0 +1,112 @@
+name: WHT Certificate
+module: Finance
+is_submittable: true
+track_changes: true
+title_field: name
+search_fields: supplier, certificate_date
+sort_field: certificate_date
+sort_order: DESC
+
+fields:
+  - fieldname: column_left
+    fieldtype: Column Break
+
+  - fieldname: supplier
+    fieldtype: Link
+    label: Supplier
+    options: Supplier
+    reqd: true
+    in_list_view: true
+    description: Supplier for whom the WHT certificate is issued.
+
+  - fieldname: certificate_date
+    fieldtype: Date
+    label: Certificate Date
+    reqd: true
+    in_list_view: true
+    description: Date of the WHT certificate.
+
+  - fieldname: column_right
+    fieldtype: Column Break
+
+  - fieldname: fiscal_period
+    fieldtype: Link
+    label: Fiscal Period
+    options: Fiscal Period
+    description: Fiscal period the WHT applies to.
+
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: supplier_invoice
+    fieldtype: Link
+    label: Supplier Invoice
+    options: Supplier Invoice
+    description: Related supplier invoice.
+
+  - fieldname: gross_amount
+    fieldtype: Currency
+    label: Gross Amount (KES)
+    reqd: true
+    constraints:
+      - type: min
+        value: 1
+        message: "Gross amount must be at least KES 1."
+    description: Gross invoice amount before withholding tax.
+
+  - fieldname: wht_rate
+    fieldtype: Percent
+    label: WHT Rate (%)
+    reqd: true
+    default: "5"
+    constraints:
+      - type: min
+        value: 0
+        message: "WHT rate cannot be negative."
+      - type: max
+        value: 30
+        message: "WHT rate cannot exceed 30%."
+    description: Withholding tax rate as a percentage.
+
+  - fieldname: wht_amount
+    fieldtype: Currency
+    label: WHT Amount (KES)
+    computed: "gross_amount * wht_rate / 100"
+    read_only: true
+    description: Auto-computed withholding tax amount.
+
+  - fieldname: net_amount
+    fieldtype: Currency
+    label: Net Amount (KES)
+    computed: "gross_amount - wht_amount"
+    read_only: true
+    description: Auto-computed net amount after WHT.
+
+  - fieldname: certificate_number
+    fieldtype: Data
+    label: Certificate Number
+    unique: true
+    description: Unique WHT certificate serial number.
+
+  - fieldname: issued_by
+    fieldtype: Data
+    label: Issued By
+    description: Person who issued the certificate.
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Issued
+      Cancelled
+    read_only: true
+    default: Draft
+    in_list_view: true
+    in_standard_filter: true
+    description: Current certificate status.

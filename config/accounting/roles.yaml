@@ -1,0 +1,9 @@
+- name: Accountant
+  workspace_access: true
+  description: Prepares journals and reconciliations.
+- name: Controller
+  workspace_access: true
+  description: Approves material journals and closes periods.
+- name: Accounting Administrator
+  workspace_access: true
+  description: Configures accounting masters and access.

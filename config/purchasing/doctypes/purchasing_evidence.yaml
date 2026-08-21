@@ -1,0 +1,15 @@
+name: Supplier Match
+module: Purchasing and Supplier Management
+title_field: reference
+fields:
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference
+    reqd: true
+  - fieldname: source_record
+    fieldtype: Data
+    label: Source Record
+    reqd: true
+  - fieldname: decision
+    fieldtype: Text
+    label: Match Decision

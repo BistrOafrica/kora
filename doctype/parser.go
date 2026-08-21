@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 
 	goyaml "github.com/goccy/go-yaml"
@@ -514,6 +515,8 @@ func (d *DocType) Validate() error {
 		return err
 	}
 
+	d.ResourceName = normalizeResourceName(d.ResourceName, d.Name)
+
 	// Set defaults.
 	if d.SortField == "" {
 		d.SortField = "modified"
@@ -596,6 +599,16 @@ func (d *DocType) Validate() error {
 			}
 		}
 
+		// Validate accept on attach fields (per-field accepted formats).
+		if f.Accept != "" {
+			if !isAttachType(f.Fieldtype) {
+				return fmt.Errorf("doctype %s, field %s: accept is only valid on Attach, Attach Image, or Attach Audio fields", d.Name, f.Fieldname)
+			}
+			if err := validateAccept(f.Accept); err != nil {
+				return fmt.Errorf("doctype %s, field %s: %w", d.Name, f.Fieldname, err)
+			}
+		}
+
 		// Validate computed expression syntax (basic check).
 		if f.Computed != "" {
 			if err := validateComputedExpr(f.Computed); err != nil {
@@ -673,6 +686,26 @@ func validateDocTypeName(name string) error {
 	// DocType names can contain spaces (e.g., "Service Report", "Work Order").
 	// They cannot be empty (checked elsewhere).
 	return nil
+}
+
+var nonResourceNameChars = regexp.MustCompile(`[^a-z0-9_]+`)
+
+func normalizeResourceName(resourceName, displayName string) string {
+	value := strings.TrimSpace(resourceName)
+	if value == "" {
+		value = displayName
+	}
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, " ", "_")
+	value = nonResourceNameChars.ReplaceAllString(value, "_")
+	for strings.Contains(value, "__") {
+		value = strings.ReplaceAll(value, "__", "_")
+	}
+	value = strings.Trim(value, "_")
+	if value == "" {
+		return "doctype"
+	}
+	return value
 }
 
 // validFieldNameRe is a simple check: field names must start with a lowercase letter
@@ -772,12 +805,43 @@ func validateFieldType(ft string) error {
 		"Int": true, "Float": true, "Currency": true, "Percent": true,
 		"Check": true, "Date": true, "Time": true, "Datetime": true,
 		"Select": true, "Link": true, "Dynamic Link": true,
-		"Table": true, "Attach": true, "Attach Image": true,
+		"Table": true, "Attach": true, "Attach Image": true, "Attach Audio": true,
 		"JSON": true, "Password": true,
 		"Section Break": true, "Column Break": true, "Heading": true,
 	}
 	if !validTypes[ft] {
 		return fmt.Errorf("unknown fieldtype %q", ft)
+	}
+	return nil
+}
+
+// isAttachType reports whether a field type stores a file attachment.
+func isAttachType(ft string) bool {
+	switch ft {
+	case "Attach", "Attach Image", "Attach Audio":
+		return true
+	}
+	return false
+}
+
+// validateAccept validates an accept list (comma/newline-separated extensions or MIME types).
+func validateAccept(accept string) error {
+	normalized := strings.ReplaceAll(accept, "\n", ",")
+	for _, p := range strings.Split(normalized, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.HasPrefix(p, ".") {
+			if len(p) < 2 {
+				return fmt.Errorf("invalid accept entry %q: extension must look like \".pdf\"", p)
+			}
+			continue
+		}
+		if strings.Contains(p, "/") {
+			continue // MIME type such as "image/*" or "application/pdf"
+		}
+		return fmt.Errorf("invalid accept entry %q: use an extension (\".pdf\") or MIME type (\"image/*\")", p)
 	}
 	return nil
 }

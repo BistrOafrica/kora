@@ -1,0 +1,9 @@
+- name: Maintenance and Asset Service Operator
+  workspace_access: true
+  description: Creates and executes Maintenance and Asset Service work.
+- name: Maintenance and Asset Service Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Maintenance and Asset Service Administrator
+  workspace_access: true
+  description: Configures Maintenance and Asset Service and manages access.

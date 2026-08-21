@@ -1,0 +1,9 @@
+- name: Agriculture and Farm Operations Operator
+  workspace_access: true
+  description: Creates and executes Agriculture and Farm Operations work.
+- name: Agriculture and Farm Operations Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Agriculture and Farm Operations Administrator
+  workspace_access: true
+  description: Configures Agriculture and Farm Operations and manages access.

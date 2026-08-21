@@ -1,0 +1,87 @@
+name: Attendance
+module: HR
+title_field: name
+search_fields: employee, attendance_date
+sort_field: attendance_date
+sort_order: DESC
+
+fields:
+  # --- Section: Attendance Record ---
+  - fieldname: section_attendance
+    fieldtype: Section Break
+    label: Attendance Record
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: employee
+    fieldtype: Link
+    label: Employee
+    options: Employee
+    reqd: true
+    in_list_view: true
+
+  - fieldname: attendance_date
+    fieldtype: Date
+    label: Attendance Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: check_in
+    fieldtype: Datetime
+    label: Check In
+
+  - fieldname: check_out
+    fieldtype: Datetime
+    label: Check Out
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Present
+      Absent
+      Late
+      Half Day
+      Holiday
+    default: Present
+    in_list_view: true
+    in_standard_filter: true
+
+  # --- Section: Details ---
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: shift
+    fieldtype: Select
+    label: Shift
+    options: |
+      Day
+      Night
+      Rotating
+    default: Day
+
+  - fieldname: late_minutes
+    fieldtype: Int
+    label: Late Minutes
+    read_only: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Late minutes cannot be negative."
+
+  - fieldname: overtime_hours
+    fieldtype: Float
+    label: Overtime Hours
+    constraints:
+      - type: min
+        value: 0
+        message: "Overtime hours cannot be negative."
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

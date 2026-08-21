@@ -1,0 +1,6 @@
+pack: construction
+seed_mode: demo
+records:
+  - doctype: Site Work Package
+    reference: DEMO-CONSTRUCTION-001
+    status: Draft

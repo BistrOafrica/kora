@@ -1,0 +1,108 @@
+name: Leave Application
+module: HR
+is_submittable: true
+title_field: name
+search_fields: employee, leave_type, from_date
+sort_field: from_date
+sort_order: DESC
+
+fields:
+  # --- Section: Leave Details ---
+  - fieldname: section_leave
+    fieldtype: Section Break
+    label: Leave Details
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: employee
+    fieldtype: Link
+    label: Employee
+    options: Employee
+    reqd: true
+    in_list_view: true
+
+  - fieldname: leave_type
+    fieldtype: Select
+    label: Leave Type
+    options: |
+      Annual
+      Sick
+      Maternity
+      Paternity
+      Compassionate
+      Study
+      Unpaid
+      Other
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: from_date
+    fieldtype: Date
+    label: From Date
+    reqd: true
+    in_list_view: true
+    constraints:
+      - type: min_date
+        value: today
+        message: "From date must be today or later."
+
+  - fieldname: to_date
+    fieldtype: Date
+    label: To Date
+    reqd: true
+    constraints:
+      - type: min_date
+        value: today
+        message: "To date must be today or later."
+
+  - fieldname: total_days
+    fieldtype: Float
+    label: Total Days
+    computed: "DATEDIFF(to_date, from_date) + 1"
+    read_only: true
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Approved
+      Rejected
+      Cancelled
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  # --- Section: Details ---
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: reason
+    fieldtype: Text
+    label: Reason
+
+  - fieldname: contact_during_leave
+    fieldtype: Data
+    label: Contact During Leave
+
+  - fieldname: handover_to
+    fieldtype: Link
+    label: Handover To
+    options: Employee
+
+  - fieldname: approved_by
+    fieldtype: Data
+    label: Approved By
+    read_only: true
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

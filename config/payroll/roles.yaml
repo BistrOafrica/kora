@@ -1,0 +1,9 @@
+- name: Payroll Inputs and Compliance Operator
+  workspace_access: true
+  description: Creates and executes Payroll Inputs and Compliance work.
+- name: Payroll Inputs and Compliance Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Payroll Inputs and Compliance Administrator
+  workspace_access: true
+  description: Configures Payroll Inputs and Compliance and manages access.

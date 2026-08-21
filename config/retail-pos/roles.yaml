@@ -1,0 +1,9 @@
+- name: Retail POS and Store Operations Operator
+  workspace_access: true
+  description: Executes Retail POS and Store Operations work.
+- name: Retail POS and Store Operations Reviewer
+  workspace_access: true
+  description: Reviews Retail POS and Store Operations evidence.
+- name: Retail POS and Store Operations Administrator
+  workspace_access: true
+  description: Configures Retail POS and Store Operations.

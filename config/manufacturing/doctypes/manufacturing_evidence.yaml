@@ -1,0 +1,15 @@
+name: Production Output
+module: Light Manufacturing
+title_field: reference
+fields:
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference
+    reqd: true
+  - fieldname: source_record
+    fieldtype: Data
+    label: Primary Record
+    reqd: true
+  - fieldname: evidence
+    fieldtype: Text
+    label: Evidence

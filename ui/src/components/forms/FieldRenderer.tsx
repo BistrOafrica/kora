@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { LinkField } from './LinkField'
 import { ChildTableEditor } from './ChildTableEditor'
+import { AttachmentField } from './AttachmentField'
 import {
   Select,
   SelectContent,
@@ -64,7 +65,13 @@ export function FieldRenderer({
           <Label htmlFor={id} className={labelClass}>{label}</Label>
           {field.read_only ? (
             <div className="flex min-h-[2.5rem] items-center rounded-md border border-transparent bg-muted/30 px-3 py-2 text-sm">
-              {value != null && value !== '' ? String(value) : <span className="text-muted-foreground">—</span>}
+              {value != null && value !== '' ? (
+                field.options === 'URL' ? (
+                  <a href={String(value)} target="_blank" rel="noreferrer" className="truncate text-primary underline underline-offset-2">
+                    {String(value)}
+                  </a>
+                ) : String(value)
+              ) : <span className="text-muted-foreground">—</span>}
             </div>
           ) : (
             <Input
@@ -295,19 +302,19 @@ export function FieldRenderer({
 
     case 'Attach':
     case 'Attach Image':
+    case 'Attach Audio':
       return (
-        <div className={gapClass}>
-          <Label htmlFor={id} className={labelClass}>{label}</Label>
-          <Input
-            id={id}
-            type="text"
-            value={value ?? ''}
-            onChange={(e) => onChange(fieldname, e.target.value)}
-            disabled={disabled || field.read_only}
-            placeholder="File path or URL"
-          />
-          {hint && <p className="mt-1 text-sm text-destructive">{hint}</p>}
-        </div>
+        <AttachmentField
+          field={field}
+          value={value}
+          onChange={onChange}
+          disabled={disabled || field.read_only}
+          error={hint || undefined}
+          label={label}
+          id={id}
+          labelClass={labelClass}
+          gapClass={gapClass}
+        />
       )
 
     case 'Section Break':

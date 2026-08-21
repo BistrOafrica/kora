@@ -1,0 +1,26 @@
+name: Bank Transaction
+module: Accounting
+title_field: reference
+search_fields: reference, status
+fields:
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference
+    reqd: true
+    unique: true
+  - fieldname: bank_account
+    fieldtype: Data
+    label: Bank Account
+    reqd: true
+  - fieldname: transaction_date
+    fieldtype: Date
+    label: Transaction Date
+    reqd: true
+  - fieldname: amount
+    fieldtype: Currency
+    label: Amount
+    reqd: true
+  - fieldname: status
+    fieldtype: Data
+    label: Status
+    default: Unmatched

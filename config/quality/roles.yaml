@@ -1,0 +1,9 @@
+- name: Quality Management Operator
+  workspace_access: true
+  description: Creates and executes Quality Management work.
+- name: Quality Management Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Quality Management Administrator
+  workspace_access: true
+  description: Configures Quality Management and manages access.

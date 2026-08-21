@@ -54,7 +54,7 @@ Configure Claude Desktop to use it:
 		reg := doctype.NewRegistry()
 		reg.LoadFull(doctypes, roles, permissions)
 
-		server := mcp.New(reg, siteName)
+		server := mcp.New(reg, siteName, mcp.ModeExecutable)
 		return server.Run(context.Background())
 	},
 }

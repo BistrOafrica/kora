@@ -1,0 +1,6 @@
+pack: wholesale
+seed_mode: demo
+records:
+  - doctype: Distributor Order
+    reference: DEMO-WHOLESALE-001
+    status: Draft

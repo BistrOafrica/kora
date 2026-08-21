@@ -1,0 +1,60 @@
+name: Budget Item
+module: Finance
+is_child_table: true
+title_field: account
+sort_field: idx
+sort_order: ASC
+
+fields:
+  - fieldname: account
+    fieldtype: Link
+    label: Account
+    options: Account
+    reqd: true
+    in_list_view: true
+    description: General ledger account for this budget line.
+
+  - fieldname: description
+    fieldtype: Data
+    label: Description
+    description: Description of the budget line item.
+
+  - fieldname: budget_amount
+    fieldtype: Currency
+    label: Budget Amount (KES)
+    reqd: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Budget amount cannot be negative."
+    description: Budgeted amount for this account.
+
+  - fieldname: actual_amount
+    fieldtype: Currency
+    label: Actual Amount (KES)
+    default: "0"
+    constraints:
+      - type: min
+        value: 0
+        message: "Actual amount cannot be negative."
+    description: Actual expenditure to date.
+
+  - fieldname: variance
+    fieldtype: Currency
+    label: Variance (KES)
+    computed: "budget_amount - actual_amount"
+    read_only: true
+    description: Auto-computed variance (budget - actual).
+
+  - fieldname: variance_pct
+    fieldtype: Percent
+    label: Variance (%)
+    computed: "(budget_amount - actual_amount) / budget_amount * 100"
+    read_only: true
+    description: Auto-computed variance as a percentage.
+
+  - fieldname: cost_center
+    fieldtype: Link
+    label: Cost Center
+    options: Cost Center
+    description: Cost center for this budget line.

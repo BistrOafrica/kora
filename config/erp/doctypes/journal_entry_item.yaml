@@ -1,20 +1,3 @@
-    computed: SUM(entries.debit)
-    read_only: true
-  - fieldname: total_credit
-    fieldtype: Currency
-    label: Total Credit
-    computed: SUM(entries.credit)
-    read_only: true
-  - fieldname: entries
-    fieldtype: Table
-    label: Journal Items
-    options: Journal Entry Item
-  - fieldname: status
-    fieldtype: Data
-    label: Status
-    default: Draft
-    read_only: true
-
 ---
 name: Journal Entry Item
 module: Finance

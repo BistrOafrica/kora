@@ -14,6 +14,7 @@ type ComputedHookFunc func(doctypeName, fieldName string, doc *Document) (any, e
 type Registry struct {
 	mu            sync.RWMutex
 	doctypes      map[string]*DocType // keyed by doctype name
+	aliases       map[string]string   // resource-safe aliases → primary doctype name
 	Permissions   *PermissionMatrix
 	Workflows     *WorkflowMap
 	Views         *ViewRegistry
@@ -24,6 +25,7 @@ type Registry struct {
 func NewRegistry() *Registry {
 	return &Registry{
 		doctypes:    make(map[string]*DocType),
+		aliases:     make(map[string]string),
 		Permissions: NewPermissionMatrix(),
 		Workflows:   NewWorkflowMap(),
 		Views:       NewViewRegistry(),
@@ -36,14 +38,22 @@ func (r *Registry) Register(dt *DocType) {
 	defer r.mu.Unlock()
 	dt.NormalizePublicAccess()
 	dt.RebuildDerivedMetadata()
+	dt.ResourceName = normalizeResourceName(dt.ResourceName, dt.Name)
 	r.doctypes[dt.Name] = dt
+	r.aliases[dt.ResourceName] = dt.Name
 }
 
 // Get returns a DocType by name, or nil if not found.
 func (r *Registry) Get(name string) *DocType {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.doctypes[name]
+	if dt, ok := r.doctypes[name]; ok {
+		return dt
+	}
+	if primary, ok := r.aliases[name]; ok {
+		return r.doctypes[primary]
+	}
+	return nil
 }
 
 // Has returns true if the DocType exists in the registry.
@@ -51,6 +61,10 @@ func (r *Registry) Has(name string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	_, ok := r.doctypes[name]
+	if ok {
+		return true
+	}
+	_, ok = r.aliases[name]
 	return ok
 }
 
@@ -59,6 +73,19 @@ func (r *Registry) Has(name string) bool {
 func (r *Registry) Unregister(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if dt, ok := r.doctypes[name]; ok {
+		delete(r.doctypes, dt.Name)
+		delete(r.aliases, dt.ResourceName)
+		return
+	}
+	if primary, ok := r.aliases[name]; ok {
+		if dt, ok := r.doctypes[primary]; ok {
+			delete(r.doctypes, dt.Name)
+			delete(r.aliases, dt.ResourceName)
+		}
+		delete(r.aliases, name)
+		return
+	}
 	delete(r.doctypes, name)
 }
 
@@ -107,10 +134,13 @@ func (r *Registry) LoadFromDB(doctypes []*DocType) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.doctypes = make(map[string]*DocType, len(doctypes))
+	r.aliases = make(map[string]string, len(doctypes))
 	for _, dt := range doctypes {
 		dt.NormalizePublicAccess()
 		dt.RebuildDerivedMetadata()
+		dt.ResourceName = normalizeResourceName(dt.ResourceName, dt.Name)
 		r.doctypes[dt.Name] = dt
+		r.aliases[dt.ResourceName] = dt.Name
 	}
 }
 
@@ -119,10 +149,13 @@ func (r *Registry) LoadFull(doctypes []*DocType, roles []*Role, permissions []*P
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.doctypes = make(map[string]*DocType, len(doctypes))
+	r.aliases = make(map[string]string, len(doctypes))
 	for _, dt := range doctypes {
 		dt.NormalizePublicAccess()
 		dt.RebuildDerivedMetadata()
+		dt.ResourceName = normalizeResourceName(dt.ResourceName, dt.Name)
 		r.doctypes[dt.Name] = dt
+		r.aliases[dt.ResourceName] = dt.Name
 	}
 	r.Permissions.LoadPermissionsFromDB(roles, permissions)
 }

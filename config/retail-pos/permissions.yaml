@@ -1,0 +1,20 @@
+- doctype: POS Order
+  role: Retail POS and Store Operations Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: POS Order
+  role: Retail POS and Store Operations Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Payment
+  role: Retail POS and Store Operations Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

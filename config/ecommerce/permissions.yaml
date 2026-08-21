@@ -1,0 +1,33 @@
+- doctype: Web Order
+  role: E-commerce and Order Fulfillment Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Web Order
+  role: E-commerce and Order Fulfillment Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Web Order
+  role: E-commerce and Order Fulfillment Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Fulfillment
+  role: E-commerce and Order Fulfillment Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Shipment
+  role: E-commerce and Order Fulfillment Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

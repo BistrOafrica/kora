@@ -27,7 +27,7 @@ func (h *Handler) HandleExtensionList(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var extensions []map[string]any
+	var extensions []extensionSummary
 	for rows.Next() {
 		var name, site, displayName, desc, endpointURL, lastErr string
 		var subsJSON, permsJSON sql.NullString
@@ -36,19 +36,27 @@ func (h *Handler) HandleExtensionList(c *gin.Context) {
 		var installedAt, lastDeliveryAt sql.NullString
 		rows.Scan(&name, &site, &displayName, &desc, &endpointURL, &isActive, &subsJSON, &permsJSON,
 			&secretCount, &consecutiveFailures, &installedAt, &lastDeliveryAt, &lastErr)
-		extensions = append(extensions, map[string]any{
-			"name": name, "display_name": displayName, "description": desc, "endpoint_url": endpointURL,
-			"is_active": isActive, "subscriptions": subsJSON.String, "api_permissions": permsJSON.String,
-			"secret_count": secretCount, "consecutive_failures": consecutiveFailures,
-			"installed_at": installedAt.String, "last_delivery_at": lastDeliveryAt.String, "last_error": lastErr,
+		extensions = append(extensions, extensionSummary{
+			Name:                name,
+			DisplayName:         displayName,
+			Description:         desc,
+			EndpointURL:         endpointURL,
+			IsActive:            isActive,
+			Subscriptions:       subsJSON.String,
+			APIPermissions:      permsJSON.String,
+			SecretCount:         secretCount,
+			ConsecutiveFailures: consecutiveFailures,
+			InstalledAt:         installedAt.String,
+			LastDeliveryAt:      lastDeliveryAt.String,
+			LastError:           lastErr,
 		})
 	}
-	c.JSON(http.StatusOK, Response{Data: extensions})
+	c.JSON(http.StatusOK, Response{Data: extensionListResponse{Extensions: extensions}})
 }
 
 // HandleExtensionGet returns a single extension.
 func (h *Handler) HandleExtensionGet(c *gin.Context) {
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "ok"}})
+	c.JSON(http.StatusOK, Response{Data: extensionGetResponse{Status: "ok"}})
 }
 
 // HandleExtensionCreate registers a new extension.
@@ -61,7 +69,7 @@ func (h *Handler) HandleExtensionCreate(c *gin.Context) {
 		DisplayName    string `json:"display_name"`
 		Description    string `json:"description"`
 		EndpointURL    string `json:"endpoint_url"`
-		Subscriptions  string `json:"subscriptions"`  // JSON array
+		Subscriptions  string `json:"subscriptions"`   // JSON array
 		APIPermissions string `json:"api_permissions"` // JSON array
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" || req.EndpointURL == "" {
@@ -106,15 +114,17 @@ func (h *Handler) HandleExtensionCreate(c *gin.Context) {
 
 	slog.Info("extension registered", "name", req.Name, "site", siteNameStr)
 	// Return secret and access token — shown once.
-	c.JSON(http.StatusCreated, Response{Data: map[string]any{
-		"name": req.Name, "secret": secret, "access_token": accessToken,
-		"warning": "Store these credentials securely. They will not be shown again.",
+	c.JSON(http.StatusCreated, Response{Data: extensionCreatedResponse{
+		Name:        req.Name,
+		Secret:      secret,
+		AccessToken: accessToken,
+		Warning:     "Store these credentials securely. They will not be shown again.",
 	}})
 }
 
 // HandleExtensionUpdate updates an extension.
 func (h *Handler) HandleExtensionUpdate(c *gin.Context) {
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "ok"}})
+	c.JSON(http.StatusOK, Response{Data: extensionGetResponse{Status: "ok"}})
 }
 
 // HandleExtensionDelete removes an extension.
@@ -130,7 +140,7 @@ func (h *Handler) HandleExtensionDelete(c *gin.Context) {
 	}
 	db.Exec(`DELETE FROM _kora_extension WHERE site = ? AND name = ?`, siteNameStr, name)
 	db.Exec(`DELETE FROM _kora_webhook_delivery WHERE extension_name = ?`, name)
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "deleted"}})
+	c.JSON(http.StatusOK, Response{Data: extensionDeleteResponse{Status: "deleted"}})
 }
 
 // HandleExtensionDeliveries returns the delivery log for an extension.
@@ -151,24 +161,30 @@ func (h *Handler) HandleExtensionDeliveries(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var deliveries []map[string]any
+	var deliveries []extensionDelivery
 	for rows.Next() {
 		var id, eventID, eventType, endpointURL, status, errMsg, createdAt string
 		var attempt, respStatus, durationMs int
 		rows.Scan(&id, &eventID, &eventType, &endpointURL, &status, &attempt, &respStatus, &durationMs, &errMsg, &createdAt)
-		deliveries = append(deliveries, map[string]any{
-			"id": id, "event_id": eventID, "event_type": eventType,
-			"endpoint_url": endpointURL, "status": status, "attempt": attempt,
-			"response_status": respStatus, "duration_ms": durationMs,
-			"error_message": errMsg, "created_at": createdAt,
+		deliveries = append(deliveries, extensionDelivery{
+			ID:             id,
+			EventID:        eventID,
+			EventType:      eventType,
+			EndpointURL:    endpointURL,
+			Status:         status,
+			Attempt:        attempt,
+			ResponseStatus: respStatus,
+			DurationMs:     durationMs,
+			ErrorMessage:   errMsg,
+			CreatedAt:      createdAt,
 		})
 	}
-	c.JSON(http.StatusOK, Response{Data: deliveries})
+	c.JSON(http.StatusOK, Response{Data: extensionDeliveriesResponse{Deliveries: deliveries}})
 }
 
 // HandleExtensionReplay replays a specific delivery or all dead-lettered deliveries.
 func (h *Handler) HandleExtensionReplay(c *gin.Context) {
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "replay triggered"}})
+	c.JSON(http.StatusOK, Response{Data: extensionReplayResponse{Status: "replay triggered"}})
 }
 
 // HandleExtensionRotateSecret generates a new signing secret for an extension.
@@ -190,9 +206,9 @@ func (h *Handler) HandleExtensionRotateSecret(c *gin.Context) {
 		secret = ?, secret_count = secret_count + 1, updated_at = NOW(6) WHERE name = ?`,
 		time.Now().Add(24*time.Hour).Format("2006-01-02 15:04:05"), secret, name)
 
-	c.JSON(http.StatusOK, Response{Data: map[string]any{
-		"secret": secret,
-		"warning": "Update your extension with this new secret. Both old and new secrets are valid for 24 hours.",
+	c.JSON(http.StatusOK, Response{Data: extensionRotatedSecretResponse{
+		Secret:  secret,
+		Warning: "Update your extension with this new secret. Both old and new secrets are valid for 24 hours.",
 	}})
 }
 

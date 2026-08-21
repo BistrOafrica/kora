@@ -94,6 +94,15 @@ export interface ConfigVersion {
   status: 'Draft' | 'Active' | 'Superseded'
 }
 
+export function isImmutableConfigVersion(version: Pick<ConfigVersion, 'status'>): boolean {
+  return version.status !== 'Draft'
+}
+
+export function selectRollbackTargetVersion(versions: ConfigVersion[]): ConfigVersion | null {
+  const immutable = versions.filter(isImmutableConfigVersion)
+  return immutable.sort((a, b) => b.version - a.version)[0] ?? null
+}
+
 export interface ConfigVersionPreview {
   version_id: string
   status: string

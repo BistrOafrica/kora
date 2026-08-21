@@ -1,0 +1,9 @@
+- name: Purchasing Operator
+  workspace_access: true
+  description: Creates requests, orders, and supplier records.
+- name: Purchasing Reviewer
+  workspace_access: true
+  description: Approves requests and reviews receipts and matches.
+- name: Purchasing Administrator
+  workspace_access: true
+  description: Configures purchasing policy and access.

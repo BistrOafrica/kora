@@ -1,0 +1,143 @@
+name: Contact
+module: CRM
+title_field: first_name
+search_fields: first_name, last_name, email, phone
+sort_field: first_name
+sort_order: ASC
+track_changes: true
+
+fields:
+  # --- Section: Personal Details ---
+  - fieldname: section_personal
+    fieldtype: Section Break
+    label: Personal Details
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: first_name
+    fieldtype: Data
+    label: First Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: last_name
+    fieldtype: Data
+    label: Last Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: email
+    fieldtype: Data
+    label: Email
+    options: Email
+    in_list_view: true
+    constraints:
+      - type: regex
+        pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+        message: "Enter a valid email address."
+
+  - fieldname: phone
+    fieldtype: Data
+    label: Phone
+    options: Phone
+    in_list_view: true
+
+  - fieldname: mobile
+    fieldtype: Data
+    label: Mobile
+    options: Phone
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: company
+    fieldtype: Link
+    label: Company
+    options: Company
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: job_title
+    fieldtype: Data
+    label: Job Title
+
+  - fieldname: lead_source
+    fieldtype: Select
+    label: Lead Source
+    options: |
+      Website
+      Referral
+      Social Media
+      Event
+      Cold Call
+      Email Campaign
+      Partner
+      Existing Customer
+      Other
+    in_standard_filter: true
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Active
+      Inactive
+      Lead
+    default: Active
+    in_list_view: true
+    in_standard_filter: true
+
+  # --- Section: Address ---
+  - fieldname: section_address
+    fieldtype: Section Break
+    label: Address
+
+  - fieldname: address
+    fieldtype: Text
+    label: Address
+
+  - fieldname: city
+    fieldtype: Data
+    label: City
+
+  - fieldname: county
+    fieldtype: Data
+    label: County
+
+  - fieldname: country
+    fieldtype: Data
+    label: Country
+    default: Kenya
+
+  # --- Section: Other ---
+  - fieldname: section_other
+    fieldtype: Section Break
+    label: Other
+
+  - fieldname: tax_id
+    fieldtype: Data
+    label: KRA PIN
+
+  - fieldname: id_number
+    fieldtype: Data
+    label: National ID Number
+
+  - fieldname: contact_type
+    fieldtype: Select
+    label: Contact Type
+    options: |
+      Customer
+      Supplier
+      Partner
+      Employee
+      Other
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

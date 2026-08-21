@@ -1,0 +1,46 @@
+name: Purchase Request Item
+module: Purchasing
+is_child_table: true
+title_field: item
+sort_field: idx
+sort_order: ASC
+
+fields:
+  - fieldname: item
+    fieldtype: Link
+    label: Item
+    options: Item
+    reqd: true
+    in_list_view: true
+
+  - fieldname: description
+    fieldtype: Data
+    label: Description
+
+  - fieldname: quantity
+    fieldtype: Float
+    label: Quantity
+    reqd: true
+    constraints:
+      - type: min
+        value: 0.01
+        message: "Quantity must be at least 0.01."
+
+  - fieldname: unit
+    fieldtype: Data
+    label: Unit
+
+  - fieldname: estimated_unit_price
+    fieldtype: Currency
+    label: Est. Unit Price (KES)
+
+  - fieldname: estimated_total
+    fieldtype: Currency
+    label: Est. Total (KES)
+    computed: "quantity * estimated_unit_price"
+    read_only: true
+    description: Auto-computed from quantity × estimated unit price.
+
+  - fieldname: purpose
+    fieldtype: Data
+    label: Purpose

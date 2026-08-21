@@ -88,19 +88,22 @@ func (h *Handler) HandleScriptCreate(c *gin.Context) {
 	}
 
 	var req struct {
-		Name          string `json:"name"`
-		ScriptType    string `json:"script_type"`
-		DocType       string `json:"doctype"`
-		Event         string `json:"event"`
-		MethodPath    string `json:"method_path"`
+		Name           string `json:"name"`
+		ScriptType     string `json:"script_type"`
+		DocType        string `json:"doctype"`
+		Event          string `json:"event"`
+		MethodPath     string `json:"method_path"`
 		WorkflowAction string `json:"workflow_action"`
-		Schedule      string `json:"schedule"`
-		Priority      int    `json:"priority"`
-		RunAs         string `json:"run_as"`
-		TimeoutMs     int    `json:"timeout_ms"`
-		Script        string `json:"script"`
+		Schedule       string `json:"schedule"`
+		Priority       int    `json:"priority"`
+		RunAs          string `json:"run_as"`
+		TimeoutMs      int    `json:"timeout_ms"`
+		Script         string `json:"script"`
 	}
+	// DEBUG: Check Content-Length and body state
+	slog.Info("HandleScriptCreate", "contentLength", c.Request.ContentLength, "method", c.Request.Method, "path", c.Request.URL.Path)
 	if err := c.ShouldBindJSON(&req); err != nil {
+		slog.Error("HandleScriptCreate ShouldBindJSON failed", "error", err, "contentLength", c.Request.ContentLength)
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request body"}})
 		return
 	}
@@ -223,17 +226,17 @@ func (h *Handler) HandleScriptUpdate(c *gin.Context) {
 	}
 
 	var req struct {
-		ScriptType    *string `json:"script_type"`
-		DocType       *string `json:"doctype"`
-		Event         *string `json:"event"`
-		MethodPath    *string `json:"method_path"`
+		ScriptType     *string `json:"script_type"`
+		DocType        *string `json:"doctype"`
+		Event          *string `json:"event"`
+		MethodPath     *string `json:"method_path"`
 		WorkflowAction *string `json:"workflow_action"`
-		Schedule      *string `json:"schedule"`
-		Priority      *int    `json:"priority"`
-		IsActive      *bool   `json:"is_active"`
-		RunAs         *string `json:"run_as"`
-		TimeoutMs     *int    `json:"timeout_ms"`
-		Script        *string `json:"script"`
+		Schedule       *string `json:"schedule"`
+		Priority       *int    `json:"priority"`
+		IsActive       *bool   `json:"is_active"`
+		RunAs          *string `json:"run_as"`
+		TimeoutMs      *int    `json:"timeout_ms"`
+		Script         *string `json:"script"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request body"}})
@@ -263,7 +266,7 @@ func (h *Handler) HandleScriptUpdate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "ok"}})
+	c.JSON(http.StatusOK, Response{Data: scriptStatusResponse{Status: "ok"}})
 }
 
 // HandleScriptDelete deletes a script.
@@ -288,7 +291,7 @@ func (h *Handler) HandleScriptDelete(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "deleted"}})
+	c.JSON(http.StatusOK, Response{Data: scriptStatusResponse{Status: "deleted"}})
 }
 
 // HandleScriptValidate validates a script without saving it.
@@ -311,16 +314,12 @@ func (h *Handler) HandleScriptValidate(c *gin.Context) {
 	}
 
 	if err := h.ScriptRunner.Validate(req.Script); err != nil {
-		c.JSON(http.StatusOK, Response{
-			Data: map[string]any{"valid": false, "error": err.Error()},
-		})
+		c.JSON(http.StatusOK, Response{Data: scriptValidateResponse{Valid: false, Error: err.Error()}})
 		return
 	}
 
 	issues := detectHardcodedSecrets(req.Script)
-	c.JSON(http.StatusOK, Response{
-		Data: map[string]any{"valid": true, "warnings": issues},
-	})
+	c.JSON(http.StatusOK, Response{Data: scriptValidateResponse{Valid: true, Warnings: issues}})
 }
 
 // HandleScriptExecutions returns the execution log for a script.
@@ -353,12 +352,12 @@ func (h *Handler) HandleScriptExecutions(c *gin.Context) {
 func detectHardcodedSecrets(script string) []string {
 	var issues []string
 	patterns := []string{
-		"sk_live_", "sk_test_",           // Stripe
-		"api_key", "api_secret",           // Generic
-		"Bearer ", "Authorization:",       // Auth headers
-		"password", "passwd", "pwd",       // Passwords
-		"PRIVATE KEY",                     // PEM keys
-		"-----BEGIN",                      // PEM blocks
+		"sk_live_", "sk_test_", // Stripe
+		"api_key", "api_secret", // Generic
+		"Bearer ", "Authorization:", // Auth headers
+		"password", "passwd", "pwd", // Passwords
+		"PRIVATE KEY", // PEM keys
+		"-----BEGIN",  // PEM blocks
 	}
 	for _, p := range patterns {
 		if containsIgnoreCase(script, p) {

@@ -1,0 +1,94 @@
+name: KRA Return
+module: Finance
+is_submittable: true
+track_changes: true
+title_field: name
+search_fields: return_type, return_period
+sort_field: filing_date
+sort_order: DESC
+
+fields:
+  - fieldname: return_type
+    fieldtype: Select
+    label: Return Type
+    options: |
+      VAT3
+      PAYE
+      NSSF
+      SHIF
+      WHT
+      Income Tax
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+    description: Type of KRA tax return being filed.
+
+  - fieldname: return_period
+    fieldtype: Link
+    label: Return Period
+    options: Fiscal Period
+    reqd: true
+    in_list_view: true
+    description: Fiscal period this return covers.
+
+  - fieldname: filing_date
+    fieldtype: Date
+    label: Filing Date
+    in_list_view: true
+    description: Date the return was filed with KRA.
+
+  - fieldname: submission_status
+    fieldtype: Select
+    label: Submission Status
+    options: |
+      Draft
+      Prepared
+      Submitted
+      Accepted
+      Rejected
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+    description: Current status of the KRA return filing.
+
+  - fieldname: total_taxable
+    fieldtype: Currency
+    label: Total Taxable (KES)
+    description: Total taxable amount for this return.
+
+  - fieldname: total_tax
+    fieldtype: Currency
+    label: Total Tax (KES)
+    description: Total calculated tax amount.
+
+  - fieldname: total_paid
+    fieldtype: Currency
+    label: Total Paid (KES)
+    description: Amount already paid towards this return.
+
+  - fieldname: balance
+    fieldtype: Currency
+    label: Balance (KES)
+    computed: "total_tax - total_paid"
+    read_only: true
+    description: Outstanding balance (tax - paid).
+
+  - fieldname: acknowledgement_number
+    fieldtype: Data
+    label: Acknowledgement Number
+    description: iTax acknowledgement receipt number.
+
+  - fieldname: filed_by
+    fieldtype: Data
+    label: Filed By
+    description: Person who filed the return.
+
+  - fieldname: itax_response
+    fieldtype: JSON
+    label: iTax Response
+    description: Full JSON response from the iTax API.
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

@@ -1,0 +1,23 @@
+name: Expense and Reimbursement Workspace
+route: /expense
+type: workspace
+layout: two_panel
+label: Expense and Reimbursement
+module: Expense and Reimbursement
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Expense Claim
+    label: Expense Claim Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Expense Line
+    label: Expense Line Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

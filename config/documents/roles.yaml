@@ -1,0 +1,9 @@
+- name: Document and Knowledge Management Operator
+  workspace_access: true
+  description: Creates and executes Document and Knowledge Management work.
+- name: Document and Knowledge Management Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Document and Knowledge Management Administrator
+  workspace_access: true
+  description: Configures Document and Knowledge Management and manages access.

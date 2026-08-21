@@ -1,0 +1,23 @@
+name: Marketing Campaigns Workspace
+route: /marketing
+type: workspace
+layout: two_panel
+label: Marketing Campaigns
+module: Marketing Campaigns
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Campaign
+    label: Campaign Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Audience
+    label: Audience Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

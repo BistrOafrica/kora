@@ -19,6 +19,10 @@ func TestParseFieldworkConfigs(t *testing.T) {
 		"Work Order":      11,
 		"Work Order Item": 5,
 		"Service Report":  10,
+		"Service Request": 5,
+		"Visit":           5,
+		"Used Part":       5,
+		"Customer Signoff": 5,
 	}
 
 	for _, dt := range doctypes {
@@ -95,8 +99,8 @@ func TestParseFieldworkConfigs(t *testing.T) {
 		t.Logf("✓ %s (%d fields)", dt.Name, len(dt.Fields))
 	}
 
-	if len(doctypes) != 6 {
-		t.Errorf("expected 6 doctypes, got %d", len(doctypes))
+	if len(doctypes) != 10 {
+		t.Errorf("expected 10 doctypes, got %d", len(doctypes))
 	}
 }
 

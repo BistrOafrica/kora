@@ -34,7 +34,7 @@ func TestLoadAll_Empty(t *testing.T) {
 			"reqd", "unique_constraint", "default_value", "hidden", "read_only",
 			"bold", "in_list_view", "in_standard_filter", "search_index",
 			"description", "depends_on", "mandatory_depends_on", "constraints_json",
-			"renamed_from", "linked_field", "computed", "idx",
+			"renamed_from", "linked_field", "computed", "accept", "idx",
 		}))
 
 	doctypes, err := s.LoadAll("")
@@ -70,11 +70,11 @@ func TestLoadAll_WithDoctypes(t *testing.T) {
 		"reqd", "unique_constraint", "default_value", "hidden", "read_only",
 		"bold", "in_list_view", "in_standard_filter", "search_index",
 		"description", "depends_on", "mandatory_depends_on", "constraints_json",
-		"renamed_from", "linked_field", "computed", "idx",
+		"renamed_from", "linked_field", "computed", "accept", "idx",
 	}).
-		AddRow("Task", "subject", "Data", "Subject", "", 1, 0, "", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", 0).
-		AddRow("Task", "status", "Select", "Status", "Open,Closed", 1, 0, "Open", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", 1).
-		AddRow("User", "email", "Data", "Email", "", 1, 1, "", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", 0)
+		AddRow("Task", "subject", "Data", "Subject", "", 1, 0, "", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", "", 0).
+		AddRow("Task", "status", "Select", "Status", "Open,Closed", 1, 0, "Open", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", "", 1).
+		AddRow("User", "email", "Data", "Email", "", 1, 1, "", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", "", 0)
 
 	mock.ExpectQuery("SELECT .* FROM _kora_field WHERE .* ORDER BY parent, idx").
 		WillReturnRows(fieldRows)

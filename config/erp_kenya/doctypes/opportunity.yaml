@@ -1,0 +1,127 @@
+name: Opportunity
+module: CRM
+is_submittable: true
+track_changes: true
+title_field: opportunity_name
+search_fields: opportunity_name, company, contact
+sort_field: modified
+sort_order: DESC
+
+fields:
+  # --- Section: Opportunity Information ---
+  - fieldname: section_opp
+    fieldtype: Section Break
+    label: Opportunity Information
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: opportunity_name
+    fieldtype: Data
+    label: Opportunity Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: contact
+    fieldtype: Link
+    label: Contact
+    options: Contact
+    in_list_view: true
+
+  - fieldname: company
+    fieldtype: Link
+    label: Company
+    options: Company
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: sales_stage
+    fieldtype: Select
+    label: Sales Stage
+    options: |
+      Prospecting
+      Qualification
+      Needs Analysis
+      Proposal
+      Price Quote
+      Negotiation
+      Closed Won
+      Closed Lost
+    default: Prospecting
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: lead_source
+    fieldtype: Link
+    label: Lead Source
+    options: Lead
+
+  - fieldname: close_date
+    fieldtype: Date
+    label: Expected Close Date
+    constraints:
+      - type: min_date
+        value: today
+        message: "Expected close date must be today or later."
+
+  # --- Section: Financial ---
+  - fieldname: section_financial
+    fieldtype: Section Break
+    label: Financial
+
+  - fieldname: amount
+    fieldtype: Currency
+    label: Amount
+    constraints:
+      - type: min
+        value: 0
+        message: "Amount cannot be negative."
+
+  - fieldname: probability
+    fieldtype: Percent
+    label: Probability (%)
+    constraints:
+      - type: min
+        value: 0
+        message: "Probability cannot be less than 0%."
+      - type: max
+        value: 100
+        message: "Probability cannot exceed 100%."
+
+  - fieldname: expected_revenue
+    fieldtype: Currency
+    label: Expected Revenue
+    computed: "amount * probability / 100"
+    read_only: true
+
+  # --- Section: Details ---
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: next_step
+    fieldtype: Data
+    label: Next Step
+
+  - fieldname: competition
+    fieldtype: Data
+    label: Competition
+
+  - fieldname: description
+    fieldtype: Text
+    label: Description
+
+  - fieldname: loss_reason
+    fieldtype: Text
+    label: Loss Reason
+    depends_on: sales_stage
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

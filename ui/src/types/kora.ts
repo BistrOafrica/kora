@@ -20,7 +20,7 @@ export type FieldType =
   | 'Int' | 'Float' | 'Currency' | 'Percent'
   | 'Check' | 'Date' | 'Time' | 'Datetime'
   | 'Select' | 'Link' | 'Dynamic Link'
-  | 'Table' | 'Attach' | 'Attach Image'
+  | 'Table' | 'Attach' | 'Attach Image' | 'Attach Audio'
   | 'JSON' | 'Password'
   | 'Section Break' | 'Column Break' | 'Heading'
 
@@ -45,6 +45,7 @@ export interface Field {
   renamed_from: string
   linked_field?: string
   computed?: string
+  accept?: string
 }
 
 export interface Constraint {
@@ -104,6 +105,23 @@ export interface DocTypeSchema {
   permissions: PermissionMap
   transitions?: WorkflowTransition[]
   referenced_by?: ReferenceInfo[]
+}
+
+export interface PackageMetadata {
+  name: string
+  version: string
+  digest: string
+  signature?: string
+  engine_range?: string
+  frontend_range?: string
+  status: 'draft' | 'preview' | 'active' | 'retired'
+}
+
+export interface PageManifest {
+  name: string
+  route: string
+  components: unknown[]
+  metadata: PackageMetadata
 }
 
 export interface Document {
