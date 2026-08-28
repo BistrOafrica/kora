@@ -10,11 +10,24 @@ func sqlDefaultClause(dialect string, fieldtype string, value string) string {
 		return ""
 	}
 
+	if dialect == "mysql" && !mysqlSupportsDefault(fieldtype) {
+		return ""
+	}
+
 	if expr, ok := temporalDefaultExpr(dialect, fieldtype, value); ok {
 		return " DEFAULT " + expr
 	}
 
 	return fmt.Sprintf(" DEFAULT '%s'", escapeSQLDefault(value))
+}
+
+func mysqlSupportsDefault(fieldtype string) bool {
+	switch fieldtype {
+	case "Text", "Text Editor", "Attach", "Attach Image", "Attach Audio", "JSON":
+		return false
+	default:
+		return true
+	}
 }
 
 func temporalDefaultExpr(dialect string, fieldtype string, value string) (string, bool) {

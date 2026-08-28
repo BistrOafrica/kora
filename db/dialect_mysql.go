@@ -148,7 +148,9 @@ func (d *MySQLDialect) CreateTable(dt *doctype.DocType) []string {
 		} else {
 			col += " DEFAULT NULL"
 		}
-		col += sqlDefaultClause("mysql", f.Fieldtype, f.Default)
+		if mysqlSupportsDefault(f.Fieldtype) {
+			col += sqlDefaultClause("mysql", f.Fieldtype, f.Default)
+		}
 		cols = append(cols, col)
 	}
 
@@ -184,7 +186,9 @@ func (d *MySQLDialect) AddColumn(tableName string, f *doctype.Field) string {
 	} else {
 		col += " DEFAULT NULL"
 	}
-	col += sqlDefaultClause("mysql", f.Fieldtype, f.Default)
+	if mysqlSupportsDefault(f.Fieldtype) {
+		col += sqlDefaultClause("mysql", f.Fieldtype, f.Default)
+	}
 	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", d.QuoteIdent(tableName), col)
 }
 

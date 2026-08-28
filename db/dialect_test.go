@@ -196,6 +196,32 @@ func TestMySQL_CreateTableTemporalDefaults(t *testing.T) {
 	}
 }
 
+func TestMySQL_OmitsIllegalDefaultsForTextLikeColumns(t *testing.T) {
+	d := &MySQLDialect{}
+	dt := &doctype.DocType{
+		Name: "Text Defaults DocType",
+		Fields: []doctype.Field{
+			{Fieldname: "body", Fieldtype: "Text", Default: "hello"},
+			{Fieldname: "details", Fieldtype: "Text Editor", Default: "rich"},
+			{Fieldname: "payload", Fieldtype: "JSON", Default: `{"ok":true}`},
+		},
+	}
+
+	stmt := d.CreateTable(dt)[0]
+	if strings.Contains(stmt, "DEFAULT 'hello'") || strings.Contains(stmt, "DEFAULT 'rich'") || strings.Contains(stmt, `DEFAULT '{"ok":true}'`) {
+		t.Fatalf("MySQL should not emit defaults for text-like or JSON columns: %s", stmt)
+	}
+	if !contains(stmt, "`body` TEXT DEFAULT NULL") {
+		t.Fatalf("expected nullable text column without SQL default, got: %s", stmt)
+	}
+	if !contains(stmt, "`details` LONGTEXT DEFAULT NULL") {
+		t.Fatalf("expected nullable longtext column without SQL default, got: %s", stmt)
+	}
+	if !contains(stmt, "`payload` JSON DEFAULT NULL") {
+		t.Fatalf("expected nullable JSON column without SQL default, got: %s", stmt)
+	}
+}
+
 func TestLibSQL_CreateTable(t *testing.T) {
 	d := &LibSQLDialect{}
 	dt := &doctype.DocType{
