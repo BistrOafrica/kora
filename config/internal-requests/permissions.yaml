@@ -1,0 +1,33 @@
+- doctype: Internal Request
+  role: Internal Requests and Approvals Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Internal Request
+  role: Internal Requests and Approvals Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Internal Request
+  role: Internal Requests and Approvals Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Approval Step
+  role: Internal Requests and Approvals Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Fulfillment Task
+  role: Internal Requests and Approvals Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

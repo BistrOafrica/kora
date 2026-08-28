@@ -1,0 +1,6 @@
+pack: quality
+seed_mode: demo
+records:
+  - doctype: Inspection Request
+    reference: DEMO-QUALITY-001
+    status: Draft

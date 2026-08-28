@@ -93,6 +93,106 @@ func TestViewValidate_KeepsExplicitDefaults(t *testing.T) {
 	}
 }
 
+func TestPageManifestEnsurePrimaryDataBindings_RepairsMissingFormBinding(t *testing.T) {
+	manifest := &PageManifest{
+		APIVersion: "ui.kora.dev/v1",
+		Kind:       "Page",
+		Metadata: PageManifestMetadata{
+			Name:    "dummy-form",
+			Version: "0.1.0",
+			Package: "tenant.workspace",
+			Status:  "draft",
+		},
+		Spec: PageManifestSpec{
+			Route:   "/dummy-form",
+			Runtime: ">=2.0.0 <3.0.0",
+			Layout: PageManifestLayout{
+				Type: "single",
+				Children: []PageComponent{
+					{
+						ID:        "record_form_1",
+						Component: "record_form",
+						Version:   1,
+						Region:    "main",
+						Position:  0,
+						Props: map[string]any{
+							"title":          "Dummy",
+							"source_doctype": "Dummy",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	manifest.EnsurePrimaryDataBindings()
+
+	if len(manifest.Spec.Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(manifest.Spec.Resources))
+	}
+	if manifest.Spec.Resources[0].ID != "primary" {
+		t.Fatalf("expected primary resource id, got %q", manifest.Spec.Resources[0].ID)
+	}
+	if manifest.Spec.Layout.Children[0].Data != "primary.data" {
+		t.Fatalf("expected data binding to be repaired, got %q", manifest.Spec.Layout.Children[0].Data)
+	}
+}
+
+func TestPageManifestFromViewRoundTripPreservesCurrentProjection(t *testing.T) {
+	view := &View{
+		Name:          "Sales Dashboard",
+		Route:         "/sales",
+		Type:          "dashboard",
+		Layout:        "two_panel",
+		Module:        "Sales",
+		SourceDocType: "Sales Invoice",
+		PublicAccess: &ViewPublicAccess{
+			Enabled:        true,
+			Components:     []string{"record_form"},
+			AllowMutations: true,
+		},
+		Components: []ViewComponent{
+			{
+				ID:            "main",
+				Type:          "record_form",
+				Region:        "main",
+				SourceDocType: "Sales Invoice",
+			},
+		},
+	}
+
+	manifest := PageManifestFromView(view)
+	if manifest == nil {
+		t.Fatal("expected manifest")
+	}
+	if manifest.APIVersion != "ui.kora.dev/v1" || manifest.Kind != "Page" {
+		t.Fatalf("unexpected manifest header: %+v", manifest)
+	}
+	if manifest.Metadata.Name != view.Name || manifest.Metadata.Package != "tenant.sales" {
+		t.Fatalf("unexpected metadata projection: %+v", manifest.Metadata)
+	}
+	if manifest.Spec.Resources[0].Params["doctype"] != "Sales Invoice" {
+		t.Fatalf("expected primary doctype projection, got %+v", manifest.Spec.Resources[0])
+	}
+
+	back := manifest.ToView()
+	if back.Name != view.Name || back.Route != view.Route {
+		t.Fatalf("round-trip name/route mismatch: got %+v want %+v", back, view)
+	}
+	if back.Type != "collection" {
+		t.Fatalf("expected page-manifest projection to map to collection view type, got %q", back.Type)
+	}
+	if back.Module != "tenant.sales" {
+		t.Fatalf("expected module normalization to survive projection, got %q", back.Module)
+	}
+	if back.PublicAccess == nil || !back.PublicAccess.Enabled || !back.PublicAccess.AllowMutations {
+		t.Fatalf("expected public access projection to survive round-trip: %+v", back.PublicAccess)
+	}
+	if len(back.Components) != 1 || back.Components[0].Type != "record_form" {
+		t.Fatalf("expected component projection to survive round-trip: %+v", back.Components)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ViewComponent Validation
 // ---------------------------------------------------------------------------
@@ -510,6 +610,7 @@ func TestView_JSONRoundTrip(t *testing.T) {
 			{
 				ID:   "products",
 				Type: "product_grid",
+				Data: "primary.data",
 				Bindings: map[string]string{
 					"title": "product_name",
 					"price": "selling_price",
@@ -551,6 +652,9 @@ func TestView_JSONRoundTrip(t *testing.T) {
 	comp := restored.Components[0]
 	if comp.Bindings["title"] != "product_name" {
 		t.Errorf("binding title: got %q, want 'product_name'", comp.Bindings["title"])
+	}
+	if comp.Data != "primary.data" {
+		t.Errorf("data: got %q, want %q", comp.Data, "primary.data")
 	}
 	if len(comp.MobileColumns) != 2 {
 		t.Errorf("expected 2 mobile columns, got %d", len(comp.MobileColumns))

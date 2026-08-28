@@ -1,0 +1,6 @@
+pack: fleet
+seed_mode: demo
+records:
+  - doctype: Trip Plan
+    reference: DEMO-FLEET-001
+    status: Draft

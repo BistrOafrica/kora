@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { CodeEditor } from '@/components/forms/CodeEditor'
+import { HelpTooltip } from '@/components/ui/help-tooltip'
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false)
@@ -192,8 +193,8 @@ export default function AdminScriptsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Code2 className="h-6 w-6" /> Scripts
+            <HelpTooltip label="Scripts help">JavaScript hooks, custom API methods, and workflow actions.</HelpTooltip>
           </h1>
-          <p className="text-muted-foreground mt-1">JavaScript hooks, custom API methods, and workflow actions.</p>
         </div>
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" /> New Script</Button>
       </div>

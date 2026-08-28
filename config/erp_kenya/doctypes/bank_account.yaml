@@ -1,0 +1,67 @@
+name: Bank Account
+module: Finance
+title_field: account_name
+search_fields: account_name, account_number, bank_name
+sort_field: account_name
+sort_order: ASC
+fields:
+  - fieldname: account_name
+    fieldtype: Data
+    label: Account Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: bank_name
+    fieldtype: Data
+    label: Bank Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+  - fieldname: account_number
+    fieldtype: Data
+    label: Account Number
+    reqd: true
+    unique: true
+    in_list_view: true
+  - fieldname: branch
+    fieldtype: Data
+    label: Branch
+  - fieldname: swift_code
+    fieldtype: Data
+    label: SWIFT Code
+    description: International SWIFT/BIC code for wire transfers.
+  - fieldname: currency
+    fieldtype: Link
+    label: Currency
+    options: Currency
+    default: KES
+    in_list_view: true
+  - fieldname: gl_account
+    fieldtype: Link
+    label: GL Account
+    options: Account
+    description: General ledger account linked to this bank account for reconciliation.
+  - fieldname: opening_balance
+    fieldtype: Currency
+    label: Opening Balance (KES)
+    default: "0"
+  - fieldname: current_balance
+    fieldtype: Currency
+    label: Current Balance (KES)
+    computed: "opening_balance"
+    read_only: true
+    in_list_view: true
+    description: Auto-computed balance from opening balance and all reconciled transactions.
+  - fieldname: is_company_account
+    fieldtype: Check
+    label: Is Company Account
+    default: "1"
+    description: Mark as a company-owned bank account (vs. petty cash or personal).
+  - fieldname: bank_code
+    fieldtype: Data
+    label: Bank Sort Code
+    description: Local bank sort/routing code.
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

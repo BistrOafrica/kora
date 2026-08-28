@@ -1,0 +1,23 @@
+name: Fleet and Transport Workspace
+route: /fleet
+type: workspace
+layout: two_panel
+label: Fleet and Transport
+module: Fleet and Transport
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Trip Plan
+    label: Trip Plan Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Vehicle
+    label: Vehicle Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

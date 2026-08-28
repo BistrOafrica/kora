@@ -1,0 +1,6 @@
+pack: documents
+seed_mode: demo
+records:
+  - doctype: Document
+    reference: DEMO-DOCUMENTS-001
+    status: Draft

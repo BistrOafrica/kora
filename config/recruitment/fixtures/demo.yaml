@@ -1,0 +1,10 @@
+pack: recruitment
+seed_mode: demo
+records:
+  - doctype: Candidate
+    reference: DEMO-RECRUITMENT-001
+    full_name: Demo Candidate
+    email: candidate@example.test
+    phone: "+254700000003"
+    stage: Applied
+    notes: Demo candidate for recruitment UAT.

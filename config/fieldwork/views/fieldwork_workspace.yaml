@@ -1,0 +1,23 @@
+name: Field Service Workspace
+route: /fieldwork
+type: workspace
+layout: two_panel
+label: Dispatch and Technician
+module: Field Service
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Work Order
+    label: Dispatch and Technician
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Work Order
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

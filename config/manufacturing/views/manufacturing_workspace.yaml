@@ -1,0 +1,15 @@
+name: Light Manufacturing Workspace
+route: /manufacturing
+type: workspace
+layout: two_panel
+label: Light Manufacturing
+module: Light Manufacturing
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Manufacturing Order
+    label: Manufacturing Order Queue
+    desktop_columns: [name, reference, status]
+    mobile_columns: [reference, status]

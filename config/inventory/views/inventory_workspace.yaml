@@ -1,0 +1,23 @@
+name: Inventory and Warehouse Workspace
+route: /inventory
+type: workspace
+layout: two_panel
+label: Receiving and Exceptions
+module: Inventory and Warehouse
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Stock Move
+    label: Receiving and Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Stock Move
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

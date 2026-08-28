@@ -5,6 +5,47 @@ export interface FormSectionGroup {
   fields: Field[]
 }
 
+/**
+ * Convert the string defaults from a DocType schema into values the form
+ * controls can use. Keeping this in the shared runtime means every new
+ * document form starts with the same safe, schema-defined defaults.
+ */
+export function buildDefaultFormData(fields: Field[]): Record<string, any> {
+  const defaults: Record<string, any> = {}
+
+  for (const field of fields) {
+    if (field.default === undefined || field.default === null || field.default === '') continue
+
+    if (field.default === 'today' || field.default === '__today__') {
+      const now = new Date()
+      defaults[field.fieldname] = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+        .map((part) => String(part).padStart(2, '0'))
+        .join('-')
+      continue
+    }
+
+    switch (field.fieldtype) {
+      case 'Check':
+        defaults[field.fieldname] = field.default === '1' || field.default.toLowerCase() === 'true'
+        break
+      case 'Int':
+        defaults[field.fieldname] = Number.parseInt(field.default, 10)
+        break
+      case 'Float':
+      case 'Currency':
+      case 'Percent': {
+        const value = Number.parseFloat(field.default)
+        defaults[field.fieldname] = Number.isNaN(value) ? field.default : value
+        break
+      }
+      default:
+        defaults[field.fieldname] = field.default
+    }
+  }
+
+  return defaults
+}
+
 export function buildFormSections(fields: Field[]): FormSectionGroup[] {
   const sections: FormSectionGroup[] = []
   let currentTitle = 'Details'

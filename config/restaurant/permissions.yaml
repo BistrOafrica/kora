@@ -1,0 +1,33 @@
+- doctype: Food Order
+  role: Restaurant and Food Service Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Food Order
+  role: Restaurant and Food Service Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Food Order
+  role: Restaurant and Food Service Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Production Ticket
+  role: Restaurant and Food Service Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Shift Close
+  role: Restaurant and Food Service Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

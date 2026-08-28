@@ -20,9 +20,13 @@ import (
 	"github.com/asenawritescode/kora/analytics"
 	"github.com/asenawritescode/kora/auth"
 	"github.com/asenawritescode/kora/doctype"
+	"github.com/asenawritescode/kora/kernel"
+	"github.com/asenawritescode/kora/natsprovider"
 	"github.com/asenawritescode/kora/orm"
+	"github.com/asenawritescode/kora/outbox"
 	"github.com/asenawritescode/kora/script"
 	"github.com/asenawritescode/kora/secret"
+	"github.com/asenawritescode/kora/storage"
 	"github.com/asenawritescode/kora/webhook"
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
@@ -32,15 +36,27 @@ import (
 // cli/serve.go sets this to its Version value during initialization.
 var BinaryVersion = "dev"
 
+// fallbackStorage is used when no site-specific storage backend is configured.
+var fallbackStorage storage.Backend
+
 // Handler holds dependencies for API handlers.
 // Registry and TxManager are fallbacks; handlers read site context from the request.
 type Handler struct {
-	Registry  *doctype.Registry
-	TxManager *orm.TxManager
+	Registry      *doctype.Registry
+	TxManager     *orm.TxManager
+	AuthProviders *auth.ProviderRegistry
 
 	// SiteEventBuses maps site name → EventBus for analytics event emission.
 	// When set, siteTx() propagates the EventBus to the TxManager.
 	SiteEventBuses map[string]analytics.EventBus
+
+	// SiteOutboxes maps site name → outbox.Writer for transactional outbox recording.
+	// When a site has a writer, its document writes record an event in _kora_outbox
+	// within the same transaction. Nil for sites (or deployments) without the outbox.
+	SiteOutboxes map[string]outbox.Writer
+
+	// SiteRealtimeProviders maps site name → NATS provider used to source realtime events.
+	SiteRealtimeProviders map[string]*natsprovider.Provider
 
 	// ScriptRunner executes JavaScript hooks (shared across all sites).
 	ScriptRunner script.Runner
@@ -57,15 +73,26 @@ type Handler struct {
 	// SiteWebhookWorkers maps site name → *webhook.Worker for webhook delivery.
 	SiteWebhookWorkers map[string]*webhook.Worker
 
-	// AsyncHookQueue receives after_* hooks for fire-and-forget execution.
-	AsyncHookQueue chan orm.AsyncHookRequest
+	// AsyncHookSink receives after_* hooks for fire-and-forget execution.
+	AsyncHookSink orm.AsyncHookSink
+
+	// SiteStorages maps site name → storage backend for attachments. Storage is a
+	// fallback used when no site-specific backend is configured.
+	SiteStorages map[string]storage.Backend
+	Storage      storage.Backend
+
+	// KernelCommands carries config-defined command resources (KERNEL-008)
+	// loaded at startup from application configuration. Nil = built-ins only;
+	// GET /api/v1/kernel/_registry then reports an empty list.
+	KernelCommands *kernel.CommandRegistry
 }
 
 // NewHandler creates a new API handler.
 func NewHandler(registry *doctype.Registry, txManager *orm.TxManager) *Handler {
 	return &Handler{
-		Registry:  registry,
-		TxManager: txManager,
+		Registry:      registry,
+		TxManager:     txManager,
+		AuthProviders: auth.NewProviderRegistry(),
 	}
 }
 
@@ -78,6 +105,24 @@ func (h *Handler) siteRegistry(c *gin.Context) *doctype.Registry {
 		}
 	}
 	return h.Registry
+}
+
+// siteStorage returns the storage backend for the current request's site.
+func (h *Handler) siteStorage(c *gin.Context) storage.Backend {
+	if h.SiteStorages != nil {
+		if siteName := c.GetString("site_name"); siteName != "" {
+			if b, ok := h.SiteStorages[siteName]; ok && b != nil {
+				return b
+			}
+		}
+	}
+	if h.Storage != nil {
+		return h.Storage
+	}
+	if fallbackStorage == nil {
+		fallbackStorage, _ = storage.New(storage.Config{Backend: "local"})
+	}
+	return fallbackStorage
 }
 
 // siteAnalyticsWorker returns the analytics worker for the current request's site, or nil.
@@ -110,6 +155,11 @@ func (h *Handler) siteTx(c *gin.Context) *orm.TxManager {
 			if r, ok := reg.(*doctype.Registry); ok {
 				tm := &orm.TxManager{DB: sqlDB, Registry: r, Dialect: h.TxManager.Dialect}
 				tm.Context = c.Request.Context()
+				if createdAt, ok := c.Get("session_created_at"); ok {
+					if ts, ok := createdAt.(time.Time); ok && !ts.IsZero() {
+						tm.Context = context.WithValue(tm.Context, "session_created_at", ts)
+					}
+				}
 				if siteNameStr, ok := siteName.(string); ok {
 					tm.SiteName = siteNameStr
 				}
@@ -117,6 +167,14 @@ func (h *Handler) siteTx(c *gin.Context) *orm.TxManager {
 					if siteNameStr, ok := siteName.(string); ok {
 						if bus, exists := h.SiteEventBuses[siteNameStr]; exists {
 							tm.EventBus = bus
+						}
+					}
+				}
+				// Wire the transactional outbox writer for this site.
+				if h.SiteOutboxes != nil {
+					if siteNameStr, ok := siteName.(string); ok {
+						if w, exists := h.SiteOutboxes[siteNameStr]; exists {
+							tm.Outbox = w
 						}
 					}
 				}
@@ -130,7 +188,7 @@ func (h *Handler) siteTx(c *gin.Context) *orm.TxManager {
 					}
 				}
 				// Wire async hook queue.
-				tm.AsyncHookQueue = h.AsyncHookQueue
+				tm.AsyncHookSink = h.AsyncHookSink
 
 				// Create script provider for this request (bridges JS → engine).
 				if h.ScriptRunner != nil {
@@ -176,9 +234,7 @@ func SetAPILimits(def, max int) {
 // This prevents sensitive DB/internal details from leaking to API clients.
 func internalError(c *gin.Context, msg string, err error) {
 	slog.Error(msg, "error", err)
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: map[string]string{"message": "An internal error occurred"},
-	})
+	writeError(c, http.StatusInternalServerError, "server.internal_error", "An internal error occurred", nil)
 }
 
 // Meta holds response metadata.
@@ -198,6 +254,35 @@ type Response struct {
 type ErrorResponse struct {
 	Error any   `json:"error"`
 	Meta  *Meta `json:"meta,omitempty"`
+}
+
+// ErrorBody is the machine-readable error envelope returned to the frontend.
+type ErrorBody struct {
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
+func writeError(c *gin.Context, status int, code, message string, details map[string]any) {
+	c.JSON(status, ErrorResponse{
+		Error: ErrorBody{
+			Code:    code,
+			Message: message,
+			Details: details,
+		},
+	})
+}
+
+func badRequestError(c *gin.Context, code, message string, details map[string]any) {
+	writeError(c, http.StatusBadRequest, code, message, details)
+}
+
+func notFoundError(c *gin.Context, code, message string, details map[string]any) {
+	writeError(c, http.StatusNotFound, code, message, details)
+}
+
+func conflictError(c *gin.Context, code, message string, details map[string]any) {
+	writeError(c, http.StatusConflict, code, message, details)
 }
 
 // --- List Handler ---
@@ -247,9 +332,7 @@ func (h *Handler) HandleList(c *gin.Context) {
 	doctypeName := c.Param("doctype")
 	dt := h.siteRegistry(c).Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": fmt.Sprintf("DocType %q not found", doctypeName)},
-		})
+		notFoundError(c, "resource.doctype_not_found", fmt.Sprintf("DocType %q not found", doctypeName), map[string]any{"doctype": doctypeName})
 		return
 	}
 
@@ -378,9 +461,7 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 	var rawData map[string]any
 	if err := c.ShouldBindJSON(&rawData); err != nil {
 		slog.Warn("invalid JSON in create", "error", err)
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Invalid request format"},
-		})
+		badRequestError(c, "validation.invalid_json", "Invalid request format", nil)
 		return
 	}
 
@@ -392,9 +473,7 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 			// Parse child table rows.
 			children, err := parseChildRows(val, field, h.siteRegistry(c))
 			if err != nil {
-				c.JSON(http.StatusBadRequest, ErrorResponse{
-					Error: map[string]string{"message": fmt.Sprintf("Field %s: %s", key, err.Error())},
-				})
+				badRequestError(c, "validation.invalid_child_table", fmt.Sprintf("Field %s: %s", key, err.Error()), map[string]any{"field": key})
 				return
 			}
 			doc.Set(key, children)
@@ -424,9 +503,7 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 	// Validate.
 	validationErrs := doctype.ValidateDocument(dt, doc, h.Registry, nil)
 	if validationErrs.HasErrors() {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: formatValidationErrors(validationErrs),
-		})
+		writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"fields": validationErrorDetails(validationErrs)})
 		return
 	}
 
@@ -440,13 +517,15 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 	if err := h.siteTx(c).Insert(dt, doc, owner, owner); err != nil {
 		var valErr *doctype.ValidationError
 		if errors.As(err, &valErr) {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: formatValidationErrors(doctype.ValidationErrors{valErr}),
-			})
+			writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"fields": validationErrorDetails(doctype.ValidationErrors{valErr})})
 			return
 		}
 		internalError(c, "insert failed", err)
 		return
+	}
+	h.invalidateAnalyticsForDoctype(c, doctypeName)
+	if w := h.siteAnalyticsWorker(c); w != nil {
+		w.Flush()
 	}
 
 	c.JSON(http.StatusCreated, Response{
@@ -464,9 +543,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 
 	dt := h.siteRegistry(c).Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": fmt.Sprintf("DocType %q not found", doctypeName)},
-		})
+		notFoundError(c, "resource.doctype_not_found", fmt.Sprintf("DocType %q not found", doctypeName), map[string]any{"doctype": doctypeName})
 		return
 	}
 
@@ -484,9 +561,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	oldDoc, err := h.siteTx(c).GetDoc(dt, name, owner)
 	if err != nil {
 		slog.Warn("document get failed for update", "doctype", doctypeName, "name", name, "error", err)
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "Document not found"},
-		})
+		notFoundError(c, "resource.document_not_found", "Document not found", map[string]any{"doctype": doctypeName, "name": name})
 		return
 	}
 
@@ -494,9 +569,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	var rawData map[string]any
 	if err := c.ShouldBindJSON(&rawData); err != nil {
 		slog.Warn("invalid JSON in update", "error", err)
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Invalid request format"},
-		})
+		badRequestError(c, "validation.invalid_json", "Invalid request format", nil)
 		return
 	}
 
@@ -519,9 +592,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 		if field != nil && field.Fieldtype == "Table" {
 			children, err := parseChildRows(val, field, h.siteRegistry(c))
 			if err != nil {
-				c.JSON(http.StatusBadRequest, ErrorResponse{
-					Error: map[string]string{"message": fmt.Sprintf("Field %s: %s", key, err.Error())},
-				})
+				badRequestError(c, "validation.invalid_child_table", fmt.Sprintf("Field %s: %s", key, err.Error()), map[string]any{"field": key})
 				return
 			}
 			doc.Set(key, children)
@@ -556,9 +627,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	// Validate.
 	validationErrs := doctype.ValidateDocument(dt, doc, h.Registry, oldDoc)
 	if validationErrs.HasErrors() {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: formatValidationErrors(validationErrs),
-		})
+		writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"fields": validationErrorDetails(validationErrs)})
 		return
 	}
 
@@ -572,13 +641,15 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	if err := h.siteTx(c).Save(dt, doc, modifiedBy, owner, oldDoc); err != nil {
 		var valErr *doctype.ValidationError
 		if errors.As(err, &valErr) {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: formatValidationErrors(doctype.ValidationErrors{valErr}),
-			})
+			writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"fields": validationErrorDetails(doctype.ValidationErrors{valErr})})
 			return
 		}
 		internalError(c, "save failed", err)
 		return
+	}
+	h.invalidateAnalyticsForDoctype(c, doctypeName)
+	if w := h.siteAnalyticsWorker(c); w != nil {
+		w.Flush()
 	}
 
 	c.JSON(http.StatusOK, Response{
@@ -716,9 +787,7 @@ func (h *Handler) HandleDelete(c *gin.Context) {
 
 	dt := h.siteRegistry(c).Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": fmt.Sprintf("DocType %q not found", doctypeName)},
-		})
+		notFoundError(c, "resource.doctype_not_found", fmt.Sprintf("DocType %q not found", doctypeName), map[string]any{"doctype": doctypeName})
 		return
 	}
 
@@ -734,10 +803,12 @@ func (h *Handler) HandleDelete(c *gin.Context) {
 
 	if err := h.siteTx(c).Delete(dt, name, owner); err != nil {
 		slog.Warn("document delete failed", "doctype", doctypeName, "name", name, "error", err)
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "Document not found"},
-		})
+		notFoundError(c, "resource.document_not_found", "Document not found", map[string]any{"doctype": doctypeName, "name": name})
 		return
+	}
+	h.invalidateAnalyticsForDoctype(c, doctypeName)
+	if w := h.siteAnalyticsWorker(c); w != nil {
+		w.Flush()
 	}
 
 	c.JSON(http.StatusOK, Response{
@@ -835,10 +906,10 @@ func parseChildRows(val any, field *doctype.Field, registry *doctype.Registry) (
 	return children, nil
 }
 
-func formatValidationErrors(errors doctype.ValidationErrors) any {
+func validationErrorDetails(errors doctype.ValidationErrors) any {
 	if len(errors) == 1 {
 		return map[string]any{
-			"type":    errors[0].Type,
+			"code":    errors[0].Type,
 			"message": errors[0].Message,
 			"field":   errors[0].Field,
 			"doctype": errors[0].DocType,
@@ -848,15 +919,13 @@ func formatValidationErrors(errors doctype.ValidationErrors) any {
 	var messages []map[string]any
 	for _, e := range errors {
 		messages = append(messages, map[string]any{
-			"type":    e.Type,
+			"code":    e.Type,
 			"message": e.Message,
 			"field":   e.Field,
 			"doctype": e.DocType,
 		})
 	}
-	return map[string]any{
-		"errors": messages,
-	}
+	return messages
 }
 
 // RegisterRoutes registers all CRUD routes for all DocTypes in the registry on a full Engine.
@@ -870,18 +939,7 @@ func RegisterRoutes(router *gin.Engine, registry *doctype.Registry, txManager *o
 		c.JSON(200, gin.H{"message": "pong"})
 	})
 	router.GET("/health", func(c *gin.Context) {
-		db, _ := c.Get("site_db")
-		status := "ok"
-		dbStatus := "connected"
-		if sqlDB, ok := db.(*sql.DB); ok {
-			if err := sqlDB.Ping(); err != nil {
-				dbStatus = "disconnected"
-				status = "degraded"
-			}
-		} else {
-			dbStatus = "unknown"
-		}
-		c.JSON(200, gin.H{"status": status, "db": dbStatus})
+		c.JSON(200, healthPayload(c))
 	})
 
 	// File upload endpoint.
@@ -890,10 +948,30 @@ func RegisterRoutes(router *gin.Engine, registry *doctype.Registry, txManager *o
 	_ = handler
 }
 
+func healthPayload(c *gin.Context) gin.H {
+	db, _ := c.Get("site_db")
+	status := "ok"
+	dbStatus := "connected"
+	if sqlDB, ok := db.(*sql.DB); ok {
+		if err := sqlDB.Ping(); err != nil {
+			dbStatus = "disconnected"
+			status = "degraded"
+		}
+	} else {
+		dbStatus = "unknown"
+	}
+	return gin.H{
+		"status": status,
+		"db":     dbStatus,
+		// Async hook overflow count (RFC Phase 1: no silent drops).
+		"async_hook_enqueue_failed": orm.HookEnqueueFailedCount(),
+	}
+}
+
 // RegisterRoutesOnGroup registers all CRUD routes on an existing RouterGroup.
 // This allows the caller to apply middleware (e.g., auth) before the group.
 func RegisterRoutesOnGroup(apiGroup *gin.RouterGroup, registry *doctype.Registry, txManager *orm.TxManager) {
-	RegisterRoutesOnGroupWithAnalytics(apiGroup, registry, txManager, nil, nil, nil, nil, nil, nil, nil)
+	RegisterRoutesOnGroupWithAnalytics(apiGroup, registry, txManager, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 // RegisterPublicRoutesOnGroup registers unauthenticated, read-only public
@@ -909,20 +987,33 @@ func RegisterPublicRoutesOnGroup(apiGroup *gin.RouterGroup, registry *doctype.Re
 	// Public view routes (unauthenticated, three-layer security check).
 	apiGroup.GET("/v", handler.HandlePublicView)
 	apiGroup.POST("/v", handler.HandlePublicCreate)
+
+	// DigiTax cannot use a Kora session/CSRF token. The handler authenticates
+	// this callback with the site's digitax_webhook_secret instead.
+	apiGroup.POST("/webhooks/digitax/etims", handler.HandleDigiTaxWebhook)
 }
 
 // RegisterRoutesOnGroupWithAnalytics registers all CRUD routes with optional
 // analytics event propagation. siteBuses maps site name → EventBus; if nil or
 // empty, analytics event emission is a no-op.
-func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doctype.Registry, txManager *orm.TxManager, siteBuses map[string]analytics.EventBus, scriptRunner script.Runner, siteScriptStores map[string]*script.Store, siteSecretStores map[string]*secret.Store, httpAllowlist []string, siteWebhookWorkers map[string]*webhook.Worker, asyncHookQueue chan orm.AsyncHookRequest) {
+func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doctype.Registry, txManager *orm.TxManager, siteBuses map[string]analytics.EventBus, realtimeProviders map[string]*natsprovider.Provider, scriptRunner script.Runner, siteScriptStores map[string]*script.Store, siteSecretStores map[string]*secret.Store, httpAllowlist []string, siteWebhookWorkers map[string]*webhook.Worker, asyncHookSink orm.AsyncHookSink, siteOutboxes map[string]outbox.Writer, siteStorages map[string]storage.Backend, kernelCommands *kernel.CommandRegistry) {
 	handler := NewHandler(registry, txManager)
 	handler.SiteEventBuses = siteBuses
+	handler.SiteRealtimeProviders = realtimeProviders
 	handler.ScriptRunner = scriptRunner
 	handler.SiteScriptStores = siteScriptStores
 	handler.SiteSecretStores = siteSecretStores
 	handler.ScriptHTTPAllowlist = httpAllowlist
 	handler.SiteWebhookWorkers = siteWebhookWorkers
-	handler.AsyncHookQueue = asyncHookQueue
+	handler.AsyncHookSink = asyncHookSink
+	handler.SiteOutboxes = siteOutboxes
+	handler.SiteStorages = siteStorages
+	handler.KernelCommands = kernelCommands
+
+	// File attachments: upload + authenticated serving (Range-aware for audio/video).
+	apiGroup.POST("/upload", handler.HandleUpload)
+	apiGroup.GET("/files/*path", handler.HandleFileServe)
+	apiGroup.DELETE("/files/*path", handler.HandleFileDelete)
 
 	resource := apiGroup.Group("/resource")
 	{
@@ -934,12 +1025,25 @@ func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doc
 		resource.POST("/:doctype/:name/workflow_action", handler.HandleWorkflowAction)
 	}
 
+	// Operation kernel: canonical command path shared by every adapter
+	// (first vertical slice — record.create, record.update) plus the
+	// config-defined command registry (KERNEL-008).
+	apiGroup.POST("/kernel/:command", handler.HandleKernelOperation)
+	apiGroup.GET("/kernel/_registry", handler.HandleKernelRegistry)
+
 	// OpenAPI docs.
 	apiGroup.GET("/openapi.json", handler.HandleOpenAPI)
 	apiGroup.GET("/swagger-ui", handler.HandleSwaggerUI)
 
 	// AI Chat.
 	apiGroup.POST("/chat", handler.HandleChat)
+	aiGroup := apiGroup.Group("/ai")
+	{
+		aiGroup.POST("/approvals/:id/grant", handler.HandleAIGrantApproval)
+		aiGroup.POST("/runs/:id/cancel", handler.HandleAICancel)
+		aiGroup.POST("/runs/:id/resume", handler.HandleAIResume)
+		aiGroup.POST("/retention/cleanup", handler.HandleAIRetentionCleanup)
+	}
 
 	channel := apiGroup.Group("/internal/channel")
 	{
@@ -958,25 +1062,18 @@ func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doc
 		method.GET("/:name", handler.HandleMethod)
 	}
 
-	// View management endpoints.
-	sysViews := apiGroup.Group("/system/views")
+	// RFC-native page manifest management endpoints.
+	pageManifests := apiGroup.Group("/system/page-manifests")
 	{
-		sysViews.GET("", handler.HandleSystemViews)
-		sysViews.POST("", handler.HandleSystemViewCreate)
-		sysViews.GET("/:name", handler.HandleSystemView)
-		sysViews.PUT("/:name", handler.HandleSystemViewUpdate)
-		sysViews.DELETE("/:name", handler.HandleSystemViewDelete)
-		sysViews.POST("/validate", handler.HandleViewValidate)
+		pageManifests.GET("", handler.HandleSystemPageManifests)
+		pageManifests.POST("", handler.HandleSystemPageManifestCreate)
+		pageManifests.GET("/:name", handler.HandleSystemPageManifest)
+		pageManifests.PUT("/:name", handler.HandleSystemPageManifestUpdate)
+		pageManifests.DELETE("/:name", handler.HandleSystemPageManifestDelete)
 	}
 
-	// View runtime route resolution.
-	apiGroup.GET("/views", handler.HandleViewByRoute)
-
-	// View action execution.
-	apiGroup.POST("/view/action/:actionId", handler.HandleViewAction)
-
-	// View data aggregate endpoint.
-	apiGroup.GET("/view/data", handler.HandleViewData)
+	// RFC-native runtime page route resolution.
+	apiGroup.GET("/page-manifests", handler.HandlePageManifestByRoute)
 
 	// System config endpoints.
 	system := apiGroup.Group("/system/config")
@@ -1371,7 +1468,7 @@ func (h *Handler) HandleConfigVersion(c *gin.Context) {
 		"SELECT version, label, config, changelog FROM _kora_config_version WHERE id = ?", id,
 	).Scan(&version, &label, &configJSON, &changelog)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Version not found"}})
+		writeError(c, http.StatusNotFound, "version.not_found", "Version not found", nil)
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: map[string]any{
@@ -1385,7 +1482,7 @@ func (h *Handler) HandleConfigDiff(c *gin.Context) {
 	fromID := c.Query("from")
 	toID := c.Query("to")
 	if fromID == "" || toID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "from and to required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "from and to required", map[string]any{"fields": []string{"from", "to"}})
 		return
 	}
 	// First check if the "to" version has a stored change_list.
@@ -1403,7 +1500,7 @@ func (h *Handler) HandleConfigDiff(c *gin.Context) {
 	h.siteTx(c).DB.QueryRow("SELECT config FROM _kora_config_version WHERE id = ?", fromID).Scan(&fromConfig)
 	h.siteTx(c).DB.QueryRow("SELECT config FROM _kora_config_version WHERE id = ?", toID).Scan(&toConfig)
 	if fromConfig == "" || toConfig == "" {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Version not found"}})
+		writeError(c, http.StatusNotFound, "version.not_found", "Version not found", nil)
 		return
 	}
 	fromSnapshot, fromErr := doctype.ParseConfig(fromConfig)
@@ -1421,9 +1518,27 @@ func (h *Handler) HandleConfigDiff(c *gin.Context) {
 }
 
 // HandleUpload handles file uploads via multipart form.
-// POST /api/upload
-// Stores files to sites/<site>/files/<YYYY>/<MM>/<filename>.
+// POST /upload
+// Stores files via the configured storage backend and returns a file reference
+// (path + metadata) for storage in an Attach / Attach Image / Attach Audio field.
 func (h *Handler) HandleUpload(c *gin.Context) {
+	maxBytes := maxUploadBytes()
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+	// Use a modest in-memory threshold; larger uploads spill to temp files.
+	if err := c.Request.ParseMultipartForm(10 << 20); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, ErrorResponse{
+				Error: map[string]string{"message": "That file is too large to upload."},
+			})
+			return
+		}
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: map[string]string{"message": "No file provided"},
+		})
+		return
+	}
+
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -1439,42 +1554,317 @@ func (h *Handler) HandleUpload(c *gin.Context) {
 		siteName = "default"
 	}
 
-	// Create directory: sites/<site>/files/<YYYY>/<MM>/
+	// Sniff the first bytes to validate content (never trust headers alone).
+	sniff := make([]byte, 512)
+	n, _ := io.ReadFull(file, sniff)
+	sniff = sniff[:n]
+
+	// fieldtype + accept (optional) from the uploader drive MIME/extension rules.
+	if fieldtype, accept := c.Request.FormValue("fieldtype"), c.Request.FormValue("accept"); fieldtype != "" || accept != "" {
+		if err := validateUploadType(fieldtype, accept, header.Filename, sniff); err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: map[string]string{"message": err.Error()},
+			})
+			return
+		}
+	}
+
+	// Build a site-scoped key: sites/<site>/files/<YYYY>/<MM>/<filename>.
 	now := time.Now()
+	filename := sanitizeFilename(header.Filename)
+	ext := filepath.Ext(filename)
+	base := strings.TrimSuffix(filename, ext)
 	dir := filepath.Join("sites", siteName, "files",
 		fmt.Sprintf("%04d", now.Year()),
 		fmt.Sprintf("%02d", now.Month()))
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		internalError(c, "creating upload directory", err)
+	key := filepath.Join(dir, filename)
+
+	backend := h.siteStorage(c)
+
+	// Avoid collisions by appending _1, _2, ... until the key is free.
+	for i := 1; ; i++ {
+		if _, err := backend.Head(c.Request.Context(), filepath.ToSlash(key)); err != nil {
+			break
+		}
+		key = filepath.Join(dir, fmt.Sprintf("%s_%d%s", base, i, ext))
+	}
+
+	// Resolve a display MIME type: sniffed content first, extension fallback.
+	mimeType := http.DetectContentType(sniff)
+	if mimeType == "application/octet-stream" || mimeType == "" {
+		if m := storage.MimeByExt(ext); m != "" {
+			mimeType = m
+		}
+	}
+
+	// Rewind and hand off to the backend.
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		internalError(c, "reading file", err)
 		return
 	}
-
-	// Sanitize filename and avoid collisions.
-	filename := filepath.Base(header.Filename)
-	ext := filepath.Ext(filename)
-	base := strings.TrimSuffix(filename, ext)
-	dest := filepath.Join(dir, filename)
-	for i := 1; fileExists(dest); i++ {
-		dest = filepath.Join(dir, fmt.Sprintf("%s_%d%s", base, i, ext))
-	}
-
-	out, err := os.Create(dest)
-	if err != nil {
-		internalError(c, "creating file", err)
-		return
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, file); err != nil {
-		internalError(c, "writing file", err)
-		return
-	}
-
-	// Return the relative path for storing in an Attach field.
-	relPath := dest
-	c.JSON(http.StatusCreated, Response{
-		Data: map[string]string{"path": relPath, "filename": filepath.Base(dest)},
+	meta, err := backend.Put(c.Request.Context(), filepath.ToSlash(key), file, header.Size, storage.FileMeta{
+		Filename:   filename,
+		MIMEType:   mimeType,
+		UploadedBy: c.GetString("user"),
+		UploadedAt: now,
 	})
+	if err != nil {
+		internalError(c, "storing file", err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, Response{
+		Data: map[string]any{
+			"path":      meta.Key,
+			"filename":  meta.Filename,
+			"key":       meta.Key,
+			"mime_type": meta.MIMEType,
+			"size":      meta.Size,
+			"checksum":  meta.Checksum,
+		},
+	})
+}
+
+// HandleFileServe serves an uploaded attachment with HTTP Range support so browsers
+// can seek within audio/video. Access is enforced by the SiteGuard middleware.
+// GET /files/*path
+func (h *Handler) HandleFileServe(c *gin.Context) {
+	key, err := fileKeyForSite(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Error: map[string]string{"message": "Invalid file path"},
+		})
+		return
+	}
+
+	backend := h.siteStorage(c)
+	meta, err := backend.Head(c.Request.Context(), key)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Error: map[string]string{"message": "File not found"},
+			})
+			return
+		}
+		internalError(c, "statting file", err)
+		return
+	}
+
+	ext := filepath.Ext(key)
+	ctype := meta.MIMEType
+	if ctype == "" {
+		ctype = storage.MimeByExt(ext)
+	}
+	if ctype == "" {
+		ctype = "application/octet-stream"
+	}
+	c.Header("Content-Type", ctype)
+	c.Header("X-Content-Type-Options", "nosniff")
+	if !storage.IsInlineSafe(ext) {
+		safeName := strings.ReplaceAll(meta.Filename, `"`, "")
+		c.Header("Content-Disposition", `attachment; filename="`+safeName+`"`)
+	}
+
+	offset, length := int64(0), int64(-1)
+	status := http.StatusOK
+	if rangeHeader := c.GetHeader("Range"); rangeHeader != "" {
+		if start, end, ok := parseRange(rangeHeader, meta.Size); ok {
+			offset = start
+			length = end - start + 1
+			status = http.StatusPartialContent
+			c.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, meta.Size))
+			c.Header("Content-Length", strconv.FormatInt(length, 10))
+		} else {
+			c.Header("Content-Length", strconv.FormatInt(meta.Size, 10))
+		}
+	} else {
+		c.Header("Content-Length", strconv.FormatInt(meta.Size, 10))
+	}
+
+	rc, err := backend.Open(c.Request.Context(), key, offset, length)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Error: map[string]string{"message": "File not found"},
+			})
+			return
+		}
+		internalError(c, "opening file", err)
+		return
+	}
+	defer rc.Close()
+
+	c.Status(status)
+	if _, err := io.Copy(c.Writer, rc); err != nil {
+		slog.Error("streaming file", "error", err)
+	}
+}
+
+// HandleFileDelete removes an uploaded attachment.
+// DELETE /files/*path
+func (h *Handler) HandleFileDelete(c *gin.Context) {
+	key, err := fileKeyForSite(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Error: map[string]string{"message": "Invalid file path"},
+		})
+		return
+	}
+	backend := h.siteStorage(c)
+	if err := backend.Delete(c.Request.Context(), key); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Error: map[string]string{"message": "File not found"},
+			})
+			return
+		}
+		internalError(c, "deleting file", err)
+		return
+	}
+	c.JSON(http.StatusOK, Response{Data: map[string]string{"deleted": key}})
+}
+
+// fileKeyForSite extracts and validates a site-scoped storage key from the request path.
+func fileKeyForSite(c *gin.Context) (string, error) {
+	siteName := c.GetString("site_name")
+	if siteName == "" {
+		siteName = "default"
+	}
+	rel := filepath.Clean(strings.TrimPrefix(c.Param("path"), "/"))
+	// Never serve internal sidecar metadata files.
+	if strings.HasSuffix(strings.ToLower(rel), ".meta.json") {
+		return "", fmt.Errorf("invalid file path")
+	}
+	base := filepath.Join("sites", siteName, "files")
+	if rel != base && !strings.HasPrefix(rel, base+string(os.PathSeparator)) {
+		return "", fmt.Errorf("invalid file path")
+	}
+	return filepath.ToSlash(rel), nil
+}
+
+// parseRange parses a single "bytes=start-end" range against size. It returns
+// (start, end, ok) where end is inclusive. It returns ok=false for invalid,
+// multi-range, or unsatisfiable requests.
+func parseRange(s string, size int64) (int64, int64, bool) {
+	if !strings.HasPrefix(s, "bytes=") {
+		return 0, 0, false
+	}
+	spec := strings.TrimPrefix(s, "bytes=")
+	if strings.Contains(spec, ",") {
+		return 0, 0, false
+	}
+	dash := strings.IndexByte(spec, '-')
+	if dash < 0 {
+		return 0, 0, false
+	}
+	startStr := strings.TrimSpace(spec[:dash])
+	endStr := strings.TrimSpace(spec[dash+1:])
+
+	var start, end int64
+	if startStr == "" {
+		// Suffix range: last N bytes.
+		n, err := strconv.ParseInt(endStr, 10, 64)
+		if err != nil || n <= 0 {
+			return 0, 0, false
+		}
+		if n > size {
+			n = size
+		}
+		start = size - n
+		end = size - 1
+	} else {
+		var err error
+		start, err = strconv.ParseInt(startStr, 10, 64)
+		if err != nil || start < 0 || start >= size {
+			return 0, 0, false
+		}
+		if endStr == "" {
+			end = size - 1
+		} else {
+			end, err = strconv.ParseInt(endStr, 10, 64)
+			if err != nil || end < start {
+				return 0, 0, false
+			}
+			if end >= size {
+				end = size - 1
+			}
+		}
+	}
+	return start, end, true
+}
+
+// maxUploadBytes returns the per-file upload limit in bytes (KORA_MAX_UPLOAD_MB, default 50 MB).
+func maxUploadBytes() int64 {
+	if v := os.Getenv("KORA_MAX_UPLOAD_MB"); v != "" {
+		if mb, err := strconv.ParseInt(v, 10, 64); err == nil && mb > 0 {
+			return mb << 20
+		}
+	}
+	return 50 << 20
+}
+
+// sanitizeFilename strips path separators and unsafe characters from an uploaded filename.
+func sanitizeFilename(name string) string {
+	name = filepath.Base(name)
+	name = strings.ReplaceAll(name, "\x00", "")
+	name = strings.TrimSpace(name)
+	if name == "" || name == "." || name == ".." || name == string(os.PathSeparator) {
+		return "file"
+	}
+	return name
+}
+
+// validateUploadType enforces per-fieldtype or per-field accept rules on an upload.
+// If accept is non-empty, it takes precedence over the fieldtype defaults.
+func validateUploadType(fieldtype, accept, filename string, sniffed []byte) error {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if accept != "" {
+		return validateAgainstAccept(accept, ext, sniffed)
+	}
+	switch fieldtype {
+	case "Attach Image":
+		if ct := http.DetectContentType(sniffed); !strings.HasPrefix(ct, "image/") {
+			return fmt.Errorf("Please choose an image file.")
+		}
+	case "Attach Audio":
+		if !audioExts[ext] {
+			return fmt.Errorf("Please choose an audio file (MP3, WAV, OGG, M4A, or FLAC).")
+		}
+	}
+	return nil
+}
+
+// validateAgainstAccept checks an upload against a comma/newline-separated accept list
+// of extensions (".pdf") and MIME types ("image/*", "application/pdf").
+func validateAgainstAccept(accept, ext string, sniffed []byte) error {
+	mime := http.DetectContentType(sniffed)
+	normalized := strings.ReplaceAll(accept, "\n", ",")
+	var friendly []string
+	for _, p := range strings.Split(normalized, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		friendly = append(friendly, p)
+		if strings.HasPrefix(p, ".") {
+			if ext == strings.ToLower(p) {
+				return nil
+			}
+			continue
+		}
+		if strings.Contains(p, "/") {
+			if p == mime || (strings.HasSuffix(p, "/*") && strings.HasPrefix(mime, strings.TrimSuffix(p, "*"))) {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("Please choose a file in one of these formats: %s.", strings.Join(friendly, ", "))
+}
+
+// audioExts lists supported audio extensions for Attach Audio validation.
+var audioExts = map[string]bool{
+	".mp3": true, ".wav": true, ".ogg": true, ".oga": true,
+	".m4a": true, ".aac": true, ".flac": true, ".opus": true, ".webm": true,
 }
 
 // HandleMethod handles POST/GET /api/method/{name} — user-defined custom API endpoints.
@@ -1608,9 +1998,4 @@ func (h *Handler) HandleMethod(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "ok"}})
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }

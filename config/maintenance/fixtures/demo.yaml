@@ -1,0 +1,6 @@
+pack: maintenance
+seed_mode: demo
+records:
+  - doctype: Maintenance Work Order
+    reference: DEMO-MAINTENANCE-001
+    status: Draft

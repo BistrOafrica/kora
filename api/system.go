@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/asenawritescode/kora/auth"
 	"github.com/asenawritescode/kora/configstore"
 	"github.com/asenawritescode/kora/doctype"
+	"github.com/asenawritescode/kora/natsprovider"
 	"github.com/asenawritescode/kora/schema"
 )
 
@@ -24,12 +27,15 @@ import (
 // HandleAuthProviders returns enabled authentication providers.
 // Public endpoint — no auth required.
 func (h *Handler) HandleAuthProviders(c *gin.Context) {
+	providers := []auth.AuthProvider(nil)
+	if h.AuthProviders != nil {
+		providers = h.AuthProviders.List()
+	} else {
+		providers = auth.NewProviderRegistry().List()
+	}
 	c.JSON(http.StatusOK, Response{
 		Data: map[string]any{
-			"providers": []map[string]any{
-				{"name": "password", "label": "Email & Password"},
-				{"name": "magic_link", "label": "Magic Link"},
-			},
+			"providers": providers,
 		},
 	})
 }
@@ -176,10 +182,11 @@ type ModuleGroup struct {
 
 // DocTypeNavItem is a single DocType entry in the navigation.
 type DocTypeNavItem struct {
-	Name    string `json:"name"`
-	Label   string `json:"label"`
-	Icon    string `json:"icon,omitempty"`
-	IsChild bool   `json:"is_child"`
+	Name         string `json:"name"`
+	ResourceName string `json:"resource_name"`
+	Label        string `json:"label"`
+	Icon         string `json:"icon,omitempty"`
+	IsChild      bool   `json:"is_child"`
 }
 
 // ViewNavItem is a configured workspace view entry in the navigation.
@@ -226,9 +233,10 @@ func (h *Handler) HandleSystemNavigation(c *gin.Context) {
 			module = "System"
 		}
 		moduleMap[module] = append(moduleMap[module], DocTypeNavItem{
-			Name:    dt.Name,
-			Label:   dt.Name,
-			IsChild: false,
+			Name:         dt.Name,
+			ResourceName: dt.ResourceName,
+			Label:        dt.Name,
+			IsChild:      false,
 		})
 	}
 
@@ -254,21 +262,22 @@ func (h *Handler) HandleSystemNavigation(c *gin.Context) {
 	}
 
 	views := make([]ViewNavItem, 0)
-	if reg.Views != nil {
-		for _, view := range reg.Views.All() {
-			if view == nil || view.Route == "" {
+	if store := h.viewStore(c); store != nil {
+		manifests, _ := store.LoadPageManifests(siteName(c))
+		for _, manifest := range manifests {
+			if manifest == nil || manifest.Spec.Route == "" {
 				continue
 			}
-			label := view.Label
+			label := manifest.Metadata.Name
 			if label == "" {
-				label = view.Name
+				label = manifest.Spec.Route
 			}
 			views = append(views, ViewNavItem{
-				Name:   view.Name,
+				Name:   manifest.Metadata.Name,
 				Label:  label,
-				Route:  view.Route,
-				Type:   view.Type,
-				Module: view.Module,
+				Route:  manifest.Spec.Route,
+				Type:   "page_manifest",
+				Module: manifest.Metadata.Package,
 			})
 		}
 		sort.Slice(views, func(i, j int) bool {
@@ -414,9 +423,7 @@ func (h *Handler) HandleSystemDoctypeCreate(c *gin.Context) {
 
 	var dt doctype.DocType
 	if err := c.ShouldBindJSON(&dt); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Invalid request format: " + err.Error()},
-		})
+		badRequestError(c, "validation.invalid_json", "Invalid request format: "+err.Error(), nil)
 		return
 	}
 
@@ -430,9 +437,7 @@ func (h *Handler) HandleSystemDoctypeCreate(c *gin.Context) {
 
 	// Check for duplicate.
 	if reg.Has(dt.Name) {
-		c.JSON(http.StatusConflict, ErrorResponse{
-			Error: map[string]string{"message": "DocType already exists: " + dt.Name},
-		})
+		conflictError(c, "doctype.already_exists", "DocType already exists: "+dt.Name, map[string]any{"doctype": dt.Name})
 		return
 	}
 
@@ -442,6 +447,10 @@ func (h *Handler) HandleSystemDoctypeCreate(c *gin.Context) {
 	store := configstore.NewStore(db, h.TxManager.Dialect)
 
 	if activate {
+		if !requireSafeDoctypeChange(c, nil, singleDocTypeSlice(&dt)) {
+			return
+		}
+
 		// Activate immediately: save to DB, register, create permissions, run migration.
 		if err := store.SaveDocType(&dt, siteName); err != nil {
 			internalError(c, "saving doctype", err)
@@ -554,17 +563,13 @@ func (h *Handler) HandleSystemDoctypeUpdate(c *gin.Context) {
 
 	oldDT := reg.Get(doctypeName)
 	if oldDT == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "DocType not found: " + doctypeName},
-		})
+		notFoundError(c, "doctype.not_found", "DocType not found: "+doctypeName, map[string]any{"doctype": doctypeName})
 		return
 	}
 
 	var newDT doctype.DocType
 	if err := c.ShouldBindJSON(&newDT); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Invalid request format: " + err.Error()},
-		})
+		badRequestError(c, "validation.invalid_json", "Invalid request format: "+err.Error(), nil)
 		return
 	}
 
@@ -584,6 +589,10 @@ func (h *Handler) HandleSystemDoctypeUpdate(c *gin.Context) {
 	activate := c.Query("activate") != "false"
 	status := "Draft"
 	if activate {
+		if !requireSafeDoctypeChange(c, singleDocTypeSlice(oldDT), singleDocTypeSlice(&newDT)) {
+			return
+		}
+
 		if err := store.SaveDocType(&newDT, siteName); err != nil {
 			internalError(c, "saving doctype", err)
 			return
@@ -660,15 +669,17 @@ func (h *Handler) HandleSystemDoctypeDelete(c *gin.Context) {
 	db := h.siteTx(c).DB
 
 	if !reg.Has(doctypeName) {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "DocType not found: " + doctypeName},
-		})
+		notFoundError(c, "doctype.not_found", "DocType not found: "+doctypeName, map[string]any{"doctype": doctypeName})
 		return
 	}
 
 	cleanup := c.Query("cleanup")
 	if cleanup == "" {
 		cleanup = "config" // default: current behavior
+	}
+
+	if !requireSafeDoctypeChange(c, singleDocTypeSlice(reg.Get(doctypeName)), nil) {
+		return
 	}
 
 	// Delete from config tables (always).
@@ -857,13 +868,13 @@ func (h *Handler) HandleConfigVersionPreview(c *gin.Context) {
 		"SELECT config, site, status, COALESCE(change_list, '') FROM _kora_config_version WHERE id = ?", versionID,
 	).Scan(&configJSON, &siteName, &currentStatus, &changeList)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Version not found"}})
+		writeError(c, http.StatusNotFound, "version.not_found", "Version not found", nil)
 		return
 	}
 
 	snapshot, err := doctype.ParseConfig(configJSON)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to parse version config"}})
+		writeError(c, http.StatusInternalServerError, "version.parse_failed", "Failed to parse version config", nil)
 		return
 	}
 
@@ -1101,13 +1112,13 @@ func (h *Handler) HandleConfigVersionActivate(c *gin.Context) {
 		if h.TxManager.Dialect.DriverName() == "libsql" {
 			if err := h.TxManager.Dialect.ExecuteBatch(db, ddlStatements); err != nil {
 				slog.Error("activation: LibSQL DDL failed", "version", versionID, "error", err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Schema migration failed: " + err.Error()}})
+				writeError(c, http.StatusInternalServerError, "schema.migration_failed", "Schema migration failed", map[string]any{"error": err.Error()})
 				return
 			}
 		} else {
 			if err := configstore.ApplyDDLTx(tx, ddlStatements); err != nil {
 				slog.Error("activation: DDL failed — rolling back", "version", versionID, "error", err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Schema migration failed: " + err.Error()}})
+				writeError(c, http.StatusInternalServerError, "schema.migration_failed", "Schema migration failed", map[string]any{"error": err.Error()})
 				return
 			}
 		}
@@ -1216,13 +1227,13 @@ func (h *Handler) HandleConfigVersionRollbackPreview(c *gin.Context) {
 		"SELECT config, site, status FROM _kora_config_version WHERE id = ?", versionID,
 	).Scan(&configJSON, &siteName, &currentStatus)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Version not found"}})
+		writeError(c, http.StatusNotFound, "version.not_found", "Version not found", nil)
 		return
 	}
 
 	snapshot, err := doctype.ParseConfig(configJSON)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to parse version config"}})
+		writeError(c, http.StatusInternalServerError, "version.parse_failed", "Failed to parse version config", nil)
 		return
 	}
 
@@ -1322,13 +1333,13 @@ func (h *Handler) HandleConfigVersionRollback(c *gin.Context) {
 		if h.TxManager.Dialect.DriverName() == "libsql" {
 			if err := h.TxManager.Dialect.ExecuteBatch(db, rollbackDDL); err != nil {
 				slog.Error("rollback: LibSQL DDL failed", "version", versionID, "error", err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Rollback DDL failed: " + err.Error()}})
+				writeError(c, http.StatusInternalServerError, "schema.rollback_failed", "Rollback DDL failed", map[string]any{"error": err.Error()})
 				return
 			}
 		} else {
 			if err := configstore.ApplyDDLTx(tx, rollbackDDL); err != nil {
 				slog.Error("rollback: DDL failed — rolling back", "version", versionID, "error", err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Rollback DDL failed: " + err.Error()}})
+				writeError(c, http.StatusInternalServerError, "schema.rollback_failed", "Rollback DDL failed", map[string]any{"error": err.Error()})
 				return
 			}
 		}
@@ -1385,7 +1396,7 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 		"SELECT config, site, version, COALESCE(label, '') FROM _kora_config_version WHERE id = ?", versionID,
 	).Scan(&configJSON, &siteName, &versionNum, &label)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Version not found"}})
+		writeError(c, http.StatusNotFound, "version.not_found", "Version not found", nil)
 		return
 	}
 
@@ -1406,7 +1417,7 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 	}
 
 	// Generate YAML pack files ready for Template Pack File rows.
-	packFiles := make([]map[string]string, 0)
+	packFiles := make([]configVersionSnapshotFile, 0)
 
 	// Doctypes → doctypes/<name>.yaml
 	for _, dt := range snapshot.DocTypes {
@@ -1420,10 +1431,10 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 			})
 			return
 		}
-		packFiles = append(packFiles, map[string]string{
-			"path":         fmt.Sprintf("doctypes/%s.yaml", strings.ToLower(dt.Name)),
-			"content":      string(yamlBytes),
-			"content_type": "doctype",
+		packFiles = append(packFiles, configVersionSnapshotFile{
+			Path:        fmt.Sprintf("doctypes/%s.yaml", strings.ToLower(dt.Name)),
+			Content:     string(yamlBytes),
+			ContentType: "doctype",
 		})
 	}
 
@@ -1436,10 +1447,10 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 			})
 			return
 		}
-		packFiles = append(packFiles, map[string]string{
-			"path":         "roles.yaml",
-			"content":      string(yamlBytes),
-			"content_type": "roles",
+		packFiles = append(packFiles, configVersionSnapshotFile{
+			Path:        "roles.yaml",
+			Content:     string(yamlBytes),
+			ContentType: "roles",
 		})
 	}
 
@@ -1452,10 +1463,10 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 			})
 			return
 		}
-		packFiles = append(packFiles, map[string]string{
-			"path":         "permissions.yaml",
-			"content":      string(yamlBytes),
-			"content_type": "permissions",
+		packFiles = append(packFiles, configVersionSnapshotFile{
+			Path:        "permissions.yaml",
+			Content:     string(yamlBytes),
+			ContentType: "permissions",
 		})
 	}
 
@@ -1471,10 +1482,10 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 			})
 			return
 		}
-		packFiles = append(packFiles, map[string]string{
-			"path":         fmt.Sprintf("doctypes/%s_workflow.yaml", strings.ToLower(wf.Name)),
-			"content":      string(yamlBytes),
-			"content_type": "workflow",
+		packFiles = append(packFiles, configVersionSnapshotFile{
+			Path:        fmt.Sprintf("doctypes/%s_workflow.yaml", strings.ToLower(wf.Name)),
+			Content:     string(yamlBytes),
+			ContentType: "workflow",
 		})
 	}
 
@@ -1487,18 +1498,18 @@ func (h *Handler) HandleConfigVersionSnapshot(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, Response{Data: map[string]any{
-		"version_id":        versionID,
-		"version":           versionNum,
-		"site":              siteName,
-		"label":             label,
-		"doctype_names":     doctypeNames,
-		"doctype_count":     len(snapshot.DocTypes),
-		"roles_count":       len(snapshot.Roles),
-		"permissions_count": len(snapshot.Permissions),
-		"workflows_count":   len(snapshot.Workflows),
-		"snapshot":          json.RawMessage(snapshotJSON),
-		"pack_files":        packFiles,
+	c.JSON(http.StatusOK, Response{Data: configVersionSnapshotResponse{
+		VersionID:        versionID,
+		Version:          versionNum,
+		Site:             siteName,
+		Label:            label,
+		DoctypeNames:     doctypeNames,
+		DoctypeCount:     len(snapshot.DocTypes),
+		RolesCount:       len(snapshot.Roles),
+		PermissionsCount: len(snapshot.Permissions),
+		WorkflowsCount:   len(snapshot.Workflows),
+		Snapshot:         json.RawMessage(snapshotJSON),
+		PackFiles:        packFiles,
 	}})
 }
 
@@ -1577,11 +1588,11 @@ func (h *Handler) HandleSystemRoleCreate(c *gin.Context) {
 	db := h.siteTx(c).DB
 	var role doctype.Role
 	if err := c.ShouldBindJSON(&role); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", nil)
 		return
 	}
 	if role.Name == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Role name is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "Role name is required", map[string]any{"field": "name"})
 		return
 	}
 	store := configstore.NewStore(db, h.TxManager.Dialect)
@@ -1599,7 +1610,7 @@ func (h *Handler) HandleSystemRoleUpdate(c *gin.Context) {
 	roleName := c.Param("name")
 	var role doctype.Role
 	if err := c.ShouldBindJSON(&role); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", nil)
 		return
 	}
 	role.Name = roleName
@@ -1627,7 +1638,7 @@ func (h *Handler) HandleSystemRoleDelete(c *gin.Context) {
 		internalError(c, "deleting role permissions", err)
 		return
 	}
-	c.JSON(http.StatusOK, Response{Data: map[string]any{"message": "deleted", "users_with_role": userCount}})
+	c.JSON(http.StatusOK, Response{Data: deletedResponse{Message: "deleted", UsersWithRole: userCount}})
 }
 
 // --- Permissions ---
@@ -1651,7 +1662,7 @@ func (h *Handler) HandleSystemPermissionsSave(c *gin.Context) {
 	db := h.siteTx(c).DB
 	var permissions []*doctype.Permission
 	if err := c.ShouldBindJSON(&permissions); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", nil)
 		return
 	}
 	store := configstore.NewStore(db, h.TxManager.Dialect)
@@ -1663,7 +1674,134 @@ func (h *Handler) HandleSystemPermissionsSave(c *gin.Context) {
 	reg := h.siteRegistry(c)
 	roles, _ := store.LoadRoles(c.GetString("site_name"))
 	reg.Permissions.LoadPermissionsFromDB(roles, permissions)
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"message": "saved"}})
+	c.JSON(http.StatusOK, Response{Data: savedResponse{Message: "saved"}})
+}
+
+// HandleSystemRealtime streams authenticated realtime connection events.
+// It supports WebSocket when the client upgrades, and SSE as a read-only fallback.
+func (h *Handler) HandleSystemRealtime(c *gin.Context) {
+	siteName := c.GetString("site_name")
+	provider := h.SiteRealtimeProviders[siteName]
+	slog.Info("realtime request received",
+		"site", siteName,
+		"method", c.Request.Method,
+		"path", c.Request.URL.Path,
+		"upgrade", c.GetHeader("Upgrade"),
+		"connection", c.GetHeader("Connection"),
+		"accept", c.GetHeader("Accept"),
+		"origin", c.GetHeader("Origin"),
+		"user_agent", c.Request.UserAgent(),
+	)
+	if isWebSocketUpgrade(c.Request) {
+		h.handleSystemRealtimeWebSocket(c, provider, siteName)
+		return
+	}
+	h.handleSystemRealtimeSSE(c, provider, siteName)
+}
+
+func (h *Handler) handleSystemRealtimeWebSocket(c *gin.Context, provider *natsprovider.Provider, siteName string) {
+	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		internalError(c, "realtime websocket upgrade failed", err)
+		return
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "closed")
+	h.streamRealtime(c, func(msg []byte) error {
+		return conn.Write(c.Request.Context(), websocket.MessageText, msg)
+	}, provider, siteName)
+}
+
+func (h *Handler) handleSystemRealtimeSSE(c *gin.Context, provider *natsprovider.Provider, siteName string) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		writeError(c, http.StatusInternalServerError, "server.streaming_unsupported", "streaming unsupported", nil)
+		return
+	}
+
+	writeEvent := func(eventType string, payload map[string]any) error {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(c.Writer, "event: %s\n", eventType); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", data); err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	}
+
+	h.streamRealtime(c, func(msg []byte) error {
+		var envelope map[string]any
+		if err := json.Unmarshal(msg, &envelope); err != nil {
+			envelope = map[string]any{"type": "heartbeat"}
+		}
+		eventType, _ := envelope["type"].(string)
+		if eventType == "" {
+			eventType = "message"
+		}
+		return writeEvent(eventType, envelope)
+	}, provider, siteName)
+}
+
+func (h *Handler) streamRealtime(c *gin.Context, send func([]byte) error, provider *natsprovider.Provider, siteName string) {
+	if provider == nil {
+		_ = send([]byte(`{"type":"connected","transport":"local","site":"` + siteName + `"}`))
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-c.Request.Context().Done():
+				return
+			case <-ticker.C:
+				if err := send([]byte(`{"type":"heartbeat","transport":"local"}`)); err != nil {
+					return
+				}
+			}
+		}
+	}
+
+	subject := provider.Config().SubjectPrefix + ".realtime." + siteName + ".>"
+	ch, drain, err := provider.Subscribe(c.Request.Context(), subject)
+	if err != nil {
+		_ = send([]byte(`{"type":"connected","transport":"local"}`))
+		return
+	}
+	defer drain()
+
+	_ = send([]byte(`{"type":"connected","transport":"nats","site":"` + siteName + `"}`))
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			if err := send(msg.Data); err != nil {
+				return
+			}
+		case <-ticker.C:
+			if err := send([]byte(`{"type":"heartbeat","transport":"nats"}`)); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func isWebSocketUpgrade(req *http.Request) bool {
+	return strings.EqualFold(req.Header.Get("Upgrade"), "websocket") && strings.Contains(strings.ToLower(req.Header.Get("Connection")), "upgrade")
 }
 
 // --- Workflows ---
@@ -1688,7 +1826,7 @@ func (h *Handler) HandleSystemWorkflowByDoctype(c *gin.Context) {
 	doctypeName := c.Param("doctype")
 	wf := reg.Workflows.Get(doctypeName)
 	if wf == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "No workflow for " + doctypeName}})
+		writeError(c, http.StatusNotFound, "workflow.not_found", "No workflow for doctype", map[string]any{"doctype": doctypeName})
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: wf})
@@ -1701,11 +1839,11 @@ func (h *Handler) HandleSystemWorkflowSave(c *gin.Context) {
 	reg := h.siteRegistry(c)
 	var wf doctype.Workflow
 	if err := c.ShouldBindJSON(&wf); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request"}})
+		badRequestError(c, "validation.invalid_json", "Invalid request", nil)
 		return
 	}
 	if wf.DocumentType == "" || wf.Name == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "name and document_type are required"}})
+		badRequestError(c, "validation.required_field", "name and document_type are required", map[string]any{"fields": []string{"name", "document_type"}})
 		return
 	}
 	store := configstore.NewStore(db, h.TxManager.Dialect)
@@ -1737,7 +1875,7 @@ func (h *Handler) HandleSystemWorkflowDelete(c *gin.Context) {
 		slog.Warn("workflow transition cleanup", "error", err)
 	}
 	reg.Workflows.Remove(doctypeName)
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"message": "deleted"}})
+	c.JSON(http.StatusOK, Response{Data: savedResponse{Message: "deleted"}})
 }
 
 // RegisterSystemRoutes registers system endpoints on the given API group.
@@ -1767,6 +1905,9 @@ func RegisterSystemRoutes(apiGroup *gin.RouterGroup, handler *Handler) {
 
 		// Config import.
 		system.POST("/config/import", handler.HandleConfigImport)
+
+		// Realtime stream.
+		system.GET("/realtime", handler.HandleSystemRealtime)
 
 		// Roles.
 		system.GET("/roles", handler.HandleSystemRoles)

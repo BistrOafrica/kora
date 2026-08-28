@@ -49,6 +49,7 @@ type sessionCacheEntry struct {
 	user      *User
 	site      string // site the session belongs to (prevents cross-site cache hits)
 	cachedAt  time.Time
+	createdAt time.Time
 	expiresAt time.Time // session expiry from DB
 }
 
@@ -130,11 +131,12 @@ func (sm *SessionManager) CreateSession(site string, user *User) (string, error)
 	return sid, nil
 }
 
-// GetSession validates a session ID for a given site and returns the associated user.
+// GetSession validates a session ID for a given site and returns the associated user
+// plus the session creation timestamp.
 // Uses an in-memory TTL cache to avoid hitting the database on every request.
-func (sm *SessionManager) GetSession(site, sid string) (*User, error) {
+func (sm *SessionManager) GetSession(site, sid string) (*User, time.Time, error) {
 	if sm.DB == nil {
-		return nil, fmt.Errorf("no database connection available: %w", ErrNoDBConnection)
+		return nil, time.Time{}, fmt.Errorf("no database connection available: %w", ErrNoDBConnection)
 	}
 	// Check cache first.
 	sm.cacheMu.RLock()
@@ -144,47 +146,52 @@ func (sm *SessionManager) GetSession(site, sid string) (*User, error) {
 	if ok && time.Now().Before(entry.cachedAt.Add(sessionCacheTTL)) && entry.site == site {
 		if time.Now().After(entry.expiresAt) {
 			sm.DeleteSession(sid)
-			return nil, fmt.Errorf("session expired: %w", ErrSessionExpired)
+			return nil, time.Time{}, fmt.Errorf("session expired: %w", ErrSessionExpired)
 		}
-		return entry.user, nil
+		return entry.user, entry.createdAt, nil
 	}
 
 	// Cache miss or expired — query database.
 	var userJSON string
 	var expiresStr string // scanned as string for SQLite compatibility (TEXT column)
+	var createdStr string
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 	err := sm.DB.QueryRowContext(ctx,
-		"SELECT data, expires_at FROM _kora_session WHERE site = ? AND sid = ?",
+		"SELECT data, expires_at, created_at FROM _kora_session WHERE site = ? AND sid = ?",
 		site, sid,
-	).Scan(&userJSON, &expiresStr)
+	).Scan(&userJSON, &expiresStr, &createdStr)
 
 	if err == sql.ErrNoRows {
 		// Remove from cache if present.
 		sm.cacheMu.Lock()
 		delete(sm.cache, sid)
 		sm.cacheMu.Unlock()
-		return nil, fmt.Errorf("session not found")
+		return nil, time.Time{}, fmt.Errorf("session not found")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("querying session: %w", err)
+		return nil, time.Time{}, fmt.Errorf("querying session: %w", err)
 	}
 
 	expiresAt, err := parseTime(expiresStr)
 	if err != nil {
-		return nil, fmt.Errorf("parsing session expiry: %w", err)
+		return nil, time.Time{}, fmt.Errorf("parsing session expiry: %w", err)
+	}
+	createdAt, err := parseTime(createdStr)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("parsing session creation time: %w", err)
 	}
 
 	if time.Now().After(expiresAt) {
 		sm.DeleteSession(sid)
-		return nil, fmt.Errorf("session expired: %w", ErrSessionExpired)
+		return nil, time.Time{}, fmt.Errorf("session expired: %w", ErrSessionExpired)
 	}
 
 	// Parse JSON. For simplicity in Phase 1, parse manually.
 	user := &User{}
 	if err := scanUserJSON(userJSON, user); err != nil {
-		return nil, fmt.Errorf("parsing session data: %w", err)
+		return nil, time.Time{}, fmt.Errorf("parsing session data: %w", err)
 	}
 
 	// Populate cache.
@@ -193,11 +200,12 @@ func (sm *SessionManager) GetSession(site, sid string) (*User, error) {
 		user:      user,
 		site:      site,
 		cachedAt:  time.Now(),
+		createdAt: createdAt,
 		expiresAt: expiresAt,
 	}
 	sm.cacheMu.Unlock()
 
-	return user, nil
+	return user, createdAt, nil
 }
 
 func scanUserJSON(jsonStr string, user *User) error {
@@ -720,7 +728,7 @@ func validateSession(c *gin.Context, sm *SessionManager) bool {
 	}
 
 	site := c.GetString("site_name")
-	user, err := sessionSM.GetSession(site, sid)
+	user, createdAt, err := sessionSM.GetSession(site, sid)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired session"})
 		c.Abort()
@@ -729,6 +737,8 @@ func validateSession(c *gin.Context, sm *SessionManager) bool {
 
 	c.Set("user", user.Name)
 	c.Set("user_obj", user)
+	c.Set("session_sid", sid)
+	c.Set("session_created_at", createdAt)
 
 	// Set role info for permission checks.
 	if len(user.Roles) > 0 {
@@ -767,6 +777,13 @@ func requireAuthenticatedAuthUser(c *gin.Context, sm *SessionManager) (*SessionM
 
 // RegisterAuthRoutes registers authentication endpoints.
 func RegisterAuthRoutes(router *gin.Engine, sm *SessionManager, db *sql.DB, mailer *email.Sender) {
+	registerAuthRoutes(router, sm, db, mailer, NewProviderRegistry())
+}
+
+func registerAuthRoutes(router *gin.Engine, sm *SessionManager, db *sql.DB, mailer *email.Sender, registry *ProviderRegistry) {
+	if registry == nil {
+		registry = NewProviderRegistry()
+	}
 	auth := router.Group("/api/auth")
 	{
 		auth.POST("/login", func(c *gin.Context) {
@@ -883,10 +900,7 @@ func RegisterAuthRoutes(router *gin.Engine, sm *SessionManager, db *sql.DB, mail
 		auth.GET("/providers", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"data": gin.H{
-					"providers": []gin.H{
-						{"name": "password", "label": "Email & Password"},
-						{"name": "magic_link", "label": "Magic Link"},
-					},
+					"providers": registry.List(),
 				},
 			})
 		})
@@ -1083,7 +1097,7 @@ func RegisterAuthRoutes(router *gin.Engine, sm *SessionManager, db *sql.DB, mail
 				}
 			}
 			site := c.GetString("site_name")
-			user, err := meSM.GetSession(site, sid)
+			user, _, err := meSM.GetSession(site, sid)
 			if err != nil {
 				slog.Warn("session validation failed for /me", "error", err)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired session"})

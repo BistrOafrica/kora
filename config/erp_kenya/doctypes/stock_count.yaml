@@ -1,0 +1,72 @@
+name: Stock Count
+module: Inventory
+is_submittable: true
+track_changes: true
+title_field: name
+search_fields: warehouse, count_date
+sort_field: count_date
+sort_order: DESC
+
+fields:
+  - fieldname: column_left
+    fieldtype: Column Break
+
+  - fieldname: warehouse
+    fieldtype: Link
+    label: Warehouse
+    options: Warehouse
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: count_date
+    fieldtype: Date
+    label: Count Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: counted_by
+    fieldtype: Data
+    label: Counted By
+
+  - fieldname: column_right
+    fieldtype: Column Break
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      In Progress
+      Completed
+      Reconciled
+      Cancelled
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: section_items
+    fieldtype: Section Break
+    label: Count Items
+
+  - fieldname: items
+    fieldtype: Table
+    label: Items
+    options: Stock Count Item
+    reqd: true
+
+  - fieldname: section_summary
+    fieldtype: Section Break
+    label: Summary
+
+  - fieldname: total_variance_value
+    fieldtype: Currency
+    label: Total Variance (KES)
+    computed: "SUM(items.variance_value)"
+    read_only: true
+    description: Auto-computed sum of all variance values.
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

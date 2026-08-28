@@ -210,13 +210,11 @@ func runConfigImport(siteName, path, dbName string) error {
 		return fmt.Errorf("saving workflows: %w", err)
 	}
 
-	// Parse and save views.
-	views, err := doctype.ParseViewsDirectory(path)
+	// Parse and save views from the dedicated views directory only.
+	// Root-level YAML files are reserved for doctypes, roles, permissions, and workflows.
+	views, err := doctype.ParseViewsDirectory(path + "/views")
 	if err != nil {
 		views = nil
-	}
-	if v2, err := doctype.ParseViewsDirectory(path + "/views"); err == nil {
-		views = append(views, v2...)
 	}
 	if len(views) > 0 {
 		fmt.Printf("Found %d views\n", len(views))

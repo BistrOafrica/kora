@@ -1,0 +1,23 @@
+name: Project Delivery Workspace
+route: /projectmgmt
+type: workspace
+layout: two_panel
+label: Project Portfolio
+module: Project Delivery
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Project
+    label: Project Portfolio
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Project
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

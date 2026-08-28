@@ -1,0 +1,9 @@
+- name: Pharmacy and Medical Inventory Operator
+  workspace_access: true
+  description: Creates and executes Pharmacy and Medical Inventory work.
+- name: Pharmacy and Medical Inventory Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Pharmacy and Medical Inventory Administrator
+  workspace_access: true
+  description: Configures Pharmacy and Medical Inventory and manages access.

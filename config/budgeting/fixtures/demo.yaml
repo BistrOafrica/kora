@@ -1,0 +1,6 @@
+pack: budgeting
+seed_mode: demo
+records:
+  - doctype: Budget
+    reference: DEMO-BUDGETING-001
+    status: Draft

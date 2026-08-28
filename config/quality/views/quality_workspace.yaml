@@ -1,0 +1,23 @@
+name: Quality Management Workspace
+route: /quality
+type: workspace
+layout: two_panel
+label: Quality Management
+module: Quality Management
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Inspection Request
+    label: Inspection Request Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Nonconformance
+    label: Nonconformance Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

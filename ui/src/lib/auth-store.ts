@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { AuthProvider, CurrentUser } from '@/types/api'
 import { sitePath } from './basepath'
 import * as authApi from './api/auth'
+import { KoraApiError } from './api/client'
 
 interface AuthState {
   user: CurrentUser | null
@@ -24,7 +25,10 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
-  isLoading: true,
+  // Route authentication is tracked by AuthGuard. This flag is reserved for
+  // sign-in, sign-out, and other user-triggered auth actions so public forms
+  // are usable immediately.
+  isLoading: false,
   error: null,
   errorType: null,
   providers: [],
@@ -35,7 +39,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await authApi.login({ email, password })
       set({ user, isAuthenticated: true, isLoading: false })
     } catch (err: any) {
-      set({ isLoading: false, error: err.message || 'Login failed', errorType: err.type || null })
+      set({ isLoading: false, error: err.message || 'Login failed', errorType: err instanceof KoraApiError ? err.code : err.type || null })
       throw err
     }
   },
@@ -58,7 +62,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await authApi.requestMagicLink({ email })
       set({ isLoading: false })
     } catch (err: any) {
-      set({ isLoading: false, error: err.message || 'Failed to request magic link', errorType: err.type || null })
+      set({ isLoading: false, error: err.message || 'Failed to request magic link', errorType: err instanceof KoraApiError ? err.code : err.type || null })
       throw err
     }
   },
@@ -69,7 +73,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await authApi.requestEmailVerification({ email })
       set({ isLoading: false })
     } catch (err: any) {
-      set({ isLoading: false, error: err.message || 'Failed to request verification email', errorType: err.type || null })
+      set({ isLoading: false, error: err.message || 'Failed to request verification email', errorType: err instanceof KoraApiError ? err.code : err.type || null })
       throw err
     }
   },
@@ -80,7 +84,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await authApi.verifyMagicLink({ token })
       set({ user, isAuthenticated: true, isLoading: false })
     } catch (err: any) {
-      set({ isLoading: false, error: err.message || 'Failed to verify magic link', errorType: err.type || null })
+      set({ isLoading: false, error: err.message || 'Failed to verify magic link', errorType: err instanceof KoraApiError ? err.code : err.type || null })
       throw err
     }
   },

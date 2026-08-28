@@ -1,0 +1,6 @@
+pack: clinic
+seed_mode: demo
+records:
+  - doctype: Appointment
+    reference: DEMO-CLINIC-001
+    status: Draft

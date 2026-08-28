@@ -248,7 +248,23 @@ func ParseWorkflowYAML(data []byte) (*Workflow, error) {
 	if wf.WorkflowStateField == "" {
 		wf.WorkflowStateField = "status"
 	}
+	// The persisted workflow_state.allow_edit column is boolean. Older
+	// templates used role lists here even though role authorization is already
+	// enforced by transitions and permissions. Normalize both formats at import
+	// time so every template can be provisioned safely.
+	for i := range wf.States {
+		wf.States[i].AllowEdit = normalizeAllowEdit(wf.States[i].AllowEdit)
+	}
 	return wf, nil
+}
+
+func normalizeAllowEdit(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "0", "false", "no", "n":
+		return "0"
+	default:
+		return "1"
+	}
 }
 
 // ParseWorkflowDirectory looks for workflow YAML files in a directory.

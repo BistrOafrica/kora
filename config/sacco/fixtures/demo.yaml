@@ -1,0 +1,6 @@
+pack: sacco
+seed_mode: demo
+records:
+  - doctype: Loan
+    reference: DEMO-SACCO-001
+    status: Draft

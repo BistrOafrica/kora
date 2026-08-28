@@ -1,0 +1,121 @@
+name: Job Opening
+module: HR
+is_submittable: true
+title_field: job_title
+search_fields: job_title, department
+sort_field: modified
+sort_order: DESC
+
+fields:
+  # --- Section: Job Details ---
+  - fieldname: section_job
+    fieldtype: Section Break
+    label: Job Details
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: job_title
+    fieldtype: Data
+    label: Job Title
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: department
+    fieldtype: Link
+    label: Department
+    options: Cost Center
+    in_list_view: true
+
+  - fieldname: designation
+    fieldtype: Data
+    label: Designation
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: employment_type
+    fieldtype: Select
+    label: Employment Type
+    options: |
+      Permanent
+      Contract
+      Temporary
+      Intern
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: no_of_positions
+    fieldtype: Int
+    label: Number of Positions
+    default: "1"
+    constraints:
+      - type: min
+        value: 1
+        message: "Number of positions must be at least 1."
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Open
+      In Review
+      Interviewing
+      Offer Extended
+      Filled
+      Cancelled
+    default: Open
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  # --- Section: Details ---
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: salary_range_min
+    fieldtype: Currency
+    label: Salary Range Min
+    constraints:
+      - type: min
+        value: 0
+        message: "Minimum salary cannot be negative."
+
+  - fieldname: salary_range_max
+    fieldtype: Currency
+    label: Salary Range Max
+    constraints:
+      - type: min
+        value: 0
+        message: "Maximum salary cannot be negative."
+
+  - fieldname: application_deadline
+    fieldtype: Date
+    label: Application Deadline
+    constraints:
+      - type: min_date
+        value: today
+        message: "Deadline must be today or later."
+
+  - fieldname: location
+    fieldtype: Data
+    label: Location
+
+  - fieldname: job_description
+    fieldtype: Text
+    label: Job Description
+
+  - fieldname: requirements
+    fieldtype: Text
+    label: Requirements
+
+  - fieldname: benefits
+    fieldtype: Text
+    label: Benefits
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

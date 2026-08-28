@@ -17,6 +17,43 @@ import (
 	"github.com/asenawritescode/kora/secret"
 )
 
+// ProviderProfile is the normalized provider/model selection used by the chat
+// pipeline before any network I/O occurs.
+type ProviderProfile struct {
+	ProviderKey    string
+	BaseURL        string
+	Model          string
+	HTTPTimeoutSec int
+}
+
+// ValidateProviderProfile rejects incomplete or mismatched provider settings
+// before the first provider request is made.
+func ValidateProviderProfile(p ProviderProfile) error {
+	if p.ProviderKey == "" || p.BaseURL == "" || p.Model == "" {
+		return fmt.Errorf("provider profile is incomplete")
+	}
+	if p.HTTPTimeoutSec <= 0 {
+		return fmt.Errorf("provider profile http timeout must be positive")
+	}
+	switch p.ProviderKey {
+	case "openai_api_key":
+		if !strings.Contains(p.BaseURL, "openai.com") {
+			return fmt.Errorf("provider profile base url mismatch for openai")
+		}
+	case "deepseek_api_key":
+		if !strings.Contains(p.BaseURL, "deepseek.com") {
+			return fmt.Errorf("provider profile base url mismatch for deepseek")
+		}
+	case "anthropic_api_key":
+		if !strings.Contains(p.BaseURL, "anthropic.com") {
+			return fmt.Errorf("provider profile base url mismatch for anthropic")
+		}
+	default:
+		return fmt.Errorf("unsupported provider key %q", p.ProviderKey)
+	}
+	return nil
+}
+
 // AIConfig holds all configurable thresholds for the AI chat pipeline.
 // Every value has a sensible default; site-level overrides are loaded
 // from the secret store with an "ai." key prefix.
@@ -37,17 +74,17 @@ type AIConfig struct {
 // DefaultAIConfig returns sane defaults that work for most models.
 func DefaultAIConfig() AIConfig {
 	return AIConfig{
-		MaxRounds:          10,
-		TokenBudget:        80000,
+		MaxRounds:           10,
+		TokenBudget:         80000,
 		CompactionThreshold: 0.80,
-		MaxToolResultChars: 4000,
-		StallThreshold:     3,
-		MaxToolErrors:      5,
-		MaxTokensPerCall:   4096,
-		HTTPTimeoutSec:     60,
-		MaxRetries:         2,
-		RetryBackoffMs:     500,
-		HistoryLimit:       20,
+		MaxToolResultChars:  4000,
+		StallThreshold:      3,
+		MaxToolErrors:       5,
+		MaxTokensPerCall:    4096,
+		HTTPTimeoutSec:      60,
+		MaxRetries:          2,
+		RetryBackoffMs:      500,
+		HistoryLimit:        20,
 	}
 }
 
@@ -194,13 +231,13 @@ func resolveProvider(db *sql.DB, siteName, modelOverride string) (providerKey, a
 // AI provider HTTP call with retry
 // ---------------------------------------------------------------------------
 
-func callAI(baseURL, apiKey string, body map[string]any) (map[string]any, error) {
+func callAI(client *http.Client, baseURL, apiKey string, body map[string]any) (map[string]any, error) {
 	jsonBody, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", baseURL+"/chat/completions", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -218,9 +255,18 @@ func callAI(baseURL, apiKey string, body map[string]any) (map[string]any, error)
 	return result, nil
 }
 
+func newAIHTTPClient(timeoutSec int) *http.Client {
+	return &http.Client{
+		Timeout: time.Duration(timeoutSec) * time.Second,
+	}
+}
+
+type providerAttemptRecorder func(attempt int, status string, latency time.Duration, err error)
+
 // callAIWithRetry calls the AI provider with exponential backoff on transient errors.
-func callAIWithRetry(baseURL, apiKey string, body map[string]any, cfg AIConfig) (map[string]any, error) {
+func callAIWithRetry(baseURL, apiKey string, body map[string]any, cfg AIConfig, record providerAttemptRecorder) (map[string]any, error) {
 	var lastErr error
+	client := newAIHTTPClient(cfg.HTTPTimeoutSec)
 	for attempt := 0; attempt <= cfg.MaxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(cfg.RetryBackoffMs) * time.Millisecond * time.Duration(math.Pow(2, float64(attempt-1)))
@@ -228,11 +274,18 @@ func callAIWithRetry(baseURL, apiKey string, body map[string]any, cfg AIConfig) 
 			time.Sleep(backoff)
 		}
 
-		result, err := callAI(baseURL, apiKey, body)
+		start := time.Now()
+		result, err := callAI(client, baseURL, apiKey, body)
 		if err == nil {
+			if record != nil {
+				record(attempt+1, "completed", time.Since(start), nil)
+			}
 			return result, nil
 		}
 
+		if record != nil {
+			record(attempt+1, "failed", time.Since(start), err)
+		}
 		lastErr = err
 
 		// Only retry on transient errors (429, 503, 502, 504).

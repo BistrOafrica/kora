@@ -14,6 +14,7 @@ import { Link } from '@tanstack/react-router'
 import { Workflow, Plus, Edit, Trash2, Save, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { HelpTooltip } from '@/components/ui/help-tooltip'
 
 const EMPTY_STATE: WorkflowState = { state: '', doc_status: 0, allow_edit: '', style: 'default' }
 const EMPTY_TRANSITION: WorkflowTransition = { action: '', from: '', to: '', allowed: '', condition: '', require_fields: [] }
@@ -69,7 +70,7 @@ export default function AdminWorkflowsPage() {
         {/* Header */}
         <div className="flex items-center justify-between px-3 sm:px-6 py-3 border-b shrink-0 gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => { setEditingDocType(null); setForm(null) }}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Close workflow editor" title="Close" onClick={() => { setEditingDocType(null); setForm(null) }}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="min-w-0">
@@ -126,8 +127,10 @@ export default function AdminWorkflowsPage() {
       <div className="flex items-center gap-3 mb-6">
         <Workflow className="h-6 w-6" />
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Workflows</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Define document lifecycles</p>
+          <h1 className="flex items-center gap-2 text-2xl sm:text-3xl font-bold tracking-tight">
+            Workflows
+            <HelpTooltip label="Workflows help">Define lifecycle states and transitions for submitted records.</HelpTooltip>
+          </h1>
         </div>
       </div>
 
@@ -242,7 +245,7 @@ function StateCard({ state: s, index, onChange, onRemove }: {
               <SelectContent>{STYLES.map((st) => <SelectItem key={st} value={st}>{st}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onRemove}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Remove state" title="Remove state" onClick={onRemove}><Trash2 className="h-4 w-4 text-destructive" /></Button>
         </div>
       </div>
     </div>
@@ -268,7 +271,7 @@ function TransitionCard({ t, states, onChange, onRemove }: {
           <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="To" /></SelectTrigger>
           <SelectContent>{states.map((s) => <SelectItem key={s.state} value={s.state}>{s.state}</SelectItem>)}</SelectContent>
         </Select>
-        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onRemove}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Remove transition" title="Remove transition" onClick={onRemove}><Trash2 className="h-4 w-4 text-destructive" /></Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div><Label className="sm:hidden text-xs text-muted-foreground">Action</Label><Input className="h-8" value={t.action} onChange={(e) => onChange({ action: e.target.value })} placeholder="Action label" /></div>

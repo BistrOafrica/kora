@@ -557,6 +557,85 @@
   import: false
   report: false
 
+# --- External operation lifecycle and immutable integration audit ---
+- doctype: External Operation
+  role: Store Manager
+  read: true
+  write: true
+  create: true
+  delete: true
+  submit: true
+  cancel: true
+  amend: true
+  export: true
+  import: true
+  report: true
+
+- doctype: External Operation
+  role: Cashier
+  read: true
+  write: true
+  create: true
+  delete: false
+  submit: false
+  cancel: false
+  amend: false
+  export: false
+  import: false
+  report: false
+
+- doctype: External Operation
+  role: Accountant
+  read: true
+  write: false
+  create: false
+  delete: false
+  submit: false
+  cancel: false
+  amend: false
+  export: true
+  import: false
+  report: true
+
+- doctype: External Operation Event
+  role: Store Manager
+  read: true
+  write: true
+  create: true
+  delete: true
+  submit: true
+  cancel: true
+  amend: true
+  export: true
+  import: true
+  report: true
+
+- doctype: External Operation Event
+  role: Cashier
+  read: true
+  write: false
+  create: false
+  delete: false
+  submit: false
+  cancel: false
+  amend: false
+  export: false
+  import: false
+  report: false
+
+- doctype: External Operation Event
+  role: Accountant
+  read: true
+  write: false
+  create: false
+  delete: false
+  submit: false
+  cancel: false
+  amend: false
+  export: true
+  import: false
+  report: true
+
 - doctype: Point Rule
   role: Store Manager
   read: true

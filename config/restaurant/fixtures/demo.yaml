@@ -1,0 +1,6 @@
+pack: restaurant
+seed_mode: demo
+records:
+  - doctype: Food Order
+    reference: DEMO-RESTAURANT-001
+    status: Draft

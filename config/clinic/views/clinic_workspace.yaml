@@ -1,0 +1,23 @@
+name: Clinic and Practice Management Workspace
+route: /clinic
+type: workspace
+layout: two_panel
+label: Reception and Clinical Queue
+module: Clinic and Practice Management
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Appointment
+    label: Reception and Clinical Queue
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Appointment
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

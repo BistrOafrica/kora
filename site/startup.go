@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // StartupConfig holds all configuration loaded from env vars at boot.
@@ -22,19 +23,23 @@ type StartupConfig struct {
 	ConfigDir string // KORA_CONFIG_DIR — defaults to "."
 	LogLevel  string // KORA_LOG_LEVEL — defaults to "info"
 	LogFormat string // KORA_LOG_FORMAT — defaults to "json"
+
+	// Feature flags.
+	AllowConsoleOnboarding bool // KORA_CONSOLE_ONBOARDING_ENABLED — defaults to false
 }
 
 // LoadStartupConfig reads all config from environment variables.
 func LoadStartupConfig() *StartupConfig {
 	c := &StartupConfig{
-		DBType:          os.Getenv("KORA_DB_TYPE"),
-		DBDSN:           os.Getenv("DB_DSN"),
-		ConsoleEmail:    envOrDefault("CONSOLE_EMAIL", "admin@kora.local"),
-		ConsolePassword: envOrDefault("CONSOLE_PASSWORD", "kora123"),
-		HTTPPort:        envIntOrDefault("KORA_HTTP_PORT", 8000),
-		ConfigDir:       envOrDefault("KORA_CONFIG_DIR", "."),
-		LogLevel:        envOrDefault("KORA_LOG_LEVEL", "info"),
-		LogFormat:       envOrDefault("KORA_LOG_FORMAT", "json"),
+		DBType:                 os.Getenv("KORA_DB_TYPE"),
+		DBDSN:                  os.Getenv("DB_DSN"),
+		ConsoleEmail:           envOrDefault("CONSOLE_EMAIL", "admin@kora.local"),
+		ConsolePassword:        envOrDefault("CONSOLE_PASSWORD", "kora123"),
+		HTTPPort:               envIntOrDefault("KORA_HTTP_PORT", 8000),
+		ConfigDir:              envOrDefault("KORA_CONFIG_DIR", "."),
+		LogLevel:               envOrDefault("KORA_LOG_LEVEL", "info"),
+		LogFormat:              envOrDefault("KORA_LOG_FORMAT", "json"),
+		AllowConsoleOnboarding: envBoolOrDefault("KORA_CONSOLE_ONBOARDING_ENABLED", false),
 	}
 	return c
 }
@@ -69,6 +74,18 @@ func envIntOrDefault(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+func envBoolOrDefault(key string, fallback bool) bool {
+	if v := strings.TrimSpace(strings.ToLower(os.Getenv(key))); v != "" {
+		switch v {
+		case "1", "true", "yes", "on":
+			return true
+		case "0", "false", "no", "off":
+			return false
 		}
 	}
 	return fallback

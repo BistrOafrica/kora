@@ -1,0 +1,39 @@
+name: Kenya Compliance Workspace
+route: /compliance
+type: workspace
+layout: two_panel
+label: Kenya Tax & Compliance
+module: Finance
+components:
+  - id: mpesa_payments
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: M-Pesa Payment
+    label: M-Pesa Transactions
+    desktop_columns: [name, transaction_id, transaction_date, phone_number, amount, matched, status]
+    mobile_columns: [transaction_id, amount, status]
+  - id: etims_invoices
+    type: record_table
+    region: main
+    position: 1
+    source_doctype: eTIMS Invoice
+    label: eTIMS Submissions
+    desktop_columns: [name, sales_invoice, provider_status, status, trader_invoice_number, receipt_number, etims_url]
+    mobile_columns: [sales_invoice, provider_status, status, receipt_number]
+  - id: kra_returns
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: KRA Return
+    label: KRA Returns
+    desktop_columns: [name, return_type, return_period, total_tax, submission_status]
+    mobile_columns: [name, return_type, submission_status]
+  - id: wht_certificates
+    type: record_table
+    region: side
+    position: 1
+    source_doctype: WHT Certificate
+    label: WHT Certificates
+    desktop_columns: [name, supplier, certificate_date, gross_amount, wht_amount, status]
+    mobile_columns: [name, supplier, status]

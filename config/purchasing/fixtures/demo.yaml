@@ -1,0 +1,6 @@
+pack: purchasing
+seed_mode: demo
+records:
+  - doctype: Purchase Request
+    reference: DEMO-PURCHASING-001
+    status: Draft

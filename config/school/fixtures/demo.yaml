@@ -1,0 +1,10 @@
+pack: school
+seed_mode: demo
+records:
+  - doctype: Student
+    reference: DEMO-SCHOOL-001
+    admission_number: DEMO-STUDENT-001
+    student_name: Demo Student
+    guardian_name: Demo Guardian
+    guardian_phone: "+254700000004"
+    enrollment_status: Active

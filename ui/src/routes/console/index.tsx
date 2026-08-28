@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useConsoleAuthStore } from '@/lib/console-auth-store'
-import { listSites, createSite, updateSite, deleteSite, resetSitePassword } from '@/lib/api/console'
+import {
+  listSites,
+  createSite,
+  updateSite,
+  deleteSite,
+  resetSitePassword,
+} from '@/lib/api/console'
 import type { ConsoleSite } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -71,7 +77,6 @@ export default function ConsoleDashboard() {
     queryFn: listSites,
     staleTime: 10_000,
   })
-
   const filteredSites = sites?.filter(s =>
     !search ||
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -295,7 +300,6 @@ function SiteEditSheet({
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [deleteMsg, setDeleteMsg] = useState<{ text: string; ok: boolean } | null>(null)
-
   // Sync state when site changes.
   useEffect(() => {
     if (site) {

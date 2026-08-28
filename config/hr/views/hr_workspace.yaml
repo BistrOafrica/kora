@@ -1,0 +1,23 @@
+name: Human Resources and Employee Lifecycle Workspace
+route: /hr
+type: workspace
+layout: two_panel
+label: Human Resources and Employee Lifecycle
+module: Human Resources and Employee Lifecycle
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Employee
+    label: Employee Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Onboarding Task
+    label: Onboarding Task Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

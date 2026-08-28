@@ -1,0 +1,39 @@
+name: HR Workspace
+route: /hr
+type: workspace
+layout: two_panel
+label: Human Resources
+module: HR
+components:
+  - id: employees
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Employee
+    label: Employees
+    desktop_columns: [name, employee_id, first_name, last_name, department, designation, employee_status]
+    mobile_columns: [employee_id, first_name, last_name]
+  - id: leave_applications
+    type: record_table
+    region: main
+    position: 1
+    source_doctype: Leave Application
+    label: Leave Applications
+    desktop_columns: [name, employee, leave_type, from_date, to_date, total_days, status]
+    mobile_columns: [name, leave_type, status]
+  - id: attendance
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Attendance
+    label: Attendance
+    desktop_columns: [name, employee, attendance_date, check_in, check_out, status]
+    mobile_columns: [name, employee, status]
+  - id: payroll
+    type: record_table
+    region: side
+    position: 1
+    source_doctype: Payroll Period
+    label: Payroll
+    desktop_columns: [name, period_name, start_date, end_date, status]
+    mobile_columns: [period_name, status]

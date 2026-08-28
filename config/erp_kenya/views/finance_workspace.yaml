@@ -1,0 +1,47 @@
+name: Finance Workspace
+route: /finance
+type: workspace
+layout: two_panel
+label: Financial Management
+module: Finance
+components:
+  - id: journal_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Journal Entry
+    label: Journal Queue
+    desktop_columns: [name, reference, entry_date, voucher_type, status, total_debit]
+    mobile_columns: [reference, status]
+  - id: invoices_queue
+    type: record_table
+    region: main
+    position: 1
+    source_doctype: Sales Invoice
+    label: Sales Invoices
+    desktop_columns: [name, customer, invoice_date, due_date, total, balance_due, status]
+    mobile_columns: [name, customer, status]
+  - id: supplier_invoices_queue
+    type: record_table
+    region: main
+    position: 2
+    source_doctype: Supplier Invoice
+    label: Supplier Invoices
+    desktop_columns: [name, supplier, invoice_date, total, balance_due, status]
+    mobile_columns: [name, supplier, status]
+  - id: reconciliation_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Reconciliation
+    label: Reconciliation Queue
+    desktop_columns: [name, bank_account, reconciliation_date, statement_balance, variance, status]
+    mobile_columns: [name, bank_account, status]
+  - id: payment_queue
+    type: record_table
+    region: side
+    position: 1
+    source_doctype: Payment Entry
+    label: Payments
+    desktop_columns: [name, party, payment_date, payment_method, total_paid, status]
+    mobile_columns: [name, party, status]

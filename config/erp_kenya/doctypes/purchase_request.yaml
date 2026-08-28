@@ -1,0 +1,111 @@
+name: Purchase Request
+module: Purchasing
+is_submittable: true
+track_changes: true
+title_field: name
+search_fields: department, request_date
+sort_field: request_date
+sort_order: DESC
+
+fields:
+  - fieldname: column_left
+    fieldtype: Column Break
+
+  - fieldname: request_date
+    fieldtype: Date
+    label: Request Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: required_by
+    fieldtype: Date
+    label: Required By
+
+  - fieldname: department
+    fieldtype: Link
+    label: Department
+    options: Cost Center
+    in_standard_filter: true
+
+  - fieldname: requested_by
+    fieldtype: Data
+    label: Requested By
+
+  - fieldname: column_right
+    fieldtype: Column Break
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Approved
+      Rejected
+      Ordered
+      Cancelled
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: priority
+    fieldtype: Select
+    label: Priority
+    options: |
+      Low
+      Medium
+      High
+      Urgent
+    in_list_view: true
+
+  - fieldname: currency
+    fieldtype: Link
+    label: Currency
+    options: Currency
+    default: "KES"
+
+  - fieldname: section_items
+    fieldtype: Section Break
+    label: Items
+
+  - fieldname: items
+    fieldtype: Table
+    label: Items
+    options: Purchase Request Item
+    reqd: true
+    constraints:
+      - type: min_rows
+        value: 1
+        message: "At least one item is required."
+
+  - fieldname: section_totals
+    fieldtype: Section Break
+    label: Totals
+
+  - fieldname: estimated_total
+    fieldtype: Currency
+    label: Estimated Total (KES)
+    computed: "SUM(items.estimated_total)"
+    read_only: true
+    description: Auto-computed sum of all item estimates.
+
+  - fieldname: section_approval
+    fieldtype: Section Break
+    label: Approval
+
+  - fieldname: approver
+    fieldtype: Data
+    label: Approver
+
+  - fieldname: approval_notes
+    fieldtype: Text
+    label: Approval Notes
+
+  - fieldname: purpose
+    fieldtype: Text
+    label: Purpose
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

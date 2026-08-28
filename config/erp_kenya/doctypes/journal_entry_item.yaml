@@ -1,0 +1,42 @@
+name: Journal Entry Item
+module: Finance
+is_child_table: true
+title_field: account
+sort_field: idx
+sort_order: ASC
+fields:
+  - fieldname: account
+    fieldtype: Link
+    label: Account
+    options: Account
+    reqd: true
+    in_list_view: true
+  - fieldname: cost_center
+    fieldtype: Link
+    label: Cost Center
+    options: Cost Center
+  - fieldname: description
+    fieldtype: Data
+    label: Description
+    in_list_view: true
+  - fieldname: debit_amount
+    fieldtype: Currency
+    label: Debit Amount (KES)
+    default: "0"
+    in_list_view: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Debit amount cannot be negative."
+  - fieldname: credit_amount
+    fieldtype: Currency
+    label: Credit Amount (KES)
+    default: "0"
+    in_list_view: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Credit amount cannot be negative."
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference

@@ -8,14 +8,17 @@ import { Plus, Edit, Trash2, FileText } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { HelpTooltip } from '@/components/ui/help-tooltip'
 
 export default function AdminDoctypesPage() {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">DocTypes</h1>
-          <p className="text-muted-foreground mt-1">Manage your data model</p>
+          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            DocTypes
+            <HelpTooltip label="DocTypes help">Create and maintain the data objects that power workspace pages.</HelpTooltip>
+          </h1>
         </div>
         <Link to="/workspace/admin/doctypes/new">
           <Button>

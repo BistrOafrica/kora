@@ -1,0 +1,44 @@
+name: Cost Center
+module: Finance
+title_field: center_code
+search_fields: center_code, center_name
+sort_field: center_code
+sort_order: ASC
+fields:
+  - fieldname: center_code
+    fieldtype: Data
+    label: Center Code
+    reqd: true
+    unique: true
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: center_name
+    fieldtype: Data
+    label: Center Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+  - fieldname: center_type
+    fieldtype: Select
+    label: Center Type
+    options: |
+      Department
+      Branch
+      Division
+      Project
+      Zone
+    in_list_view: true
+    in_standard_filter: true
+  - fieldname: parent_center
+    fieldtype: Link
+    label: Parent Center
+    options: Cost Center
+    description: For hierarchical cost center structures.
+  - fieldname: is_active
+    fieldtype: Check
+    label: Is Active
+    default: "1"
+  - fieldname: description
+    fieldtype: Text
+    label: Description

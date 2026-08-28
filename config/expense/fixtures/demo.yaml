@@ -1,0 +1,6 @@
+pack: expense
+seed_mode: demo
+records:
+  - doctype: Expense Claim
+    reference: DEMO-EXPENSE-001
+    status: Draft

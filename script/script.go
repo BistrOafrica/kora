@@ -36,6 +36,9 @@ const (
 	EventAfterCancel  Event = "after_cancel"
 	EventValidate     Event = "validate"
 	EventComputed     Event = "computed"
+	// EventPayment is used by named payment-provider scripts invoked before a
+	// transaction is inserted.
+	EventPayment Event = "payment"
 )
 
 // ExecuteRequest carries all context for a single script execution.

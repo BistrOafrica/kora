@@ -1,0 +1,91 @@
+name: Petty Cash
+module: Finance
+is_submittable: true
+title_field: name
+search_fields: paid_to, voucher_date
+sort_field: voucher_date
+sort_order: DESC
+
+fields:
+  - fieldname: column_left
+    fieldtype: Column Break
+
+  - fieldname: voucher_date
+    fieldtype: Date
+    label: Voucher Date
+    reqd: true
+    in_list_view: true
+    description: Date of the petty cash voucher.
+
+  - fieldname: paid_to
+    fieldtype: Data
+    label: Paid To
+    reqd: true
+    in_list_view: true
+    search_index: true
+    description: Recipient of the petty cash payment.
+
+  - fieldname: amount
+    fieldtype: Currency
+    label: Amount (KES)
+    reqd: true
+    in_list_view: true
+    constraints:
+      - type: min
+        value: 1
+        message: "Amount must be at least KES 1."
+    description: Amount disbursed in Kenya Shillings.
+
+  - fieldname: column_right
+    fieldtype: Column Break
+
+  - fieldname: cost_center
+    fieldtype: Link
+    label: Cost Center
+    options: Cost Center
+    description: Cost center to charge this expense to.
+
+  - fieldname: gl_account
+    fieldtype: Link
+    label: GL Account
+    options: Account
+    description: General ledger expense account.
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Approved
+      Reimbursed
+      Cancelled
+    read_only: true
+    default: Draft
+    in_list_view: true
+    in_standard_filter: true
+    description: Current voucher status.
+
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: purpose
+    fieldtype: Text
+    label: Purpose
+    reqd: true
+    description: Reason for the petty cash disbursement.
+
+  - fieldname: receipt_attached
+    fieldtype: Check
+    label: Receipt Attached
+    description: Whether a receipt is attached to this voucher.
+
+  - fieldname: approved_by
+    fieldtype: Data
+    label: Approved By
+    description: Person who approved the voucher.
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

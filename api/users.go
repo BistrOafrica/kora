@@ -56,9 +56,7 @@ func (h *Handler) HandleUserList(c *gin.Context) {
 
 	db := auth.SiteDB(c)
 	if db == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: map[string]string{"message": "No database connection"},
-		})
+		writeError(c, http.StatusInternalServerError, "server.database_unavailable", "No database connection", nil)
 		return
 	}
 
@@ -100,32 +98,24 @@ func (h *Handler) HandleUserCreate(c *gin.Context) {
 
 	db := auth.SiteDB(c)
 	if db == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: map[string]string{"message": "No database connection"},
-		})
+		writeError(c, http.StatusInternalServerError, "server.database_unavailable", "No database connection", nil)
 		return
 	}
 
 	var req UserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Invalid request: " + err.Error()},
-		})
+		badRequestError(c, "validation.invalid_json", "Invalid request: "+err.Error(), nil)
 		return
 	}
 
 	// Validate required fields.
 	if req.Email == "" || req.FullName == "" || req.Password == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "email, full_name, and password are required"},
-		})
+		badRequestError(c, "validation.required_field", "email, full_name, and password are required", map[string]any{"fields": []string{"email", "full_name", "password"}})
 		return
 	}
 
 	if len(req.Password) < 8 {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Password must be at least 8 characters"},
-		})
+		badRequestError(c, "validation.password_too_short", "Password must be at least 8 characters", nil)
 		return
 	}
 
@@ -138,9 +128,7 @@ func (h *Handler) HandleUserCreate(c *gin.Context) {
 		return
 	}
 	if count > 0 {
-		c.JSON(http.StatusConflict, ErrorResponse{
-			Error: map[string]string{"message": "A user with this email already exists", "field": "email"},
-		})
+		conflictError(c, "user.email_exists", "A user with this email already exists", map[string]any{"field": "email"})
 		return
 	}
 
@@ -186,9 +174,7 @@ func (h *Handler) HandleUserGet(c *gin.Context) {
 
 	db := auth.SiteDB(c)
 	if db == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: map[string]string{"message": "No database connection"},
-		})
+		writeError(c, http.StatusInternalServerError, "server.database_unavailable", "No database connection", nil)
 		return
 	}
 
@@ -196,9 +182,7 @@ func (h *Handler) HandleUserGet(c *gin.Context) {
 	name := c.Param("name")
 	u, err := fetchUser(db, site, name)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "User not found"},
-		})
+		notFoundError(c, "user.not_found", "User not found", map[string]any{"name": name})
 		return
 	}
 
@@ -214,9 +198,7 @@ func (h *Handler) HandleUserUpdate(c *gin.Context) {
 
 	db := auth.SiteDB(c)
 	if db == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: map[string]string{"message": "No database connection"},
-		})
+		writeError(c, http.StatusInternalServerError, "server.database_unavailable", "No database connection", nil)
 		return
 	}
 
@@ -225,17 +207,13 @@ func (h *Handler) HandleUserUpdate(c *gin.Context) {
 
 	// Verify user exists.
 	if _, err := fetchUser(db, site, name); err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "User not found"},
-		})
+		notFoundError(c, "user.not_found", "User not found", map[string]any{"name": name})
 		return
 	}
 
 	var req UserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Invalid request: " + err.Error()},
-		})
+		badRequestError(c, "validation.invalid_json", "Invalid request: "+err.Error(), nil)
 		return
 	}
 
@@ -258,9 +236,7 @@ func (h *Handler) HandleUserUpdate(c *gin.Context) {
 	// Optionally update password.
 	if req.Password != "" {
 		if len(req.Password) < 8 {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: map[string]string{"message": "Password must be at least 8 characters"},
-			})
+			badRequestError(c, "validation.password_too_short", "Password must be at least 8 characters", nil)
 			return
 		}
 		passwordHash, err := auth.HashPassword(req.Password)
@@ -290,9 +266,7 @@ func (h *Handler) HandleUserDelete(c *gin.Context) {
 
 	db := auth.SiteDB(c)
 	if db == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: map[string]string{"message": "No database connection"},
-		})
+		writeError(c, http.StatusInternalServerError, "server.database_unavailable", "No database connection", nil)
 		return
 	}
 
@@ -302,17 +276,13 @@ func (h *Handler) HandleUserDelete(c *gin.Context) {
 	// Prevent self-delete.
 	currentUser := c.GetString("user")
 	if currentUser == name {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "You cannot delete your own account"},
-		})
+		badRequestError(c, "user.self_delete_forbidden", "You cannot delete your own account", nil)
 		return
 	}
 
 	// Verify user exists.
 	if _, err := fetchUser(db, site, name); err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "User not found"},
-		})
+		notFoundError(c, "user.not_found", "User not found", map[string]any{"name": name})
 		return
 	}
 
@@ -339,9 +309,7 @@ func (h *Handler) HandleUserResetPassword(c *gin.Context) {
 
 	db := auth.SiteDB(c)
 	if db == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: map[string]string{"message": "No database connection"},
-		})
+		writeError(c, http.StatusInternalServerError, "server.database_unavailable", "No database connection", nil)
 		return
 	}
 
@@ -350,9 +318,7 @@ func (h *Handler) HandleUserResetPassword(c *gin.Context) {
 
 	// Verify user exists.
 	if _, err := fetchUser(db, site, name); err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "User not found"},
-		})
+		notFoundError(c, "user.not_found", "User not found", map[string]any{"name": name})
 		return
 	}
 
@@ -360,16 +326,12 @@ func (h *Handler) HandleUserResetPassword(c *gin.Context) {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Password == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "New password is required"},
-		})
+		badRequestError(c, "validation.required_field", "New password is required", map[string]any{"field": "password"})
 		return
 	}
 
 	if len(req.Password) < 8 {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Password must be at least 8 characters"},
-		})
+		badRequestError(c, "validation.password_too_short", "Password must be at least 8 characters", nil)
 		return
 	}
 
@@ -407,7 +369,7 @@ func requireAdmin(c *gin.Context) bool {
 		}
 	}
 	c.JSON(http.StatusForbidden, ErrorResponse{
-		Error: map[string]string{"message": "Administrator role required"},
+		Error: ErrorBody{Code: "permission.admin_required", Message: "Administrator role required"},
 	})
 	return false
 }

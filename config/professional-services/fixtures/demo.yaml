@@ -1,0 +1,6 @@
+pack: professional-services
+seed_mode: demo
+records:
+  - doctype: Engagement
+    reference: DEMO-PROFESSIONAL-SERVICES-001
+    status: Draft

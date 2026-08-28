@@ -15,6 +15,7 @@ import (
 	"github.com/asenawritescode/kora/analytics"
 	"github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/doctype"
+	"github.com/asenawritescode/kora/outbox"
 	"github.com/asenawritescode/kora/script"
 	"github.com/go-sql-driver/mysql"
 )
@@ -65,6 +66,11 @@ type TxManager struct {
 	// If nil, analytics event emission is disabled (no-op).
 	EventBus analytics.EventBus
 
+	// Outbox writes events into the transactional outbox in the same transaction
+	// as the business write (RFC §8.1). If nil, outbox recording is disabled and
+	// the existing post-commit EventBus.Publish path remains the only emission.
+	Outbox outbox.Writer
+
 	// ScriptRunner executes JavaScript hooks (before_save, after_insert, etc.).
 	// If nil, script execution is disabled.
 	ScriptRunner script.Runner
@@ -80,13 +86,37 @@ type TxManager struct {
 	// SiteName is the tenant identifier used in analytics events.
 	SiteName string
 
-	// AsyncHookQueue receives after_* hooks for fire-and-forget execution.
-	// If non-nil, after_* events are queued instead of executed synchronously.
-	AsyncHookQueue chan AsyncHookRequest
+	// AsyncHookSink receives after_* hooks for fire-and-forget execution.
+	// If non-nil, after_* events are handed to the async worker contract.
+	AsyncHookSink AsyncHookSink
 
 	// User and UserRole from the current request context, used for script execution.
 	CurrentUser     string
 	CurrentUserRole string
+}
+
+// writeOutbox records a change event into the transactional outbox within the
+// given transaction. It is a no-op when tx.Outbox is nil, preserving the existing
+// post-commit EventBus.Publish behavior.
+func (tx *TxManager) writeOutbox(dbTx *sql.Tx, op analytics.EventOp, dt *doctype.DocType, docName, modifiedBy string, data, oldData map[string]any) error {
+	if tx.Outbox == nil {
+		return nil
+	}
+	ctx := tx.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	change := analytics.ChangeEvent{
+		Site:       tx.SiteName,
+		Doctype:    dt.Name,
+		DocName:    docName,
+		Operation:  op,
+		Timestamp:  time.Now(),
+		ModifiedBy: modifiedBy,
+		Data:       data,
+		OldData:    oldData,
+	}
+	return tx.Outbox.Append(ctx, dbTx, outbox.ChangeEventToEnvelope(change))
 }
 
 // Insert creates a new document in the database.
@@ -110,6 +140,41 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 	}
 	defer dbTx.Rollback()
 
+	if err := tx.InsertInTx(dbTx, dt, doc, owner, modifiedBy); err != nil {
+		return err
+	}
+
+	if err := dbTx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	doc.IsNew = false
+
+	if tx.EventBus != nil {
+		tx.EventBus.Publish(analytics.ChangeEvent{
+			Site:       tx.SiteName,
+			Doctype:    dt.Name,
+			DocName:    doc.Name,
+			Operation:  analytics.EventInsert,
+			Timestamp:  time.Now(),
+			ModifiedBy: modifiedBy,
+			Data:       copyFieldsWithStatus(doc.Fields, doc.DocStatus),
+		})
+	}
+
+	// Run after_insert + after_save hooks — best-effort, errors logged not returned.
+	_ = tx.runHooks(dt, script.EventAfterInsert, doc, nil)
+	_ = tx.runHooks(dt, script.EventAfterSave, doc, nil)
+
+	return nil
+}
+
+// InsertInTx performs the transactional portion of Insert using an existing
+// SQL transaction without committing it. Callers that must commit additional
+// rows atomically with the business write (operation kernel idempotency
+// receipts, audit rows, extra outbox events) use this variant and own the
+// surrounding transaction's Commit/Rollback.
+func (tx *TxManager) InsertInTx(dbTx *sql.Tx, dt *doctype.DocType, doc *doctype.Document, owner, modifiedBy string) error {
 	nextNum := 1
 	if doc.Name == "" {
 		prefix := derivePrefix(dt.Name)
@@ -157,8 +222,7 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 		strings.Join(placeholders, ", "),
 	)
 
-	_, err = dbTx.Exec(query, values...)
-	if err != nil {
+	if _, err := dbTx.Exec(query, values...); err != nil {
 		if valErr := tx.Dialect.ParseError(err, dt); valErr != nil {
 			if valErr.Type == "UniqueConstraint" {
 				return fmt.Errorf("%w: %w", ErrDuplicate, valErr)
@@ -216,27 +280,9 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 		return fmt.Errorf("persisting computed fields: %w", err)
 	}
 
-	if err := dbTx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
+	if err := tx.writeOutbox(dbTx, analytics.EventInsert, dt, doc.Name, modifiedBy, copyFieldsWithStatus(doc.Fields, doc.DocStatus), nil); err != nil {
+		return fmt.Errorf("recording insert to outbox: %w", err)
 	}
-
-	doc.IsNew = false
-
-	if tx.EventBus != nil {
-		tx.EventBus.Publish(analytics.ChangeEvent{
-			Site:       tx.SiteName,
-			Doctype:    dt.Name,
-			DocName:    doc.Name,
-			Operation:  analytics.EventInsert,
-			Timestamp:  time.Now(),
-			ModifiedBy: modifiedBy,
-			Data:       copyFieldsWithStatus(doc.Fields, doc.DocStatus),
-		})
-	}
-
-	// Run after_insert + after_save hooks — best-effort, errors logged not returned.
-	_ = tx.runHooks(dt, script.EventAfterInsert, doc, nil)
-	_ = tx.runHooks(dt, script.EventAfterSave, doc, nil)
 
 	return nil
 }
@@ -298,6 +344,43 @@ func (tx *TxManager) Save(dt *doctype.DocType, doc *doctype.Document, modifiedBy
 	}
 	defer dbTx.Rollback() // no-op after Commit
 
+	if err := tx.SaveInTx(dbTx, dt, doc, modifiedBy, owner, oldDoc); err != nil {
+		return err
+	}
+
+	if err := dbTx.Commit(); err != nil {
+		return fmt.Errorf("committing transaction: %w", err)
+	}
+
+	if tx.EventBus != nil {
+		var oldData map[string]any
+		if oldDoc != nil {
+
+			oldData = copyFieldsWithStatus(oldDoc.Fields, oldDoc.DocStatus)
+		}
+		tx.EventBus.Publish(analytics.ChangeEvent{
+			Site:       tx.SiteName,
+			Doctype:    dt.Name,
+			DocName:    doc.Name,
+			Operation:  analytics.EventUpdate,
+			Timestamp:  time.Now(),
+			ModifiedBy: modifiedBy,
+			Data:       copyFieldsWithStatus(doc.Fields, doc.DocStatus),
+			OldData:    oldData,
+		})
+	}
+
+	// Run after_save hooks — best-effort.
+	_ = tx.runHooks(dt, script.EventAfterSave, doc, oldDoc)
+
+	return nil
+}
+
+// SaveInTx performs the transactional portion of Save using an existing SQL
+// transaction without committing it. Operation-kernel callers use this variant
+// to commit idempotency receipts and audit rows atomically with the mutation.
+// Returns orm.ErrNotFound wrapped error when the row vanished or is owner-hidden.
+func (tx *TxManager) SaveInTx(dbTx *sql.Tx, dt *doctype.DocType, doc *doctype.Document, modifiedBy string, owner string, oldDoc *doctype.Document) error {
 	now := time.Now()
 	dataFields := dt.NonTableDataFields()
 
@@ -426,30 +509,13 @@ func (tx *TxManager) Save(dt *doctype.DocType, doc *doctype.Document, modifiedBy
 		return fmt.Errorf("persisting computed fields: %w", err)
 	}
 
-	if err := dbTx.Commit(); err != nil {
-		return fmt.Errorf("committing transaction: %w", err)
+	var oldOutboxData map[string]any
+	if oldDoc != nil {
+		oldOutboxData = copyFieldsWithStatus(oldDoc.Fields, oldDoc.DocStatus)
 	}
-
-	if tx.EventBus != nil {
-		var oldData map[string]any
-		if oldDoc != nil {
-
-			oldData = copyFieldsWithStatus(oldDoc.Fields, oldDoc.DocStatus)
-		}
-		tx.EventBus.Publish(analytics.ChangeEvent{
-			Site:       tx.SiteName,
-			Doctype:    dt.Name,
-			DocName:    doc.Name,
-			Operation:  analytics.EventUpdate,
-			Timestamp:  time.Now(),
-			ModifiedBy: modifiedBy,
-			Data:       copyFieldsWithStatus(doc.Fields, doc.DocStatus),
-			OldData:    oldData,
-		})
+	if err := tx.writeOutbox(dbTx, analytics.EventUpdate, dt, doc.Name, modifiedBy, copyFieldsWithStatus(doc.Fields, doc.DocStatus), oldOutboxData); err != nil {
+		return fmt.Errorf("recording save to outbox: %w", err)
 	}
-
-	// Run after_save hooks — best-effort.
-	_ = tx.runHooks(dt, script.EventAfterSave, doc, oldDoc)
 
 	return nil
 }
@@ -629,7 +695,7 @@ func (tx *TxManager) Delete(dt *doctype.DocType, name string, owner string) erro
 	// Read the document before deleting — needed for analytics event Data and hooks.
 	var oldDoc *doctype.Document
 	var oldFields map[string]any
-	if tx.EventBus != nil || tx.ScriptRunner != nil {
+	if tx.EventBus != nil || tx.ScriptRunner != nil || tx.Outbox != nil {
 		var err error
 		oldDoc, err = tx.GetDoc(dt, name, owner)
 		if err == nil {
@@ -678,6 +744,10 @@ func (tx *TxManager) Delete(dt *doctype.DocType, name string, owner string) erro
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return fmt.Errorf("%w: document %q not found or access denied", ErrNotFound, name)
+	}
+
+	if err := tx.writeOutbox(dbTx, analytics.EventDelete, dt, name, "", oldFields, nil); err != nil {
+		return fmt.Errorf("recording delete to outbox: %w", err)
 	}
 
 	if err := dbTx.Commit(); err != nil {

@@ -1,0 +1,9 @@
+- name: Hotel and Guest Operations Operator
+  workspace_access: true
+  description: Creates and executes Hotel and Guest Operations work.
+- name: Hotel and Guest Operations Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Hotel and Guest Operations Administrator
+  workspace_access: true
+  description: Configures Hotel and Guest Operations and manages access.

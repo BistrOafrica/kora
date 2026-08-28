@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/asenawritescode/kora/doctype"
 	"github.com/asenawritescode/kora/orm"
@@ -186,6 +188,21 @@ func BuildToolCatalog(reg *doctype.Registry) ToolCatalog {
 		Version: toolCatalogVersion(catalog),
 		Tools:   catalog,
 	}
+}
+
+func buildOpenAIToolsFromCatalog(catalog ToolCatalog) []map[string]any {
+	funcs := make([]map[string]any, 0, len(catalog.Tools))
+	for _, tool := range catalog.Tools {
+		funcs = append(funcs, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        tool.Name,
+				"description": tool.Description,
+				"parameters":  tool.InputSchema,
+			},
+		})
+	}
+	return funcs
 }
 
 func buildDoctypeToolDescriptors(dt *doctype.DocType) []ToolDescriptor {
@@ -446,7 +463,7 @@ func defaultString(value, fallback string) string {
 }
 
 func ExecuteTool(tx *orm.TxManager, reg *doctype.Registry, toolName string, args map[string]any, owner, siteName string) string {
-	return executeSingleTool(tx, reg, toolName, args, owner, siteName)
+	return executeSingleTool(tx, reg, toolName, args, owner, siteName, "", "")
 }
 
 func classifyToolSafety(name string) string {
@@ -648,7 +665,7 @@ fields:
 			"type": "function",
 			"function": map[string]any{
 				"name":        "validate_doctype_yaml",
-				"description": "Validate a DocType YAML definition WITHOUT saving. Always call this first before create_doctype_draft. Returns syntax errors with line numbers and 'did you mean?' suggestions for unknown keys.\n\nFIELD TYPES: Data, Text, Text Editor, Int, Float, Currency, Percent, Check, Date, Time, Datetime, Select (with options), Link (set options to target doctype name), Dynamic Link, Table (set options to child doctype name), Attach, Attach Image, Password, JSON, Section Break, Column Break, Heading.\n\nFIELD PROPERTIES: reqd (required), unique (must be unique across all records), in_list_view (show in table), in_standard_filter (show in filter sidebar), search_index (full-text searchable), read_only (non-editable), bold (highlight in forms), default (default value), dependency_scope (self/children/cross_doctype). NEVER use reserved field names: name, owner, creation, modified, modified_by, doc_status, idx, parent, parentfield, parenttype.\n\nTEMPORAL DEFAULTS: Do not generate default: Today or default: Now in AI-created YAML. Leave Date, Time, and Datetime defaults empty unless the user explicitly asks for a literal value like 2026-07-02.\n\nLINKED FIELDS: Use linked_field: \"target.fieldname\" on a Link field to auto-populate data from the linked document (e.g., linked_field: \"product.selling_price\" auto-fills the price when a Product is selected).\n\nDEPENDS_ON: Use depends_on: \"fieldname\" to show/hide a field based on another field. Use mandatory_depends_on: \"fieldname\" to make the dependency required.\n\nCONSTRAINTS: Per-field as [{type, value, message}]. DOC CONSTRAINTS (doc_constraints): [{type, predicate, condition, message}]. Predicate: (> end_date start_date). Condition: doc.type == \"wholesale\". Types:\n- min: maximum numeric value\n- max: maximum numeric value\n- min_length: minimum string length\n- max_length: maximum string length\n- regex: pattern to match\n- one_of: array of allowed values\n- not_one_of: array of disallowed values\nCOMPUTED FIELDS: S-expression (preferred): (* qty price), (sum \"items\" \"amount\"), (round expr N). Legacy syntax also works. Set read_only: true.\n\nTABLE (CHILD TABLE): Create the child doctype FIRST (with is_child_table: true), then the parent. The child doctype name goes in the Table field's 'options'.\n\nSIMPLE EXAMPLE:\n" + simpleExample + "\n\nCOMPLEX EXAMPLE (with Table, computed, Link, Select):\n" + complexExample + "\n\nCHILD TABLE EXAMPLE:\n" + childTableExample,
+				"description": "Validate a DocType YAML definition WITHOUT saving. Always call this first before create_doctype_draft. Returns syntax errors with line numbers and 'did you mean?' suggestions for unknown keys.\n\nFIELD TYPES: Data, Text, Text Editor, Int, Float, Currency, Percent, Check, Date, Time, Datetime, Select (with options), Link (set options to target doctype name), Dynamic Link, Table (set options to child doctype name), Attach, Attach Image, Attach Audio, Password, JSON, Section Break, Column Break, Heading.\n\nFIELD PROPERTIES: reqd (required), unique (must be unique across all records), in_list_view (show in table), in_standard_filter (show in filter sidebar), search_index (full-text searchable), read_only (non-editable), bold (highlight in forms), default (default value), accept (accepted file formats for Attach fields, e.g. '.pdf,.docx' or 'image/*'), dependency_scope (self/children/cross_doctype). NEVER use reserved field names: name, owner, creation, modified, modified_by, doc_status, idx, parent, parentfield, parenttype.\n\nTEMPORAL DEFAULTS: Do not generate default: Today or default: Now in AI-created YAML. Leave Date, Time, and Datetime defaults empty unless the user explicitly asks for a literal value like 2026-07-02.\n\nLINKED FIELDS: Use linked_field: \"target.fieldname\" on a Link field to auto-populate data from the linked document (e.g., linked_field: \"product.selling_price\" auto-fills the price when a Product is selected).\n\nDEPENDS_ON: Use depends_on: \"fieldname\" to show/hide a field based on another field. Use mandatory_depends_on: \"fieldname\" to make the dependency required.\n\nCONSTRAINTS: Per-field as [{type, value, message}]. DOC CONSTRAINTS (doc_constraints): [{type, predicate, condition, message}]. Predicate: (> end_date start_date). Condition: doc.type == \"wholesale\". Types:\n- min: maximum numeric value\n- max: maximum numeric value\n- min_length: minimum string length\n- max_length: maximum string length\n- regex: pattern to match\n- one_of: array of allowed values\n- not_one_of: array of disallowed values\nCOMPUTED FIELDS: S-expression (preferred): (* qty price), (sum \"items\" \"amount\"), (round expr N). Legacy syntax also works. Set read_only: true.\n\nTABLE (CHILD TABLE): Create the child doctype FIRST (with is_child_table: true), then the parent. The child doctype name goes in the Table field's 'options'.\n\nSIMPLE EXAMPLE:\n" + simpleExample + "\n\nCOMPLEX EXAMPLE (with Table, computed, Link, Select):\n" + complexExample + "\n\nCHILD TABLE EXAMPLE:\n" + childTableExample,
 				"parameters": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -676,7 +693,7 @@ fields:
 			"type": "function",
 			"function": map[string]any{
 				"name":        "create_doctype_draft",
-				"description": "Create a NEW DocType as DRAFT only. Does NOT create database tables — a human must review and activate. If the doctype has a Table field, create the child doctype FIRST (as a separate call), then the parent. Always call validate_doctype_yaml before this. Only call this AFTER the user confirms they want to create.\n\nFIELD TYPES: Data, Text, Text Editor, Int, Float, Currency, Percent, Check, Date, Time, Datetime, Select (with options using | prefix for multi-line), Link (options = target doctype name), Dynamic Link, Table (options = child doctype name), Attach, Attach Image, Password, JSON, Section Break, Column Break, Heading.\n\nFIELD PROPERTIES: reqd, unique, in_list_view, in_standard_filter, search_index, read_only, bold, default, linked_field, depends_on, mandatory_depends_on, dependency_scope (self/children/cross_doctype). NEVER use reserved field names: name, owner, creation, modified, modified_by, doc_status, idx, parent, parentfield, parenttype.\n\nTEMPORAL DEFAULTS: Never generate default: Today or default: Now in AI-created YAML. For Date, Time, and Datetime fields, omit the default unless the user explicitly asks for a literal value.\n\nCONSTRAINTS: [{type, value, message}]. Types: min, max, min_length, max_length, regex, one_of, not_one_of. DOC CONSTRAINTS (doc_constraints): [{type, predicate, condition, message}]. Predicate: (> end_date start_date). Condition: doc.type == \"wholesale\".\n\nCOMPUTED: S-expression (preferred): (* qty price), (sum \"items\" \"amount\"), (round expr N). Legacy also works. Set read_only: true.\n\nFor child tables: set is_child_table: true. Create child FIRST, then parent. Do NOT include table columns (parent, parentfield, parenttype, idx) — the system adds them automatically.\n\nSIMPLE EXAMPLE:\n" + simpleExample + "\n\nCOMPLEX EXAMPLE (with Table, Link, Select, computed fields, submittable):\n" + complexExample + "\n\nCHILD TABLE EXAMPLE:\n" + childTableExample,
+				"description": "Create a NEW DocType as DRAFT only. Does NOT create database tables — a human must review and activate. If the doctype has a Table field, create the child doctype FIRST (as a separate call), then the parent. Always call validate_doctype_yaml before this. Only call this AFTER the user confirms they want to create.\n\nFIELD TYPES: Data, Text, Text Editor, Int, Float, Currency, Percent, Check, Date, Time, Datetime, Select (with options using | prefix for multi-line), Link (options = target doctype name), Dynamic Link, Table (options = child doctype name), Attach, Attach Image, Attach Audio, Password, JSON, Section Break, Column Break, Heading.\n\nFIELD PROPERTIES: reqd, unique, in_list_view, in_standard_filter, search_index, read_only, bold, default, linked_field, depends_on, mandatory_depends_on, accept, dependency_scope (self/children/cross_doctype). NEVER use reserved field names: name, owner, creation, modified, modified_by, doc_status, idx, parent, parentfield, parenttype.\n\nTEMPORAL DEFAULTS: Never generate default: Today or default: Now in AI-created YAML. For Date, Time, and Datetime fields, omit the default unless the user explicitly asks for a literal value.\n\nCONSTRAINTS: [{type, value, message}]. Types: min, max, min_length, max_length, regex, one_of, not_one_of. DOC CONSTRAINTS (doc_constraints): [{type, predicate, condition, message}]. Predicate: (> end_date start_date). Condition: doc.type == \"wholesale\".\n\nCOMPUTED: S-expression (preferred): (* qty price), (sum \"items\" \"amount\"), (round expr N). Legacy also works. Set read_only: true.\n\nFor child tables: set is_child_table: true. Create child FIRST, then parent. Do NOT include table columns (parent, parentfield, parenttype, idx) — the system adds them automatically.\n\nSIMPLE EXAMPLE:\n" + simpleExample + "\n\nCOMPLEX EXAMPLE (with Table, Link, Select, computed fields, submittable):\n" + complexExample + "\n\nCHILD TABLE EXAMPLE:\n" + childTableExample,
 				"parameters": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -832,11 +849,23 @@ fields:
 // ---------------------------------------------------------------------------
 
 // executeToolCallsForAI runs tool calls and returns results in OpenAI tool message format.
-func executeToolCallsForAI(tx *orm.TxManager, reg *doctype.Registry, toolCalls []any, owner, siteName string) []map[string]any {
+func executeToolCallsForAI(ctx context.Context, tx *orm.TxManager, reg *doctype.Registry, toolCalls []any, owner, siteName, runID, stepID, conversationID string) []map[string]any {
 	var results []map[string]any
 	for _, tc := range toolCalls {
 		call, ok := tc.(map[string]any)
 		if !ok {
+			_ = RecordAudit(ctx, tx.DB, AuditEvent{
+				Site:           siteName,
+				RunID:          runID,
+				StepID:         stepID,
+				ConversationID: conversationID,
+				Kind:           "tool_call",
+				Name:           "",
+				Status:         "failed",
+				Details: map[string]any{
+					"error": "invalid tool call format from AI",
+				},
+			})
 			results = append(results, map[string]any{
 				"role":         "tool",
 				"tool_call_id": "unknown",
@@ -848,6 +877,19 @@ func executeToolCallsForAI(tx *orm.TxManager, reg *doctype.Registry, toolCalls [
 		id := safeGetString(call, "id")
 		fn := safeGetMap(call, "function")
 		if fn == nil {
+			_ = RecordAudit(ctx, tx.DB, AuditEvent{
+				Site:           siteName,
+				RunID:          runID,
+				StepID:         stepID,
+				ConversationID: conversationID,
+				Kind:           "tool_call",
+				Name:           "",
+				Status:         "failed",
+				Details: map[string]any{
+					"tool_call_id": id,
+					"error":        "missing function in tool call",
+				},
+			})
 			results = append(results, map[string]any{
 				"role":         "tool",
 				"tool_call_id": id,
@@ -861,6 +903,20 @@ func executeToolCallsForAI(tx *orm.TxManager, reg *doctype.Registry, toolCalls [
 
 		var args map[string]any
 		if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+			_ = RecordAudit(ctx, tx.DB, AuditEvent{
+				Site:           siteName,
+				RunID:          runID,
+				StepID:         stepID,
+				ConversationID: conversationID,
+				Kind:           "tool_call",
+				Name:           name,
+				Status:         "failed",
+				Details: map[string]any{
+					"tool_call_id": id,
+					"args_json":    argsJSON,
+					"error":        err.Error(),
+				},
+			})
 			results = append(results, map[string]any{
 				"role":         "tool",
 				"tool_call_id": id,
@@ -869,7 +925,24 @@ func executeToolCallsForAI(tx *orm.TxManager, reg *doctype.Registry, toolCalls [
 			continue
 		}
 
-		result := executeSingleTool(tx, reg, name, args, owner, siteName)
+		result := executeSingleTool(tx, reg, name, args, owner, siteName, runID, stepID)
+		status := "completed"
+		if isToolError(result) {
+			status = "failed"
+		}
+		_ = RecordAudit(ctx, tx.DB, AuditEvent{
+			Site:           siteName,
+			RunID:          runID,
+			StepID:         stepID,
+			ConversationID: conversationID,
+			Kind:           "tool_call",
+			Name:           name,
+			Status:         status,
+			Details: map[string]any{
+				"tool_call_id": id,
+				"args":         args,
+			},
+		})
 		results = append(results, map[string]any{
 			"role":         "tool",
 			"tool_call_id": id,
@@ -879,7 +952,10 @@ func executeToolCallsForAI(tx *orm.TxManager, reg *doctype.Registry, toolCalls [
 	return results
 }
 
-func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string, args map[string]any, owner, siteName string) string {
+func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string, args map[string]any, owner, siteName, runID, stepID string) string {
+	if err := requireRecentAuthForTool(tx.Context, toolName); err != nil {
+		return err.Error()
+	}
 	// --- System tools (no doctype prefix) ---
 	switch toolName {
 	case "list_doctypes":
@@ -892,9 +968,39 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 		return executeAnalyticsInsights(tx, reg, doctypeName, siteName)
 	case "create_doctype_draft":
 		yamlStr, _ := args["yaml"].(string)
-		return executeCreateDoctypeDraft(tx, reg, yamlStr, owner, siteName)
+		if ok, _ := HasGrantedApproval(tx.Context, tx.DB, siteName, runID, toolName, args); !ok {
+			_ = EnsureApprovalPending(tx.Context, tx.DB, siteName, runID, owner, "agent", toolName, 0, args)
+			if stepID != "" && runID != "" {
+				_ = MarkRunPendingApproval(tx.Context, tx.DB, runID, stepID, "pending_approval")
+			}
+			return "Approval required for create_doctype_draft. A durable approval has been recorded and the tool was not executed."
+		}
+		result := executeCreateDoctypeDraft(tx, reg, yamlStr, owner, siteName)
+		_, _ = GrantApprovalForOperation(tx.Context, tx.DB, siteName, runID, toolName, args, owner)
+		return result
+	case "update_doctype_draft":
+		yamlStr, _ := args["yaml"].(string)
+		if ok, _ := HasGrantedApproval(tx.Context, tx.DB, siteName, runID, toolName, args); !ok {
+			_ = EnsureApprovalPending(tx.Context, tx.DB, siteName, runID, owner, "agent", toolName, 0, args)
+			if stepID != "" && runID != "" {
+				_ = MarkRunPendingApproval(tx.Context, tx.DB, runID, stepID, "pending_approval")
+			}
+			return "Approval required for update_doctype_draft. A durable approval has been recorded and the tool was not executed."
+		}
+		result := executeUpdateDoctypeDraft(tx, reg, yamlStr, owner, siteName)
+		_, _ = GrantApprovalForOperation(tx.Context, tx.DB, siteName, runID, toolName, args, owner)
+		return result
 	case "script_create":
-		return executeScriptCreate(tx, args, siteName, owner)
+		if ok, _ := HasGrantedApproval(tx.Context, tx.DB, siteName, runID, toolName, args); !ok {
+			_ = EnsureApprovalPending(tx.Context, tx.DB, siteName, runID, owner, "agent", toolName, 0, args)
+			if stepID != "" && runID != "" {
+				_ = MarkRunPendingApproval(tx.Context, tx.DB, runID, stepID, "pending_approval")
+			}
+			return "Approval required for script_create. A durable approval has been recorded and the tool was not executed."
+		}
+		result := executeScriptCreate(tx, args, siteName, owner)
+		_, _ = GrantApprovalForOperation(tx.Context, tx.DB, siteName, runID, toolName, args, owner)
+		return result
 	case "script_list":
 		return executeScriptList(tx, siteName)
 	case "script_validate":
@@ -913,11 +1019,29 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 		return executeValidateView(viewJSON, reg)
 	case "create_view":
 		viewJSON := argsToJSON(args, "view")
-		return executeCreateViewDraft(tx, reg, viewJSON, owner, siteName)
+		if ok, _ := HasGrantedApproval(tx.Context, tx.DB, siteName, runID, toolName, args); !ok {
+			_ = EnsureApprovalPending(tx.Context, tx.DB, siteName, runID, owner, "agent", toolName, 0, args)
+			if stepID != "" && runID != "" {
+				_ = MarkRunPendingApproval(tx.Context, tx.DB, runID, stepID, "pending_approval")
+			}
+			return "Approval required for create_view. A durable approval has been recorded and the tool was not executed."
+		}
+		result := executeCreateViewDraft(tx, reg, viewJSON, owner, siteName)
+		_, _ = GrantApprovalForOperation(tx.Context, tx.DB, siteName, runID, toolName, args, owner)
+		return result
 	case "update_view":
 		name, _ := args["name"].(string)
 		viewJSON := argsToJSON(args, "view")
-		return executeUpdateViewDraft(tx, reg, name, viewJSON, owner, siteName)
+		if ok, _ := HasGrantedApproval(tx.Context, tx.DB, siteName, runID, toolName, args); !ok {
+			_ = EnsureApprovalPending(tx.Context, tx.DB, siteName, runID, owner, "agent", toolName, 0, args)
+			if stepID != "" && runID != "" {
+				_ = MarkRunPendingApproval(tx.Context, tx.DB, runID, stepID, "pending_approval")
+			}
+			return "Approval required for update_view. A durable approval has been recorded and the tool was not executed."
+		}
+		result := executeUpdateViewDraft(tx, reg, name, viewJSON, owner, siteName)
+		_, _ = GrantApprovalForOperation(tx.Context, tx.DB, siteName, runID, toolName, args, owner)
+		return result
 	}
 
 	// Parse tool name using suffix matching (handles multi-word doctype names like "Work Order").
@@ -997,6 +1121,13 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 		}
 		return fmt.Sprintf("%s %q: %v", dt.Name, name, doc.Fields)
 	case "create":
+		if ok, _ := HasGrantedApproval(tx.Context, tx.DB, siteName, runID, toolName, args); !ok {
+			_ = EnsureApprovalPending(tx.Context, tx.DB, siteName, runID, owner, "agent", toolName, 0, args)
+			if stepID != "" && runID != "" {
+				_ = MarkRunPendingApproval(tx.Context, tx.DB, runID, stepID, "pending_approval")
+			}
+			return fmt.Sprintf("Approval required for %s_create. A durable approval has been recorded and the tool was not executed.", dt.Name)
+		}
 		// Validate field names — reject unknown fields with a helpful message.
 		if unknown := unknownFields(args, dt); len(unknown) > 0 {
 			slog.Warn("Rejecting unknown fields in tool call", "unknown", unknown, "valid", availableFieldNames(dt), "doctype", dt.Name)
@@ -1010,12 +1141,51 @@ func executeSingleTool(tx *orm.TxManager, reg *doctype.Registry, toolName string
 		if err := tx.Insert(dt, doc, owner, "ai-assistant"); err != nil {
 			return fmt.Sprintf("Error creating %s: %v", dt.Name, err)
 		}
+		_, _ = GrantApprovalForOperation(tx.Context, tx.DB, siteName, runID, toolName, args, owner)
 		return fmt.Sprintf("Created %s %q.", dt.Name, doc.Name)
 	case "update":
-		return executeUpdateTool(tx, reg, dt, args, owner)
+		if ok, _ := HasGrantedApproval(tx.Context, tx.DB, siteName, runID, toolName, args); !ok {
+			_ = EnsureApprovalPending(tx.Context, tx.DB, siteName, runID, owner, "agent", toolName, 0, args)
+			if stepID != "" && runID != "" {
+				_ = MarkRunPendingApproval(tx.Context, tx.DB, runID, stepID, "pending_approval")
+			}
+			return fmt.Sprintf("Approval required for %s_update. A durable approval has been recorded and the tool was not executed.", dt.Name)
+		}
+		result := executeUpdateTool(tx, reg, dt, args, owner)
+		_, _ = GrantApprovalForOperation(tx.Context, tx.DB, siteName, runID, toolName, args, owner)
+		return result
 	default:
 		return fmt.Sprintf("Unknown operation: %s", operation)
 	}
+}
+
+const recentAuthWindow = 10 * time.Minute
+
+func requireRecentAuthForTool(ctx context.Context, toolName string) error {
+	descriptor := toolDescriptorForName(toolName)
+	if descriptor == nil || !descriptor.RequiresRecentAuth {
+		return nil
+	}
+	if ctx == nil {
+		return fmt.Errorf("recent authentication required for %s", toolName)
+	}
+	sessionAt, ok := ctx.Value("session_created_at").(time.Time)
+	if !ok || sessionAt.IsZero() {
+		return fmt.Errorf("recent authentication required for %s", toolName)
+	}
+	if time.Since(sessionAt) > recentAuthWindow {
+		return fmt.Errorf("recent authentication required for %s", toolName)
+	}
+	return nil
+}
+
+func toolDescriptorForName(toolName string) *ToolDescriptor {
+	for _, dt := range buildSystemFunctions() {
+		if descriptor, ok := descriptorFromRawFunction(dt); ok && descriptor.Name == toolName {
+			return &descriptor
+		}
+	}
+	return nil
 }
 
 func executeUpdateTool(tx *orm.TxManager, reg *doctype.Registry, dt *doctype.DocType, args map[string]any, owner string) string {

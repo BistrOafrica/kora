@@ -288,7 +288,7 @@ func (d *LibSQLDialect) ColumnType(f *doctype.Field) string {
 		return "INTEGER"
 	case "Date", "Time", "Datetime":
 		return "TEXT" // Stored as ISO 8601 strings
-	case "Attach", "Attach Image":
+	case "Attach", "Attach Image", "Attach Audio":
 		return "TEXT"
 	case "JSON":
 		return "TEXT" // SQLite stores JSON as TEXT
@@ -502,6 +502,7 @@ func (d *LibSQLDialect) SystemTableSQL() []string {
 		// Add columns for backwards compat.
 		`ALTER TABLE "_kora_field" ADD COLUMN "linked_field" TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE "_kora_field" ADD COLUMN "computed" TEXT`,
+		`ALTER TABLE "_kora_field" ADD COLUMN "accept" TEXT`,
 
 		// _kora_role
 		`CREATE TABLE IF NOT EXISTS "_kora_role" (
@@ -571,6 +572,7 @@ func (d *LibSQLDialect) SystemTableSQL() []string {
 			"db_user" TEXT NOT NULL DEFAULT '',
 			"db_password" TEXT,
 			"db_password_encrypted" INTEGER NOT NULL DEFAULT 0,
+			"file_storage" TEXT NOT NULL DEFAULT 'local',
 			"domains_json" TEXT,
 			"status" TEXT NOT NULL DEFAULT 'active',
 			"created_at" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
@@ -582,6 +584,7 @@ func (d *LibSQLDialect) SystemTableSQL() []string {
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'active'`,
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "created_at" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))`,
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "updated_at" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))`,
+		`ALTER TABLE "_kora_site_registry" ADD COLUMN "file_storage" TEXT NOT NULL DEFAULT 'local'`,
 		`CREATE INDEX IF NOT EXISTS "idx_site_registry_status" ON "_kora_site_registry" ("status")`,
 
 		// _kora_user

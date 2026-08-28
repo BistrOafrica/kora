@@ -1,0 +1,70 @@
+name: Purchase Order Item
+module: Purchasing
+is_child_table: true
+title_field: item
+sort_field: idx
+sort_order: ASC
+
+fields:
+  - fieldname: item
+    fieldtype: Link
+    label: Item
+    options: Item
+    reqd: true
+    in_list_view: true
+
+  - fieldname: description
+    fieldtype: Data
+    label: Description
+
+  - fieldname: quantity
+    fieldtype: Float
+    label: Quantity
+    reqd: true
+    constraints:
+      - type: min
+        value: 0.01
+        message: "Quantity must be at least 0.01."
+
+  - fieldname: unit
+    fieldtype: Data
+    label: Unit
+
+  - fieldname: unit_price
+    fieldtype: Currency
+    label: Unit Price (KES)
+    reqd: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Unit price cannot be negative."
+
+  - fieldname: line_total
+    fieldtype: Currency
+    label: Line Total (KES)
+    computed: "quantity * unit_price"
+    read_only: true
+    description: Auto-computed from quantity × unit price.
+
+  - fieldname: warehouse
+    fieldtype: Link
+    label: Warehouse
+    options: Warehouse
+
+  - fieldname: received_qty
+    fieldtype: Float
+    label: Received Qty
+    default: "0"
+    read_only: true
+
+  - fieldname: pending_qty
+    fieldtype: Float
+    label: Pending Qty
+    computed: "quantity - received_qty"
+    read_only: true
+    description: Quantity still to be received.
+
+  - fieldname: gl_account
+    fieldtype: Link
+    label: GL Account
+    options: Account

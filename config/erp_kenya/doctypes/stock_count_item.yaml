@@ -1,0 +1,48 @@
+name: Stock Count Item
+module: Inventory
+is_child_table: true
+title_field: item
+sort_field: idx
+sort_order: ASC
+
+fields:
+  - fieldname: item
+    fieldtype: Link
+    label: Item
+    options: Item
+    reqd: true
+    in_list_view: true
+
+  - fieldname: system_qty
+    fieldtype: Float
+    label: System Qty
+    read_only: true
+    description: Current stock quantity in the system.
+
+  - fieldname: counted_qty
+    fieldtype: Float
+    label: Counted Qty
+    reqd: true
+
+  - fieldname: variance
+    fieldtype: Float
+    label: Variance
+    computed: "counted_qty - system_qty"
+    read_only: true
+    description: Difference between counted and system quantities.
+
+  - fieldname: unit_cost
+    fieldtype: Currency
+    label: Unit Cost (KES)
+    description: Cost per unit for variance valuation.
+
+  - fieldname: variance_value
+    fieldtype: Currency
+    label: Variance Value (KES)
+    computed: "variance * unit_cost"
+    read_only: true
+    description: Auto-computed monetary value of the variance.
+
+  - fieldname: comments
+    fieldtype: Data
+    label: Comments

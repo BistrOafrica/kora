@@ -1,0 +1,6 @@
+pack: manufacturing
+seed_mode: demo
+records:
+  - doctype: Manufacturing Order
+    reference: DEMO-MANUFACTURING-001
+    status: Draft

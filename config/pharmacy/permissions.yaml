@@ -1,0 +1,33 @@
+- doctype: Dispense Request
+  role: Pharmacy and Medical Inventory Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Dispense Request
+  role: Pharmacy and Medical Inventory Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Dispense Request
+  role: Pharmacy and Medical Inventory Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Medicine Batch
+  role: Pharmacy and Medical Inventory Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Recall
+  role: Pharmacy and Medical Inventory Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

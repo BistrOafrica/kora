@@ -1,6 +1,6 @@
 # Kora UI
 
-React 19 SPA for the Kora config-driven application engine. All views are **config-driven** — the UI has no knowledge of specific doctypes. It reads schemas from the API and renders forms, lists, and workflows generically.
+React 19 SPA for the Kora config-driven application engine. Most workspace views are config-driven, and the UI includes an embedded page-manifest runtime for generated screens. It still has DocType-specific routes and does not yet match the RFC's standalone semantic renderer.
 
 ## Tech Stack
 

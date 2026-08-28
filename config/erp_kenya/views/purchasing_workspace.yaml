@@ -1,0 +1,39 @@
+name: Purchasing Workspace
+route: /purchasing
+type: workspace
+layout: two_panel
+label: Purchasing & Procurement
+module: Purchasing
+components:
+  - id: purchase_requests
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Purchase Request
+    label: Purchase Requests
+    desktop_columns: [name, department, request_date, required_by, estimated_total, status]
+    mobile_columns: [name, department, status]
+  - id: purchase_orders
+    type: record_table
+    region: main
+    position: 1
+    source_doctype: Purchase Order
+    label: Purchase Orders
+    desktop_columns: [name, supplier, order_date, expected_delivery, total, receipt_status, status]
+    mobile_columns: [name, supplier, status]
+  - id: goods_receipts
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Goods Receipt
+    label: Goods Receipts
+    desktop_columns: [name, purchase_order, supplier, receipt_date, warehouse, status]
+    mobile_columns: [name, purchase_order, status]
+  - id: supplier_invoices
+    type: record_table
+    region: side
+    position: 1
+    source_doctype: Supplier Invoice
+    label: Supplier Invoices
+    desktop_columns: [name, supplier, invoice_date, total, status]
+    mobile_columns: [name, supplier, status]

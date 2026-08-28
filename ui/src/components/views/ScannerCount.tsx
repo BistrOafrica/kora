@@ -74,12 +74,12 @@ export default function ScannerCount(props: ViewComponentProps) {
           value={scanValue}
           onChange={(e) => setScanValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          onBlur={() => inputRef.current?.focus()}
           placeholder="Scan barcode..."
+          aria-label={config.label || 'Barcode count scanner input'}
           className="text-lg"
           autoFocus
         />
-        <Button onClick={handleScan}>Scan</Button>
+        <Button className="min-h-10" onClick={handleScan}>Scan</Button>
       </div>
       <p className="text-xs text-muted-foreground">
         {matched} of {total} items counted

@@ -1,0 +1,12 @@
+pack: propertymgmt
+seed_mode: demo
+records:
+  - doctype: Lease
+    reference: DEMO-PROPERTYMGMT-001
+    tenant_name: Demo Tenant
+    unit_number: DEMO-UNIT-001
+    start_date: "2026-01-01"
+    end_date: "2026-12-31"
+    monthly_rent: "45000"
+    security_deposit: "45000"
+    active: "1"

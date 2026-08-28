@@ -1,0 +1,33 @@
+- doctype: Site Work Package
+  role: Construction and Site Projects Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Site Work Package
+  role: Construction and Site Projects Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Site Work Package
+  role: Construction and Site Projects Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: RFI
+  role: Construction and Site Projects Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Inspection
+  role: Construction and Site Projects Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

@@ -1,0 +1,22 @@
+name: Tax Authority
+module: Finance
+title_field: authority_name
+search_fields: authority_name
+sort_field: authority_name
+sort_order: ASC
+fields:
+  - fieldname: authority_name
+    fieldtype: Data
+    label: Authority Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: country
+    fieldtype: Data
+    label: Country
+    default: Kenya
+    in_list_view: true
+  - fieldname: description
+    fieldtype: Text
+    label: Description

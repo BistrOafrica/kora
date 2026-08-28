@@ -1,0 +1,69 @@
+name: Account
+module: Finance
+title_field: account_name
+search_fields: account_name, account_number, account_type
+sort_field: account_number
+sort_order: ASC
+fields:
+  - fieldname: account_number
+    fieldtype: Data
+    label: Account Number
+    reqd: true
+    unique: true
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: account_name
+    fieldtype: Data
+    label: Account Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+  - fieldname: account_type
+    fieldtype: Select
+    label: Account Type
+    options: |
+      Asset
+      Liability
+      Equity
+      Income
+      Expense
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+  - fieldname: parent_account
+    fieldtype: Link
+    label: Parent Account
+    options: Account
+    description: Parent account for building a hierarchical chart of accounts.
+  - fieldname: is_group
+    fieldtype: Check
+    label: Is Group
+    default: "0"
+    description: Check if this account is a group header (cannot post transactions directly).
+  - fieldname: opening_balance
+    fieldtype: Currency
+    label: Opening Balance (KES)
+    default: "0"
+  - fieldname: current_balance
+    fieldtype: Currency
+    label: Current Balance (KES)
+    computed: "opening_balance"
+    read_only: true
+    description: Auto-computed from opening balance plus all posted transactions.
+  - fieldname: tax_category
+    fieldtype: Link
+    label: Tax Category
+    options: Tax Category
+    description: Default tax category for this account.
+  - fieldname: is_reconciliation_account
+    fieldtype: Check
+    label: Is Reconciliation Account
+    description: Mark for bank and cash accounts that require periodic reconciliation.
+  - fieldname: is_frozen
+    fieldtype: Check
+    label: Is Frozen
+    description: Frozen accounts cannot be used in new transactions.
+  - fieldname: description
+    fieldtype: Text
+    label: Description

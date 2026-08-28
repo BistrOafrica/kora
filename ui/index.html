@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kora</title>
+    <title>Kora UI</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <style>
       @keyframes spin{to{transform:rotate(360deg)}}
@@ -21,10 +21,14 @@
         "prefetch": [
           { "where": { "href_matches": "/workspace/*" }, "eagerness": "immediate" },
           { "where": { "href_matches": "/assets/*" }, "eagerness": "immediate" }
-        ],
-        "prerender": [
-          { "where": { "href_matches": "/workspace/pages/*" }, "eagerness": "moderate" }
         ]
+      }
+    </script>
+    <script id="kora-runtime-config" type="application/json">
+      {
+        "apiBaseUrl": "/api",
+        "appName": "Kora",
+        "environment": "embedded"
       }
     </script>
   </head>

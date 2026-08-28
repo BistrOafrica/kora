@@ -1,0 +1,6 @@
+pack: agriculture
+seed_mode: demo
+records:
+  - doctype: Crop Plan
+    reference: DEMO-AGRICULTURE-001
+    status: Draft

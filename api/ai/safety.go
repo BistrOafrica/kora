@@ -157,6 +157,22 @@ func hasMalformedArgs(toolCalls []any) bool {
 	return false
 }
 
+func extractAIChoice(aiResp map[string]any) (map[string]any, map[string]any, error) {
+	choices := safeGetSlice(aiResp, "choices")
+	if len(choices) == 0 {
+		return nil, nil, fmt.Errorf("AI provider returned an unexpected response format: missing choices")
+	}
+	choice, ok := choices[0].(map[string]any)
+	if !ok {
+		return nil, nil, fmt.Errorf("AI provider returned an unexpected response format: invalid choice payload")
+	}
+	msg := safeGetMap(choice, "message")
+	if msg == nil {
+		return nil, nil, fmt.Errorf("AI provider response missing message")
+	}
+	return choice, msg, nil
+}
+
 // ---------------------------------------------------------------------------
 // History sanitization
 // ---------------------------------------------------------------------------

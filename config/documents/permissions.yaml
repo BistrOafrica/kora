@@ -1,0 +1,33 @@
+- doctype: Document
+  role: Document and Knowledge Management Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Document
+  role: Document and Knowledge Management Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Document
+  role: Document and Knowledge Management Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Document Version
+  role: Document and Knowledge Management Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Knowledge Article
+  role: Document and Knowledge Management Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

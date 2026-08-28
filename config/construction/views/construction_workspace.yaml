@@ -1,0 +1,23 @@
+name: Construction and Site Projects Workspace
+route: /construction
+type: workspace
+layout: two_panel
+label: Construction and Site Projects
+module: Construction and Site Projects
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Site Work Package
+    label: Site Work Package Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: RFI
+    label: RFI Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

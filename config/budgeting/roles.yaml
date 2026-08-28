@@ -1,0 +1,9 @@
+- name: Budgeting and Management Reporting Operator
+  workspace_access: true
+  description: Creates and executes Budgeting and Management Reporting work.
+- name: Budgeting and Management Reporting Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Budgeting and Management Reporting Administrator
+  workspace_access: true
+  description: Configures Budgeting and Management Reporting and manages access.

@@ -1,0 +1,67 @@
+name: Goods Receipt Item
+module: Inventory
+is_child_table: true
+title_field: item
+sort_field: idx
+sort_order: ASC
+
+fields:
+  - fieldname: po_item
+    fieldtype: Link
+    label: Purchase Order Line
+    options: Purchase Order Item
+    description: The purchase order line being received.
+
+  - fieldname: item
+    fieldtype: Link
+    label: Item
+    options: Item
+    linked_field: "po_item.item"
+    in_list_view: true
+
+  - fieldname: description
+    fieldtype: Data
+    label: Description
+
+  - fieldname: ordered_qty
+    fieldtype: Float
+    label: Ordered Qty
+    read_only: true
+
+  - fieldname: received_qty
+    fieldtype: Float
+    label: Received Qty
+    reqd: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Received quantity cannot be negative."
+
+  - fieldname: rejected_qty
+    fieldtype: Float
+    label: Rejected Qty
+    default: "0"
+
+  - fieldname: unit_price
+    fieldtype: Currency
+    label: Unit Price (KES)
+
+  - fieldname: line_total
+    fieldtype: Currency
+    label: Line Total (KES)
+    computed: "received_qty * unit_price"
+    read_only: true
+    description: Auto-computed from received quantity × unit price.
+
+  - fieldname: accepted
+    fieldtype: Check
+    label: Accepted
+    default: "1"
+
+  - fieldname: batch_no
+    fieldtype: Data
+    label: Batch No.
+
+  - fieldname: expiry_date
+    fieldtype: Date
+    label: Expiry Date

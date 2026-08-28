@@ -1,0 +1,20 @@
+- doctype: Manufacturing Order
+  role: Light Manufacturing Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Manufacturing Order
+  role: Light Manufacturing Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Material Issue
+  role: Light Manufacturing Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

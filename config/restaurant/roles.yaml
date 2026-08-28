@@ -1,0 +1,9 @@
+- name: Restaurant and Food Service Operator
+  workspace_access: true
+  description: Creates and executes Restaurant and Food Service work.
+- name: Restaurant and Food Service Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Restaurant and Food Service Administrator
+  workspace_access: true
+  description: Configures Restaurant and Food Service and manages access.

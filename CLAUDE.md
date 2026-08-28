@@ -41,7 +41,8 @@ docker compose up -d mysql                   # MySQL 8.0 (root:kora123)
 
 ## Architecture
 
-Kora is a **config-driven application engine**. Applications are YAML configs — the engine is generic and permanent. No code generation, no per-entity Go/React code.
+Kora is currently a **DocType-centric config-driven application engine**. The codebase has real kernel, contract, workflow, AI/MCP, reconciliation, and cloud primitives, but it is not yet the full generic resource/runtime architecture described in `KORA-ENGINE-RFC.md`.
+Cloud is a control plane only: it owns deployment orchestration, package rollout, worker placement, NATS validation, tenant bootstrap, backups, observability, billing, and deletion workflows. Tenant business truth and site schema state remain in the engine/site databases.
 
 ### Startup Flow (`cli/serve.go`)
 
@@ -54,7 +55,7 @@ Kora is a **config-driven application engine**. Applications are YAML configs �
 7. Register auth routes (public), API routes (/api — SiteGuard), SPA (/workspace — NoRoute), console (/console — SystemGuard)
 8. Start scheduler, listen, graceful shutdown on SIGTERM
 
-**Site config is reconstructed from env vars + the durable site registry** — no `site_config.yaml` files. Sites survive container redeploys because metadata persists in `_kora_site_registry`, while tenant config history remains in `_kora_config_version`.
+**Site config is reconstructed from env vars + the durable site registry** — no `site_config.yaml` files. Sites survive container redeploys because metadata persists in `_kora_site_registry`, while tenant config history remains in `_kora_config_version`. Application behavior itself is still DocType/config-pack driven, not a fully generic resource model, and Cloud does not own the tenant business truth stored there.
 
 ### Middleware Chain
 
@@ -91,7 +92,7 @@ Unknown YAML keys are rejected with line numbers and Levenshtein-based suggestio
 
 ### DocType & Field Config (`config/{app}/doctypes/*.yaml`)
 
-Fields map to DB columns. Key field types: Data, Int, Float, Currency, Select, Link (autocomplete to target doctype), Table (child table — separate DB table with parent/parentfield/parenttype columns), Section Break, Column Break.
+Fields map to DB columns. Key field types: Data, Int, Float, Currency, Select, Link (autocomplete to target doctype), Table (child table — separate DB table with parent/parentfield/parenttype columns), Attach (file upload), Attach Image (image with thumbnail preview), Attach Audio (audio with player), Section Break, Column Break.
 
 **New config-driven properties:**
 - `computed: "quantity * unit_price"` — expression auto-calculated when dependencies change. Supports `+`, `-`, `*`, `/`, `SUM(table.field)`, `ROUND(expr, N)`
@@ -102,7 +103,7 @@ Fields map to DB columns. Key field types: Data, Int, Float, Currency, Select, L
 
 ### Frontend (`ui/`)
 
-React 19 + TanStack Router/Query/Table/Form + shadcn/ui + Tailwind CSS v4 + Zustand. All views are **config-driven** — the SPA reads `/api/system/doctype/:name` and renders forms, lists, and workflow generically. No per-doctype components.
+React 19 + TanStack Router/Query/Table/Form + shadcn/ui + Tailwind CSS v4 + Zustand. The UI is route-driven today, with config-driven DocType/admin surfaces and an embedded page-manifest runtime. It is not yet the RFC's standalone manifest-first semantic renderer.
 
 Key patterns:
 - `router.tsx`: Auto-detects basepath for multi-site (`/s/:site` prefix). **Admin routes must be registered before `$doctype`** to avoid the catch-all route capturing literal paths. Admin pages are under `ui/src/routes/workspace/admin/`.
@@ -115,7 +116,7 @@ Key patterns:
 
 ### Administrator Tab (SPA)
 
-The workspace sidebar has an Administrator section with ten views, all config-driven:
+The workspace sidebar has an Administrator section with ten views. Some are config-driven today, but the overall runtime still depends on React route/component code:
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -134,7 +135,7 @@ The doctype editor uses a split-pane layout: visual form builder on the left, li
 
 ### Config Versioning
 
-Config versions use a status workflow: **Draft → Active → Superseded**. The `_kora_config_version` table has a `status` column (replaced `is_active`). Versions store a full config snapshot + diff changelog. Only one version is Active at a time. Draft versions are not applied to the live schema — they must be Activated. Versions can be rolled back.
+Config versions use a status workflow: **Draft → Active → Superseded**. The `_kora_config_version` table has a `status` column (replaced `is_active`). Versions store a full config snapshot + diff changelog. Only one version is Active at a time. Draft versions are not applied to the live schema — they must be Activated. Versions can be rolled back. This is a current implementation detail, not yet the RFC's full immutable application-definition and reconciliation model.
 
 ### Schema Migration Safety Tiers
 
@@ -152,11 +153,11 @@ The `schema.AnalyzeImpact()` function compares old vs new doctype, counts affect
 
 | Package | Purpose |
 |---|---|
-| `doctype/` | DocType, Field, Constraint, Document, Registry, PermissionMatrix, Workflow, expression engine |
+| `doctype/` | DocType, Field, Constraint, Document, Registry, PermissionMatrix, Workflow, expression engine. Current resource model is DocType-first. |
 | `orm/` | Generic CRUD (Insert, Save, GetDoc, GetList, Delete), filter parsing, DB-level unique enforcement, batched child INSERTs, diff-based Save, ULID name generation, NOT NULL error parsing |
 | `db/` | SQL Dialect abstraction — MySQL/LibSQL DDL, DML, error parsing, schema introspection |
 | `schema/` | Diff registry vs live schema → DDL via dialect; column rename via `renamed_from` |
-| `api/` | REST handlers, envelope, CRUD, workflow actions, system endpoints, YAML validation, AI Chat, User management (`users.go`), Secrets management (`secrets.go`), OpenAPI spec generation |
+| `api/` | REST handlers, envelope, CRUD, workflow actions, system endpoints, YAML validation, AI Chat, User management (`users.go`), Secrets management (`secrets.go`), OpenAPI spec generation. Kernel entrypoints exist but are not the only RFC target surface. |
 | `auth/` | Session auth (bcrypt), in-memory session cache (30s TTL), CSRF (double-submit cookie), SystemGuard, SiteGuard |
 | `net/` | SiteRouter with host validation, security headers, CORS, rate limiter, TLS (autocert), ULID request IDs |
 | `cli/` | Cobra CLI: serve, setup, migrate, config (import/export/versions/diff/rollback), new-site, mcp, secret |
@@ -164,13 +165,41 @@ The `schema.AnalyzeImpact()` function compares old vs new doctype, counts affect
 | `workspace/` | SPA serving (go:embed dist/*), NoRoute handler, static file server, console SPA |
 | `scheduler/` | Cron-style background jobs |
 | `secret/` | Encrypted API key storage (AES-256-GCM) for AI provider keys (settable via UI at `/workspace/admin/secrets`) |
+| `storage/` | Pluggable attachment blob storage — local filesystem + S3-compatible (MinIO/AWS/R2/Garage) backends with AWS SigV4 signing, presigned URLs, range reads |
 | `analytics/` | EventBus + Worker + Query Engine — real-time CDC, daily/monthly rollup tables, time-series/funnel/duration queries, auto-generated metrics |
 | `mcp/` | Model Context Protocol server — auto-generates tools from doctype registry for Claude Desktop |
 | `api/ai/` | AI Chat handlers, AI config, tool execution loop, token accounting |
 | `script/` | JS script runtime — sandboxed execution engine for extensions |
 | `webhook/` | Webhook dispatcher — outgoing and incoming webhook management |
 | `sdk/` | Go SDK client library for external integrations |
-| `ui/` | React SPA (Vite + TanStack + shadcn) with floating AI Chat Widget |
+| `ui/` | React SPA (Vite + TanStack + shadcn) with floating AI Chat Widget, embedded manifest runtime, and route-based rendering today |
+
+### RFC Alignment Notes
+
+- Kernel and contract surfaces are real and should be treated as the current base layer.
+- Workflow runtime and reconciliation primitives exist, but they are smaller than the RFC target.
+- The current frontend is React-based, with an embedded manifest runtime, not Franken UI-based.
+- Docs should distinguish implemented behavior from aspirational RFC sections.
+- PostgreSQL/MySQL parity work is intentionally excluded from follow-up implementation tickets unless explicitly reintroduced later.
+
+### File Attachments & Storage
+
+Attachments are stored as blobs in a pluggable storage backend, with only a site-scoped file reference stored in the doctype field. Field types:
+
+- **`Attach`** — any file; renders as a filename link (PDF gets an inline preview).
+- **`Attach Image`** — images only; renders an inline thumbnail.
+- **`Attach Audio`** — audio only; renders an inline `<audio controls>` player with seeking.
+
+Endpoints (all behind SiteGuard):
+- `POST /api/v1/upload` — multipart upload; returns `{path, filename, key, mime_type, size, checksum}`.
+- `GET /api/v1/files/*path` — serves a stored blob with HTTP Range support (audio/video seeking).
+- `DELETE /api/v1/files/*path` — deletes a stored blob.
+
+Each attach field can restrict accepted formats with an optional `accept` property (comma/newline-separated extensions `.pdf` or MIME types `image/*`). When set, it takes precedence over the field-type defaults and is enforced both client-side and at upload time.
+
+The backend is resolved per site from the `file_storage` column in `_kora_site_registry` (overriding `KORA_STORAGE_BACKEND`), with S3 credentials/endpoint from env. Local backend persists a `.meta.json` sidecar (excluded from serving); the S3 backend stores metadata in object headers and supports SigV4 presigned GET URLs.
+
+**Multiple attachments** use the existing child-table pattern: create an `Attachment` child doctype with an `Attach`/`Attach Image`/`Attach Audio` field, then add a `Table` field pointing at it. Each child row renders the same upload/preview control.
 
 ### AI Chat System
 
@@ -267,7 +296,7 @@ Database errors are parsed via `db.Dialect.ParseError()` — dialect-neutral:
 
 #### MCP Server (`mcp/server.go`)
 
-Separate from chat API. Auto-generates MCP tools (5 per doctype: list, create, get, update, delete) for use with Claude Desktop, Cursor, etc. over stdio transport.
+Separate from chat API. Auto-generates MCP tools from the doctype registry for use with Claude Desktop, Cursor, etc. over stdio transport. The server is experimental and, for tenant tool projection, currently behaves as a validation/execution bridge rather than a standalone agent runtime.
 
 ### Extensibility System
 
@@ -275,7 +304,7 @@ Kora provides a comprehensive extensibility system for customizing application b
 
 #### Script Engine (`script/`)
 
-JavaScript runtime based on Go's JavaScript engine. Scripts run in a sandboxed environment with configurable RAM limits (`KORA_SCRIPTS_MAX_RAM`). Disabled by default — enable with `KORA_SCRIPTS_ENABLED=true`.
+JavaScript runtime based on Go's JavaScript engine. Scripts run in a sandboxed environment with configurable RAM limits (`KORA_SCRIPTS_MAX_RAM`) and HTTP/domain allowlists. Disabled by default — enable with `KORA_SCRIPTS_ENABLED=true`.
 
 - **Script types**: Event hooks, custom API methods, workflow actions, scheduled scripts
 - **Sandboxing**: Memory limits, CPU limits, timeout enforcement, no filesystem or network access
@@ -321,6 +350,8 @@ Extensions authenticate via:
 - **API keys** — generated in the Extensions admin panel, scoped to specific doctypes and operations
 - **Webhook secrets** — shared secrets for incoming webhook verification (HMAC-SHA256)
 - **Session tokens** — existing user sessions for UI-triggered extensions
+
+This surface is permission-gated and auditable, but it is not a general-purpose plugin runtime or unchecked code execution environment.
 
 ### API Versioning
 
@@ -385,6 +416,12 @@ Key environment variables for extensibility and analytics:
 - `KORA_SCRIPTS_ENABLED` — Enable the JS script engine (default: `false`)
 - `KORA_SCRIPTS_MAX_RAM` — Max RAM per script in MB (default: `64`)
 - `KORA_ANALYTICS` — Enable analytics event bus and rollup tables (default: `false`)
+- `KORA_STORAGE_BACKEND` — Attachment storage backend: `local` or `s3` (default: `local`)
+- `KORA_STORAGE_LOCAL_PATH` — Local storage root dir (default: `.`)
+- `KORA_STORAGE_S3_ENDPOINT` / `_REGION` / `_BUCKET` / `_ACCESS_KEY` / `_SECRET_KEY` — S3-compatible backend config
+- `KORA_STORAGE_S3_USE_SSL` — TLS to S3 endpoint (default: `true`)
+- `KORA_STORAGE_S3_PUBLIC_URL` — Optional public base URL (else presigned URLs are used)
+- `KORA_MAX_UPLOAD_MB` — Per-file upload cap (default: `50`)
 
 ## Release Workflow
 

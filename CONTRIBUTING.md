@@ -150,7 +150,8 @@ kora/
 | You want to... | Change this |
 |---------------|-------------|
 | Add a new API endpoint | `api/system.go` — add handler, register in `RegisterSystemRoutes` (in `api/router.go`) |
-| Add a new field type | `doctype/doctype.go` — add to `validateFieldType`, `Field.DBType`, `Field.IsDataField`; `ui/src/types/kora.ts` — add to `FieldType` union; `ui/src/components/forms/FieldRenderer.tsx` — add render case |
+| Add a new field type | `doctype/parser.go` — `validateFieldType`; `db/dialect_*.go` — `ColumnType`; `api/schema.go` — `FieldToJSONSchema`; `ui/src/types/kora.ts` — `FieldType` union; `ui/src/components/forms/FieldRenderer.tsx` — render case |
+| Add a new field property | `doctype/doctype.go` — add to `Field` struct (yaml/json tags make it a known key automatically); `configstore/store.go` — add to `_kora_field` INSERT/SELECT + `db/dialect_*.go` ALTER column; `ui/src/types/kora.ts` — add to `Field` interface |
 | Add a new admin page | `ui/src/routes/workspace/admin/` — new page component; `ui/src/router.tsx` — add route; `ui/src/components/layout/Sidebar.tsx` — add nav item |
 | Change how data is stored | `configstore/store.go` — DB schema and queries; `doctype/` — struct definitions |
 | Change the UI component library | `ui/src/components/ui/` — shadcn/ui components |

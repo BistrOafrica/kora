@@ -1,9 +1,12 @@
 package net
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -191,6 +194,7 @@ func (sr *SiteRouter) Middleware() gin.HandlerFunc {
 					c.Set("site_name", s.Name)
 					c.Set("site_db", s.DB)
 					c.Set("site_registry", s.Registry)
+					c.Set("site_analytics_worker", s.AnalyticsWorker)
 					sr.mu.RUnlock()
 					c.Next()
 					return
@@ -223,6 +227,7 @@ func (sr *SiteRouter) Middleware() gin.HandlerFunc {
 		c.Set("site_name", site.Name)
 		c.Set("site_db", site.DB)
 		c.Set("site_registry", site.Registry)
+		c.Set("site_analytics_worker", site.AnalyticsWorker)
 
 		// Set kora_site cookie so the frontend can read the site name.
 		// Only set if not already present or value differs (avoid redundant Set-Cookie).
@@ -278,6 +283,7 @@ func (sr *SiteRouter) AllDomains() []string {
 //	localhost:8000/s/fieldwork/api/...  → fieldwork site
 func RegisterPathSiteRoutes(router *gin.Engine, sr *SiteRouter, spaFS fs.FS) {
 	router.NoRoute(func(c *gin.Context) {
+		slog.Info("NoRoute handler called", "path", c.Request.URL.Path, "method", c.Request.Method, "contentLength", c.Request.ContentLength)
 		path := c.Request.URL.Path
 
 		// Not a path-based site URL — return 404.
@@ -308,6 +314,7 @@ func RegisterPathSiteRoutes(router *gin.Engine, sr *SiteRouter, spaFS fs.FS) {
 		c.Set("site_name", site.Name)
 		c.Set("site_db", site.DB)
 		c.Set("site_registry", site.Registry)
+		c.Set("site_analytics_worker", site.AnalyticsWorker)
 
 		// Handle API and workspace paths.
 		if strings.HasPrefix(rest, "/api/") || rest == "/api" {
@@ -315,6 +322,19 @@ func RegisterPathSiteRoutes(router *gin.Engine, sr *SiteRouter, spaFS fs.FS) {
 			// We need to re-enter the router for API routes to match.
 			c.Request.AddCookie(&http.Cookie{Name: "kora_site", Value: site.Name, Path: "/"})
 			c.Request.URL.Path = rest
+			// Buffer the request body for re-dispatch — HandleContext
+			// re-processes the middleware chain, so we need a fresh body reader.
+			if c.Request.Body != nil && c.Request.ContentLength > 0 {
+				bodyBytes, err := io.ReadAll(c.Request.Body)
+				if err == nil {
+					c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+					slog.Info("body buffered for re-dispatch", "path", rest, "size", len(bodyBytes))
+				} else {
+					slog.Warn("body buffer read failed", "path", rest, "error", err)
+				}
+			} else {
+				slog.Warn("body not buffered", "path", rest, "bodyNil", c.Request.Body == nil, "contentLength", c.Request.ContentLength)
+			}
 			// Manually call HandleContext — but this time site context is already set
 			// and the SiteRouter middleware will skip (checks for existing site_db).
 			router.HandleContext(c)

@@ -1,0 +1,9 @@
+- name: Marketing Campaigns Operator
+  workspace_access: true
+  description: Creates and executes Marketing Campaigns work.
+- name: Marketing Campaigns Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Marketing Campaigns Administrator
+  workspace_access: true
+  description: Configures Marketing Campaigns and manages access.

@@ -1,0 +1,6 @@
+pack: invoicing
+seed_mode: demo
+records:
+  - doctype: Invoice
+    reference: DEMO-INVOICING-001
+    status: Draft

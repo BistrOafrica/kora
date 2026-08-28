@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { evaluateLisp, type EvalContext } from './lisp-eval'
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 // ---------------------------------------------------------------------------
 // Basic arithmetic (matching Go TestLispSandbox_BasicArith)
@@ -126,10 +130,11 @@ describe('concat', () => {
 
 describe('today', () => {
   it('(today) returns current date as YYYY-MM-DD', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-13T12:00:00Z'))
     const ctx: EvalContext = { fields: {}, tables: {} }
     const result = evaluateLisp('(today)', ctx)
-    const expected = new Date().toISOString().slice(0, 10)
-    expect(result).toBe(expected)
+    expect(result).toBe('2026-08-13')
   })
 })
 

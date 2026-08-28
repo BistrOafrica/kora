@@ -129,11 +129,13 @@ func (g *SiteGuard) authenticateExtension(c *gin.Context, token string) bool {
 	if !ok || sqlDB == nil {
 		return false
 	}
+	siteName, _ := c.Get("site_name")
+	siteNameStr, _ := siteName.(string)
 
 	var extName string
 	var permsJSON sql.NullString
 	err := sqlDB.QueryRow(
-		`SELECT name, api_permissions FROM _kora_extension WHERE access_token = ? AND is_active = 1`, token,
+		`SELECT name, api_permissions FROM _kora_extension WHERE site = ? AND access_token = ? AND is_active = 1`, siteNameStr, token,
 	).Scan(&extName, &permsJSON)
 	if err != nil {
 		return false

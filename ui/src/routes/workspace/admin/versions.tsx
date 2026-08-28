@@ -7,7 +7,9 @@ import {
   fetchConfigVersionPreview,
   fetchRollbackVersionPreview,
   fetchVersionSnapshot,
+  isImmutableConfigVersion,
   rollbackVersion,
+  selectRollbackTargetVersion,
 } from '@/lib/api/system'
 import type {
   ConfigVersion,
@@ -21,6 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { History, Eye, Play, X, RotateCcw, AlertTriangle, RefreshCw, Download } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { getVersionConfirmDescription, getVersionConfirmLabel, getVersionConfirmTitle } from './versions-helpers'
 
 type ConfirmAction =
   | { type: 'activate'; id: string }
@@ -63,6 +66,9 @@ export default function AdminVersionsPage() {
     if (confirmAction.type === 'activateAll') {
       const sortedDrafts = drafts.slice().sort((a, b) => b.version - a.version)
       return sortedDrafts[0] || null
+    }
+    if (confirmAction.type === 'rollback') {
+      return selectRollbackTargetVersion(data)
     }
     return data.find(v => v.id === confirmAction.id) || null
   }, [confirmAction, data, drafts])
@@ -196,41 +202,6 @@ export default function AdminVersionsPage() {
     }
   }
 
-  const getConfirmTitle = () => {
-    switch (confirmAction?.type) {
-      case 'activate': return 'Activate Version'
-      case 'discard': return 'Discard Draft'
-      case 'rollback': return 'Rollback Version'
-      case 'activateAll': return 'Activate All Drafts'
-      default: return ''
-    }
-  }
-
-  const getConfirmDescription = () => {
-    if (dialogError) return dialogError
-
-    switch (confirmAction?.type) {
-      case 'activate':
-        return 'This will promote the selected draft to the live configuration.'
-      case 'discard':
-        return 'This draft will be marked as Superseded and removed from the pending queue.'
-      case 'rollback':
-        return 'This will replace the current config with the selected historical version.'
-      case 'activateAll':
-        return 'This will activate the latest draft and fold in all earlier draft changes.'
-      default:
-        return ''
-    }
-  }
-
-  const getConfirmLabel = () => {
-    switch (confirmAction?.type) {
-      case 'discard': return 'Discard'
-      case 'rollback': return 'Rollback'
-      default: return 'Activate'
-    }
-  }
-
   const confirmVariant = confirmAction?.type === 'discard' ? 'destructive' : 'default'
 
   const handleConfirm = async () => {
@@ -273,11 +244,16 @@ export default function AdminVersionsPage() {
     }
   }
 
+  const immutableCount = useMemo(() => (data || []).filter(isImmutableConfigVersion).length, [data])
+
   return (
     <div className="p-8 max-w-5xl">
       <div className="flex items-center gap-3 mb-6">
         <History className="h-6 w-6" />
         <h1 className="text-3xl font-bold tracking-tight">Config Versions</h1>
+      </div>
+      <div className="mb-4 text-sm text-muted-foreground">
+        Immutable versions available for rollback: <span className="font-medium text-foreground">{immutableCount}</span>
       </div>
 
       {isLoading && (
@@ -331,9 +307,9 @@ export default function AdminVersionsPage() {
             setDialogError(null)
           }
         }}
-        title={getConfirmTitle()}
-        description={getConfirmDescription()}
-        confirmLabel={getConfirmLabel()}
+        title={getVersionConfirmTitle(confirmAction?.type ?? null)}
+        description={getVersionConfirmDescription(confirmAction?.type ?? null, dialogError)}
+        confirmLabel={getVersionConfirmLabel(confirmAction?.type ?? null)}
         variant={confirmVariant}
         loading={acting !== null || previewLoading}
         confirmDisabled={

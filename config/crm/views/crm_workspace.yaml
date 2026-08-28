@@ -1,0 +1,23 @@
+name: CRM and Sales Pipeline Workspace
+route: /crm
+type: workspace
+layout: two_panel
+label: Pipeline and Handoffs
+module: CRM and Sales Pipeline
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Deal
+    label: Pipeline and Handoffs
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Deal
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

@@ -1,0 +1,60 @@
+name: Depreciation Entry Item
+module: Finance
+is_child_table: true
+title_field: asset
+sort_field: idx
+sort_order: ASC
+
+fields:
+  - fieldname: asset
+    fieldtype: Link
+    label: Asset
+    options: Fixed Asset
+    reqd: true
+    in_list_view: true
+    description: Fixed asset being depreciated.
+
+  - fieldname: asset_value
+    fieldtype: Currency
+    label: Asset Value (KES)
+    read_only: true
+    linked_field: "asset.purchase_value"
+    description: Current purchase value from the asset register.
+
+  - fieldname: depreciation_method
+    fieldtype: Data
+    label: Depreciation Method
+    read_only: true
+    linked_field: "asset.depreciation_method"
+    description: Depreciation method from the asset register.
+
+  - fieldname: depreciation_rate
+    fieldtype: Percent
+    label: Depreciation Rate (%)
+    read_only: true
+    linked_field: "asset.depreciation_rate"
+    description: Depreciation rate from the asset register.
+
+  - fieldname: depreciation_amount
+    fieldtype: Currency
+    label: Depreciation Amount (KES)
+    reqd: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Depreciation amount cannot be negative."
+    description: Depreciation amount for this period.
+
+  - fieldname: accumulated_to_date
+    fieldtype: Currency
+    label: Accumulated To Date (KES)
+    read_only: true
+    linked_field: "asset.accumulated_depreciation"
+    description: Total accumulated depreciation prior to this entry.
+
+  - fieldname: net_book_value
+    fieldtype: Currency
+    label: Net Book Value (KES)
+    read_only: true
+    linked_field: "asset.net_book_value"
+    description: Net book value from the asset register.

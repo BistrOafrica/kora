@@ -1,0 +1,15 @@
+name: Wholesale and Distribution Workspace
+route: /wholesale
+type: workspace
+layout: two_panel
+label: Wholesale and Distribution
+module: Wholesale and Distribution
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Distributor Order
+    label: Distributor Order Queue
+    desktop_columns: [name, reference, status]
+    mobile_columns: [reference, status]

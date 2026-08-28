@@ -16,6 +16,7 @@ import { Webhook, Plus, Trash2, History, KeyRound, Loader2, Copy, X } from 'luci
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
+import { HelpTooltip } from '@/components/ui/help-tooltip'
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false)
@@ -181,8 +182,8 @@ export default function AdminExtensionsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Webhook className="h-6 w-6" /> Extensions
+            <HelpTooltip label="Extensions help">Register webhooks that receive Kora events.</HelpTooltip>
           </h1>
-          <p className="text-muted-foreground mt-1">Webhook-based extensions that receive Kora events.</p>
         </div>
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" /> Register Extension</Button>
       </div>

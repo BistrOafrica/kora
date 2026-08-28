@@ -1,0 +1,23 @@
+name: Microfinance and SACCO Workspace
+route: /sacco
+type: workspace
+layout: two_panel
+label: Credit and Collections
+module: Microfinance and SACCO
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Loan
+    label: Credit and Collections
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Loan
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

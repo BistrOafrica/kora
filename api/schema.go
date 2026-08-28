@@ -56,7 +56,7 @@ func FieldToJSONSchema(f *doctype.Field) map[string]any {
 	case "Table":
 		schema["type"] = "array"
 		schema["items"] = map[string]string{"$ref": "#/components/schemas/" + f.Options}
-	case "Attach", "Attach Image":
+	case "Attach", "Attach Image", "Attach Audio":
 		schema["type"] = "string"
 		schema["format"] = "uri"
 	case "JSON":

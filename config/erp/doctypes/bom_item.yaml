@@ -1,12 +1,3 @@
-  - fieldname: quantity
-    fieldtype: Int
-    label: Output Quantity
-    default: "1"
-  - fieldname: items
-    fieldtype: Table
-    label: Raw Materials
-    options: BOM Item
-
 ---
 name: BOM Item
 module: Manufacturing

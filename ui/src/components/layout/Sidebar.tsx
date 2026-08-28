@@ -17,7 +17,6 @@ import {
   Star,
   Clock,
   Boxes,
-  Eye,
   Search,
   X,
 } from 'lucide-react'
@@ -202,7 +201,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
     { name: 'extensions', label: 'Extensions', to: '/workspace/admin/extensions' },
     { name: 'secrets', label: 'Secrets', to: '/workspace/admin/secrets' },
     { name: 'analytics', label: 'Analytics', to: '/workspace/admin/analytics' },
-    { name: 'views', label: 'Views', to: '/workspace/admin/views' },
+    { name: 'page-manifests', label: 'Page manifests', to: '/workspace/admin/page-manifests' },
   ]), [])
   const adminItems = useMemo(() => {
     if (adminCapabilities.length === 0) return []
@@ -215,21 +214,6 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
       item.name.toLowerCase().includes(normalizedQuery),
     )
   }, [adminItems, normalizedQuery])
-  const filteredViews = useMemo(() => {
-    const views = data?.views ?? []
-    const items = views.map((view) => ({
-      name: view.name,
-      label: view.label || view.name,
-      icon: view.icon || '◫',
-      to: `/workspace/pages/${encodeURIComponent(view.route.replace(/^\//, ''))}`,
-    }))
-    if (!normalizedQuery) return items
-    return items.filter((item) =>
-      item.label.toLowerCase().includes(normalizedQuery) ||
-      item.name.toLowerCase().includes(normalizedQuery),
-    )
-  }, [data?.views, normalizedQuery])
-
   const filteredModules = useMemo(() => {
     if (!normalizedQuery) return data?.modules ?? []
     return (data?.modules ?? [])
@@ -327,7 +311,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
               </div>
               {normalizedQuery && (
                 <p className="mt-1 px-1 text-[11px] text-muted-foreground">
-                  Filtering views, modules, favorites, recent items, and admin links.
+                  Filtering modules, favorites, recent items, and admin links.
                 </p>
               )}
             </div>
@@ -360,19 +344,6 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
           )}
 
 
-          {filteredViews.length > 0 && (
-            <FlyoutMenu
-              label="Views"
-              items={filteredViews}
-              collapsed={collapsed}
-              icon={Eye}
-              isOpen={openMenu === 'Views'}
-              onOpen={() => handleMenuOpen('Views')}
-              onClose={() => handleMenuClose('Views')}
-              onItemClick={() => setSidebarOpen(false)}
-            />
-          )}
-
           {filteredModules.length > 0 && (
             <div className="space-y-0.5">
               {!collapsed && (
@@ -399,7 +370,7 @@ export function Sidebar({ mobile = false }: { mobile?: boolean }) {
             </div>
           )}
 
-          {normalizedQuery && !filteredViews.length && !filteredModules.length && !filteredFavorites.length && !filteredRecent.length && !filteredAdminItems.length && (
+          {normalizedQuery && !filteredModules.length && !filteredFavorites.length && !filteredRecent.length && !filteredAdminItems.length && (
             <div className="px-3 py-4 text-center text-xs text-muted-foreground">
               No navigation matches.
             </div>

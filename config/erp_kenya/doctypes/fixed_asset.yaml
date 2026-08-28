@@ -1,0 +1,200 @@
+name: Fixed Asset
+module: Finance
+track_changes: true
+title_field: asset_code
+search_fields: asset_code, asset_name, asset_category
+sort_field: asset_code
+sort_order: ASC
+
+fields:
+  - fieldname: asset_code
+    fieldtype: Data
+    label: Asset Code
+    reqd: true
+    unique: true
+    bold: true
+    in_list_view: true
+    search_index: true
+    description: Unique asset identification code.
+
+  - fieldname: asset_name
+    fieldtype: Data
+    label: Asset Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+    description: Descriptive name of the fixed asset.
+
+  - fieldname: asset_category
+    fieldtype: Select
+    label: Asset Category
+    options: |
+      Land
+      Buildings
+      Plant & Machinery
+      Furniture & Fixtures
+      Vehicles
+      IT Equipment
+      Office Equipment
+      Infrastructure
+      Other
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+    description: Category of the fixed asset for depreciation grouping.
+
+  - fieldname: purchase_date
+    fieldtype: Date
+    label: Purchase Date
+    description: Date the asset was acquired.
+
+  - fieldname: purchase_value
+    fieldtype: Currency
+    label: Purchase Value (KES)
+    constraints:
+      - type: min
+        value: 0
+        message: "Purchase value cannot be negative."
+    description: Original purchase cost of the asset.
+
+  - fieldname: supplier
+    fieldtype: Link
+    label: Supplier
+    options: Supplier
+    description: Supplier or vendor the asset was purchased from.
+
+  - fieldname: invoice_ref
+    fieldtype: Data
+    label: Invoice Reference
+    description: Purchase invoice reference number.
+
+  - fieldname: section_depreciation
+    fieldtype: Section Break
+    label: Depreciation
+
+  - fieldname: depreciation_method
+    fieldtype: Select
+    label: Depreciation Method
+    options: |
+      Straight Line
+      Reducing Balance
+      Sum of Years
+      Units of Production
+      Not Applicable
+    default: Straight Line
+    description: Method used to calculate depreciation.
+
+  - fieldname: useful_life_years
+    fieldtype: Int
+    label: Useful Life (Years)
+    constraints:
+      - type: min
+        value: 1
+        message: "Useful life must be at least 1 year."
+      - type: max
+        value: 100
+        message: "Useful life cannot exceed 100 years."
+    description: Estimated useful life of the asset in years.
+
+  - fieldname: salvage_value
+    fieldtype: Currency
+    label: Salvage Value (KES)
+    default: "0"
+    constraints:
+      - type: min
+        value: 0
+        message: "Salvage value cannot be negative."
+    description: Estimated residual value at end of useful life.
+
+  - fieldname: depreciation_rate
+    fieldtype: Percent
+    label: Depreciation Rate (%)
+    description: Annual depreciation rate as a percentage.
+
+  - fieldname: annual_depreciation
+    fieldtype: Currency
+    label: Annual Depreciation (KES)
+    computed: "ROUND((purchase_value - salvage_value) / useful_life_years, 2)"
+    read_only: true
+    description: Auto-computed annual depreciation (Straight Line).
+
+  - fieldname: section_status
+    fieldtype: Section Break
+    label: Status
+
+  - fieldname: gross_value
+    fieldtype: Currency
+    label: Gross Value (KES)
+    computed: "purchase_value"
+    read_only: true
+    description: Gross book value (same as purchase value).
+
+  - fieldname: accumulated_depreciation
+    fieldtype: Currency
+    label: Accumulated Depreciation (KES)
+    default: "0"
+    read_only: true
+    description: Total depreciation accumulated to date.
+
+  - fieldname: net_book_value
+    fieldtype: Currency
+    label: Net Book Value (KES)
+    computed: "gross_value - accumulated_depreciation"
+    read_only: true
+    in_list_view: true
+    description: Auto-computed net book value (gross - accumulated depreciation).
+
+  - fieldname: asset_status
+    fieldtype: Select
+    label: Asset Status
+    options: |
+      Active
+      Under Maintenance
+      Disposed
+      Retired
+      Impaired
+    default: Active
+    in_list_view: true
+    in_standard_filter: true
+    description: Current operational status of the asset.
+
+  - fieldname: gl_account
+    fieldtype: Link
+    label: GL Account
+    options: Account
+    description: General ledger account for the asset.
+
+  - fieldname: depreciation_account
+    fieldtype: Link
+    label: Depreciation Account
+    options: Account
+    description: Accumulated depreciation GL account.
+
+  - fieldname: section_location
+    fieldtype: Section Break
+    label: Location
+
+  - fieldname: location
+    fieldtype: Text
+    label: Location
+    description: Physical location of the asset.
+
+  - fieldname: assigned_to
+    fieldtype: Link
+    label: Assigned To
+    options: Employee
+    description: Employee the asset is assigned to.
+
+  - fieldname: custodian
+    fieldtype: Data
+    label: Custodian
+    description: Person responsible for the asset.
+
+  - fieldname: description
+    fieldtype: Text
+    label: Description
+    description: Detailed description of the asset.
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

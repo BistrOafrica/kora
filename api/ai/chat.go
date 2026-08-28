@@ -1,12 +1,17 @@
 package ai
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/oklog/ulid/v2"
 
+	"github.com/asenawritescode/kora/contract"
 	"github.com/asenawritescode/kora/doctype"
 	"github.com/asenawritescode/kora/orm"
 	"github.com/asenawritescode/kora/secret"
@@ -17,6 +22,7 @@ type ChatRequest struct {
 	Message string        `json:"message"`
 	History []ChatMessage `json:"history,omitempty"`
 	Model   string        `json:"model,omitempty"` // override default model
+	RunID   string        `json:"run_id,omitempty"`
 	Context ChatContext   `json:"context,omitempty"`
 }
 
@@ -38,6 +44,7 @@ type ChatMessage struct {
 type ChatResponse struct {
 	Reply  string `json:"reply"`
 	Action string `json:"action,omitempty"` // what the AI did (e.g., "listed 3 customers")
+	RunID  string `json:"run_id,omitempty"`
 }
 
 // HandleChat processes a chat message, calls the AI provider with function definitions,
@@ -50,9 +57,19 @@ func HandleChat(c *gin.Context, tx *orm.TxManager, reg *doctype.Registry, siteNa
 		})
 		return
 	}
+	runID := req.RunID
+	if runID == "" {
+		runID = ulid.Make().String()
+	}
+	subjectKey := currentUser + ":" + req.Context.Pathname + ":" + req.Context.Doctype + ":" + req.Context.DocumentName
+	auditCtx := enrichAuditContext(c.Request.Context(), currentUser, c.GetString("session_sid"), c.GetString("correlation_id"), c.GetString("idempotency_key"))
+	var existingRun *RunRecord
+	if rec, err := LoadRun(c.Request.Context(), tx.DB, runID); err == nil {
+		existingRun = &rec
+	}
 
 	// Read the configured AI provider key.
-	_, apiKey, baseURL, model := resolveProvider(tx.DB, siteName, req.Model)
+	providerKey, apiKey, baseURL, model := resolveProvider(tx.DB, siteName, req.Model)
 	if apiKey == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{"message": "No AI provider configured. Go to /workspace/admin/secrets to add your API key (OpenAI, DeepSeek, or Anthropic)."},
@@ -63,11 +80,61 @@ func HandleChat(c *gin.Context, tx *orm.TxManager, reg *doctype.Registry, siteNa
 	// Load AI configuration (per-model defaults + site overrides).
 	store := secret.NewStore(tx.DB)
 	cfg := LoadAIConfig(store, siteName, model)
+	if err := ValidateProviderProfile(ProviderProfile{
+		ProviderKey:    providerKey,
+		BaseURL:        baseURL,
+		Model:          model,
+		HTTPTimeoutSec: cfg.HTTPTimeoutSec,
+	}); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{"message": "Invalid AI provider configuration: " + err.Error()},
+		})
+		return
+	}
+	if err := EnsureAIRunTables(c.Request.Context(), tx.DB); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": "Unable to initialize AI run storage."}})
+		return
+	}
+	conversationID := runID
+	if existingRun != nil && existingRun.ConversationID != "" {
+		conversationID = existingRun.ConversationID
+	} else if conv, err := LoadConversation(c.Request.Context(), tx.DB, siteName, subjectKey); err == nil {
+		conversationID = conv.ID
+	} else {
+		if err := UpsertConversation(c.Request.Context(), tx.DB, ConversationRecord{
+			ID:         conversationID,
+			Site:       siteName,
+			Channel:    "chat",
+			SubjectKey: subjectKey,
+			Title:      req.Message,
+			Status:     "active",
+			LastRunID:  runID,
+		}); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": "Unable to persist AI conversation."}})
+			return
+		}
+	}
+	if err := UpsertRun(c.Request.Context(), tx.DB, RunRecord{
+		ID:             runID,
+		Site:           siteName,
+		ConversationID: conversationID,
+		Channel:        "chat",
+		Status:         "planning",
+		InputMessage:   req.Message,
+		Model:          model,
+		Provider:       providerKey,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": "Unable to persist AI run."}})
+		return
+	}
+	if existingRun == nil {
+		_ = AppendMessage(c.Request.Context(), tx.DB, siteName, conversationID, runID, "user", req.Message, "message", "", 1)
+	} else if existingRun.InputMessage != "" {
+		req.Message = existingRun.InputMessage
+	}
 
-	// Build function definitions from the registry.
-	functions := buildFunctions(reg)
-	// Add system-level tools (doctype creation, validation, dry run).
-	functions = append(functions, buildSystemFunctions()...)
+	// Build function definitions from the canonical tool catalog projection.
+	functions := buildOpenAIToolsFromCatalog(BuildToolCatalog(reg))
 
 	// Validate and cap incoming history.
 	sanitizedHistory := sanitizeHistory(req.History, cfg.HistoryLimit)
@@ -156,6 +223,23 @@ AI CHAT: You have tools to list, find, get, create, update documents. You can cr
 		aiBody["tool_choice"] = "auto"
 	}
 
+	if estimatePromptTokens(messages, functions) > cfg.TokenBudget {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{"message": "AI request exceeds the configured token budget."},
+		})
+		return
+	}
+	reservation, err := ReserveBudget(c.Request.Context(), tx.DB, siteName, model, estimatePromptTokens(messages, functions)+cfg.MaxTokensPerCall, cfg.TokenBudget, "chat request")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{"message": err.Error()},
+		})
+		return
+	}
+	defer func() {
+		_ = ReleaseBudget(c.Request.Context(), tx.DB, reservation)
+	}()
+
 	// --- Multi-Round Tool Execution Loop ---
 	var (
 		totalTokens int      // approximate running token count
@@ -165,9 +249,79 @@ AI CHAT: You have tools to list, find, get, create, update documents. You can cr
 	)
 
 	for round := 0; round < cfg.MaxRounds; round++ {
-		aiResp, err := callAIWithRetry(baseURL, apiKey, aiBody, cfg)
+		stepID := ulid.Make().String()
+		_ = UpsertStep(c.Request.Context(), tx.DB, stepID, siteName, runID, conversationID, fmt.Sprintf("round-%d", round+1), "planning", "", "", "", "", "")
+		_ = UpsertTask(c.Request.Context(), tx.DB, TaskRecord{
+			ID:             stepID,
+			Site:           siteName,
+			RunID:          runID,
+			ConversationID: conversationID,
+			Kind:           "round",
+			Title:          fmt.Sprintf("Round %d", round+1),
+			Description:    "Track the model's progress for this round and keep a queue of follow-up work.",
+			Status:         "in_progress",
+			SortOrder:      round + 1,
+		})
+		_ = UpsertRun(c.Request.Context(), tx.DB, RunRecord{
+			ID:             runID,
+			Site:           siteName,
+			ConversationID: conversationID,
+			Channel:        "chat",
+			Status:         "planning",
+			Model:          model,
+			Provider:       providerKey,
+			CurrentStepID:  stepID,
+			InputMessage:   req.Message,
+		})
+		aiResp, err := callAIWithRetry(baseURL, apiKey, aiBody, cfg, func(attempt int, status string, latency time.Duration, attemptErr error) {
+			tokens := map[contract.UsageClass]int64{}
+			if status == "failed" {
+				tokens[contract.UsageClassPartial] = 0
+			}
+			_ = RecordUsage(auditCtx, tx.DB, contract.UsageEvent{
+				RunID:      runID,
+				Site:       siteName,
+				Model:      model,
+				Provider:   providerKey,
+				Attempt:    attempt,
+				Status:     status,
+				Tokens:     tokens,
+				LatencyMs:  latency.Milliseconds(),
+				OccurredAt: time.Now().UTC(),
+				Attribution: map[string]string{
+					"operation": "chat",
+				},
+			})
+		})
 		if err != nil {
 			slog.Error("AI provider call failed", "error", err, "round", round)
+			_ = UpdateStepStatus(c.Request.Context(), tx.DB, stepID, "failed", err.Error(), "", "", "", err.Error())
+			_ = MarkTaskStatus(c.Request.Context(), tx.DB, stepID, "failed", err.Error())
+			_ = UpsertRun(c.Request.Context(), tx.DB, RunRecord{
+				ID:             runID,
+				Site:           siteName,
+				ConversationID: conversationID,
+				Channel:        "chat",
+				Status:         "failed",
+				InputMessage:   req.Message,
+				ErrorMessage:   err.Error(),
+				Model:          model,
+				Provider:       providerKey,
+			})
+			_ = RecordAudit(auditCtx, tx.DB, AuditEvent{
+				Site:           siteName,
+				RunID:          runID,
+				StepID:         stepID,
+				ConversationID: conversationID,
+				Kind:           "model_attempt",
+				Name:           model,
+				Status:         "failed",
+				Details: map[string]any{
+					"round":    round + 1,
+					"provider": providerKey,
+					"error":    err.Error(),
+				},
+			})
 			// On first-round failure, return an error.
 			// On later rounds, return whatever tool results we've accumulated.
 			if round == 0 {
@@ -181,31 +335,45 @@ AI CHAT: You have tools to list, find, get, create, update documents. You can cr
 			if lastContent := findLastAssistantContent(messages); lastContent != "" {
 				fallbackReply = lastContent
 			}
-			c.JSON(http.StatusOK, ChatResponse{Reply: fallbackReply, Action: "partial"})
+			_ = AppendMessage(c.Request.Context(), tx.DB, siteName, conversationID, runID, "assistant", fallbackReply, "summary", stepID, round+2)
+			_ = UpdateStepStatus(c.Request.Context(), tx.DB, stepID, "partial", fallbackReply, "", "", "", err.Error())
+			_ = MarkTaskStatus(c.Request.Context(), tx.DB, stepID, "partial", err.Error())
+			_ = UpsertRun(c.Request.Context(), tx.DB, RunRecord{
+				ID:             runID,
+				Site:           siteName,
+				ConversationID: conversationID,
+				Channel:        "chat",
+				Status:         "partial",
+				InputMessage:   req.Message,
+				OutputMessage:  fallbackReply,
+				ErrorMessage:   err.Error(),
+				Model:          model,
+				Provider:       providerKey,
+			})
+			c.JSON(http.StatusOK, ChatResponse{Reply: fallbackReply, Action: "partial", RunID: runID})
 			return
 		}
 
 		// --- Safe extraction of the AI response ---
-		choices := safeGetSlice(aiResp, "choices")
-		if len(choices) == 0 {
-			slog.Error("AI provider returned empty or missing choices", "response", aiResp)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": gin.H{"message": "AI provider returned an unexpected response format."},
+		choice, msg, respErr := extractAIChoice(aiResp)
+		if respErr != nil {
+			_ = RecordAudit(auditCtx, tx.DB, AuditEvent{
+				Site:           siteName,
+				RunID:          runID,
+				StepID:         stepID,
+				ConversationID: conversationID,
+				Kind:           "model_attempt",
+				Name:           model,
+				Status:         "failed",
+				Details: map[string]any{
+					"round":    round + 1,
+					"provider": providerKey,
+					"error":    respErr.Error(),
+				},
 			})
-			return
-		}
-		choice, ok := choices[0].(map[string]any)
-		if !ok {
+			slog.Error("AI provider returned malformed response", "error", respErr, "response", aiResp)
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": gin.H{"message": "AI provider returned an unexpected response format."},
-			})
-			return
-		}
-
-		msg := safeGetMap(choice, "message")
-		if msg == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": gin.H{"message": "AI provider response missing message."},
+				"error": gin.H{"message": respErr.Error()},
 			})
 			return
 		}
@@ -214,14 +382,39 @@ AI CHAT: You have tools to list, find, get, create, update documents. You can cr
 		content := safeGetString(msg, "content")
 
 		// Track token usage if available.
+		tokens := map[contract.UsageClass]int64{}
 		if usage := safeGetMap(aiResp, "usage"); usage != nil {
 			if tt, ok := usage["total_tokens"].(float64); ok {
 				totalTokens += int(tt)
+				tokens[contract.UsageClassTotal] = int64(tt)
+			}
+			if tt, ok := usage["prompt_tokens"].(float64); ok {
+				tokens[contract.UsageClassInput] = int64(tt)
+			}
+			if tt, ok := usage["completion_tokens"].(float64); ok {
+				tokens[contract.UsageClassOutput] = int64(tt)
 			}
 		} else {
 			// Rough estimate: 4 chars ≈ 1 token.
-			totalTokens += len(content) / 4
+			estimated := len(content) / 4
+			totalTokens += estimated
+			tokens[contract.UsageClassPartial] = int64(estimated)
 		}
+		_ = RecordAudit(auditCtx, tx.DB, AuditEvent{
+			Site:           siteName,
+			RunID:          runID,
+			StepID:         stepID,
+			ConversationID: conversationID,
+			Kind:           "model_attempt",
+			Name:           model,
+			Status:         "completed",
+			Details: map[string]any{
+				"round":         round + 1,
+				"provider":      providerKey,
+				"finish_reason": finishReason,
+			},
+		})
+		_ = FinalizeBudget(c.Request.Context(), tx.DB, reservation, totalTokens)
 
 		// --- Primary dispatch on finish_reason ---
 		switch finishReason {
@@ -255,7 +448,35 @@ AI CHAT: You have tools to list, find, get, create, update documents. You can cr
 			if content == "" {
 				content = "I processed your request."
 			}
-			c.JSON(http.StatusOK, ChatResponse{Reply: content})
+			_ = AppendMessage(c.Request.Context(), tx.DB, siteName, conversationID, runID, "assistant", content, "summary", stepID, round+2)
+			_ = UpdateStepStatus(c.Request.Context(), tx.DB, stepID, "completed", content, "", "", content, "")
+			_ = MarkTaskStatus(c.Request.Context(), tx.DB, stepID, "done", content)
+			_ = QueueFollowUpTasks(c.Request.Context(), tx.DB, siteName, runID, conversationID, deriveFollowUpTasks(content, toolResultsFromMessages(messages)))
+			_ = UpsertRun(c.Request.Context(), tx.DB, RunRecord{
+				ID:             runID,
+				Site:           siteName,
+				ConversationID: conversationID,
+				Channel:        "chat",
+				Status:         "completed",
+				InputMessage:   req.Message,
+				OutputMessage:  content,
+				Summary:        content,
+				Model:          model,
+				Provider:       providerKey,
+			})
+			_ = UpsertConversation(c.Request.Context(), tx.DB, ConversationRecord{
+				ID:            conversationID,
+				Site:          siteName,
+				Channel:       "chat",
+				SubjectKey:    subjectKey,
+				Title:         req.Message,
+				Summary:       content,
+				Status:        "active",
+				LastRunID:     runID,
+				LastMessageAt: time.Now().UTC(),
+			})
+			_ = SummarizeRun(c.Request.Context(), tx.DB, runID)
+			c.JSON(http.StatusOK, ChatResponse{Reply: content, RunID: runID})
 			return
 
 		case "tool_calls":
@@ -263,7 +484,7 @@ AI CHAT: You have tools to list, find, get, create, update documents. You can cr
 			if len(toolCalls) == 0 {
 				// finish_reason says tool_calls but none present — treat as stop.
 				if content != "" {
-					c.JSON(http.StatusOK, ChatResponse{Reply: content})
+					c.JSON(http.StatusOK, ChatResponse{Reply: content, RunID: runID})
 					return
 				}
 				continue
@@ -303,7 +524,7 @@ AI CHAT: You have tools to list, find, get, create, update documents. You can cr
 					slog.Info("AI tool call", "name", safeGetString(fn, "name"), "args", safeGetString(fn, "arguments"))
 				}
 			}
-			toolResults := executeToolCallsForAI(tx, reg, toolCalls, currentUser, siteName)
+			toolResults := executeToolCallsForAI(auditCtx, tx, reg, toolCalls, currentUser, siteName, runID, stepID, conversationID)
 			for i, tr := range toolResults {
 				raw := tr["content"].(string)
 				slog.Info("Tool result", "content", raw[:min(len(raw), 200)])
@@ -362,19 +583,65 @@ AI CHAT: You have tools to list, find, get, create, update documents. You can cr
 			if content == "" {
 				content = "I ran out of space processing your request. Could you try a more specific query?"
 			}
-			c.JSON(http.StatusOK, ChatResponse{Reply: content, Action: "truncated"})
+			_ = AppendMessage(c.Request.Context(), tx.DB, siteName, conversationID, runID, "assistant", content, "summary", stepID, round+2)
+			_ = UpdateStepStatus(c.Request.Context(), tx.DB, stepID, "failed", content, "", "", content, "length")
+			_ = MarkTaskStatus(c.Request.Context(), tx.DB, stepID, "failed", "length")
+			_ = UpsertRun(c.Request.Context(), tx.DB, RunRecord{
+				ID:             runID,
+				Site:           siteName,
+				ConversationID: conversationID,
+				Channel:        "chat",
+				Status:         "failed",
+				InputMessage:   req.Message,
+				OutputMessage:  content,
+				ErrorMessage:   "length",
+				Model:          model,
+				Provider:       providerKey,
+			})
+			c.JSON(http.StatusOK, ChatResponse{Reply: content, Action: "truncated", RunID: runID})
 			return
 
 		case "content_filter":
 			c.JSON(http.StatusOK, ChatResponse{
 				Reply: "I can't respond to that request due to content policies.",
+				RunID: runID,
+			})
+			_ = UpdateStepStatus(c.Request.Context(), tx.DB, stepID, "failed", "content_filter", "", "", "", "content_filter")
+			_ = MarkTaskStatus(c.Request.Context(), tx.DB, stepID, "failed", "content_filter")
+			_ = UpsertRun(c.Request.Context(), tx.DB, RunRecord{
+				ID:             runID,
+				Site:           siteName,
+				ConversationID: conversationID,
+				Channel:        "chat",
+				Status:         "failed",
+				InputMessage:   req.Message,
+				ErrorMessage:   "content_filter",
+				Model:          model,
+				Provider:       providerKey,
 			})
 			return
 
 		default:
 			// Unknown finish_reason. If there's content, return it.
 			if content != "" {
-				c.JSON(http.StatusOK, ChatResponse{Reply: content})
+				_ = AppendMessage(c.Request.Context(), tx.DB, siteName, conversationID, runID, "assistant", content, "summary", stepID, round+2)
+				_ = UpdateStepStatus(c.Request.Context(), tx.DB, stepID, "completed", content, "", "", content, "")
+				_ = MarkTaskStatus(c.Request.Context(), tx.DB, stepID, "done", content)
+				_ = QueueFollowUpTasks(c.Request.Context(), tx.DB, siteName, runID, conversationID, deriveFollowUpTasks(content, toolResultsFromMessages(messages)))
+				_ = UpsertRun(c.Request.Context(), tx.DB, RunRecord{
+					ID:             runID,
+					Site:           siteName,
+					ConversationID: conversationID,
+					Channel:        "chat",
+					Status:         "completed",
+					InputMessage:   req.Message,
+					OutputMessage:  content,
+					Summary:        content,
+					Model:          model,
+					Provider:       providerKey,
+				})
+				_ = SummarizeRun(c.Request.Context(), tx.DB, runID)
+				c.JSON(http.StatusOK, ChatResponse{Reply: content, RunID: runID})
 				return
 			}
 			// Otherwise continue the loop.
@@ -388,7 +655,92 @@ AI CHAT: You have tools to list, find, get, create, update documents. You can cr
 	c.JSON(http.StatusOK, ChatResponse{
 		Reply:  "I've taken several actions but wasn't able to complete the task. Could you break this into smaller steps?",
 		Action: "max_rounds_reached",
+		RunID:  runID,
 	})
+	_ = UpsertRun(c.Request.Context(), tx.DB, RunRecord{
+		ID:             runID,
+		Site:           siteName,
+		ConversationID: conversationID,
+		Channel:        "chat",
+		Status:         "failed",
+		InputMessage:   req.Message,
+		ErrorMessage:   "max_rounds_reached",
+		Model:          model,
+		Provider:       providerKey,
+	})
+	_ = SummarizeRun(c.Request.Context(), tx.DB, runID)
+}
+
+func estimatePromptTokens(messages []map[string]any, functions []map[string]any) int {
+	totalChars := 0
+	for _, msg := range messages {
+		if content, ok := msg["content"].(string); ok {
+			totalChars += len(content)
+		}
+	}
+	for _, fn := range functions {
+		if raw, err := json.Marshal(fn); err == nil {
+			totalChars += len(raw)
+		}
+	}
+	return totalChars / 4
+}
+
+func deriveFollowUpTasks(content string, toolResults []TaskRecord) []TaskRecord {
+	parts := strings.Split(content, "\n")
+	out := make([]TaskRecord, 0, len(parts)+len(toolResults))
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		out = append(out, TaskRecord{
+			Kind:        "follow_up",
+			Title:       part,
+			Description: "Derived from the latest assistant response.",
+			Status:      "queued",
+			SortOrder:   i + 1,
+			Notes:       "generated from run summary",
+		})
+	}
+	for _, task := range toolResults {
+		if task.Title == "" && task.Description == "" {
+			continue
+		}
+		next := TaskRecord{
+			Kind:        "tool_result",
+			Title:       task.Title,
+			Description: task.Description,
+			Status:      "queued",
+			SortOrder:   len(out) + 1,
+			Notes:       task.Notes,
+		}
+		if next.Title == "" {
+			next.Title = task.Description
+		}
+		out = append(out, next)
+	}
+	return out
+}
+
+func toolResultsFromMessages(messages []map[string]any) []TaskRecord {
+	var out []TaskRecord
+	for _, msg := range messages {
+		if safeGetString(msg, "role") != "tool" {
+			continue
+		}
+		content := safeGetString(msg, "content")
+		if content == "" {
+			continue
+		}
+		out = append(out, TaskRecord{
+			Kind:        "tool_result",
+			Title:       content,
+			Description: content,
+			Status:      "queued",
+		})
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -458,4 +810,3 @@ func findLastAssistantContent(messages []map[string]any) string {
 	}
 	return ""
 }
-

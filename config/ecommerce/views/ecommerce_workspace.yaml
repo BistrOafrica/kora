@@ -1,0 +1,23 @@
+name: E-commerce and Order Fulfillment Workspace
+route: /ecommerce
+type: workspace
+layout: two_panel
+label: E-commerce and Order Fulfillment
+module: E-commerce and Order Fulfillment
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Web Order
+    label: Web Order Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Fulfillment
+    label: Fulfillment Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

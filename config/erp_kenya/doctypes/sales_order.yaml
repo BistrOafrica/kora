@@ -1,0 +1,148 @@
+name: Sales Order
+module: Sales
+is_submittable: true
+track_changes: true
+title_field: name
+search_fields: customer, order_date
+sort_field: order_date
+sort_order: DESC
+
+fields:
+  - fieldname: column_left
+    fieldtype: Column Break
+
+  - fieldname: customer
+    fieldtype: Link
+    label: Customer
+    options: Customer
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: order_date
+    fieldtype: Date
+    label: Order Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: delivery_date
+    fieldtype: Date
+    label: Delivery Date
+
+  - fieldname: currency
+    fieldtype: Link
+    label: Currency
+    options: Currency
+    default: "KES"
+
+  - fieldname: column_right
+    fieldtype: Column Break
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Confirmed
+      Partially Delivered
+      Fully Delivered
+      Cancelled
+    default: Draft
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: sales_rep
+    fieldtype: Data
+    label: Sales Representative
+
+  - fieldname: source
+    fieldtype: Select
+    label: Source
+    options: |
+      Manual
+      Website
+      Email
+      Phone
+      Walk-in
+
+  - fieldname: section_items
+    fieldtype: Section Break
+    label: Order Items
+
+  - fieldname: items
+    fieldtype: Table
+    label: Items
+    options: Sales Order Item
+    reqd: true
+    constraints:
+      - type: min_rows
+        value: 1
+        message: "At least one item is required."
+
+  - fieldname: section_totals
+    fieldtype: Section Break
+    label: Totals
+
+  - fieldname: subtotal
+    fieldtype: Currency
+    label: Subtotal (KES)
+    computed: "SUM(items.line_total)"
+    read_only: true
+    description: Auto-computed from all line totals.
+
+  - fieldname: discount_amount
+    fieldtype: Currency
+    label: Discount (KES)
+    default: "0"
+
+  - fieldname: tax_rate
+    fieldtype: Percent
+    label: Tax Rate (%)
+    default: "16"
+
+  - fieldname: tax_amount
+    fieldtype: Currency
+    label: Tax (KES)
+    computed: "ROUND((subtotal - discount_amount) * tax_rate / 100, 2)"
+    read_only: true
+    description: Auto-computed VAT at the given tax rate.
+
+  - fieldname: total
+    fieldtype: Currency
+    label: Total (KES)
+    computed: "ROUND(subtotal - discount_amount + tax_amount, 2)"
+    read_only: true
+    description: Auto-computed grand total.
+
+  - fieldname: section_delivery
+    fieldtype: Section Break
+    label: Delivery
+
+  - fieldname: delivery_status
+    fieldtype: Select
+    label: Delivery Status
+    options: |
+      Not Delivered
+      Partially Delivered
+      Fully Delivered
+    default: Not Delivered
+    read_only: true
+    in_list_view: true
+
+  - fieldname: shipping_address
+    fieldtype: Text
+    label: Shipping Address
+
+  - fieldname: section_other
+    fieldtype: Section Break
+    label: Other
+
+  - fieldname: terms
+    fieldtype: Text
+    label: Terms & Conditions
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

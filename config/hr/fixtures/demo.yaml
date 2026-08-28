@@ -1,0 +1,6 @@
+pack: hr
+seed_mode: demo
+records:
+  - doctype: Employee
+    reference: DEMO-HR-001
+    status: Draft

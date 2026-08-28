@@ -1,0 +1,9 @@
+pack: inventory
+seed_mode: demo
+records:
+  - doctype: Stock Move
+    reference: DEMO-INVENTORY-001
+    move_type: Receipt
+    qty_change: "25"
+    unit_cost: "600"
+    notes: Demo opening stock for inventory UAT.

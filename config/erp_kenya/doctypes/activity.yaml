@@ -1,0 +1,122 @@
+name: Activity
+module: CRM
+title_field: subject
+search_fields: subject, contact, assigned_to
+sort_field: due_date
+sort_order: ASC
+
+fields:
+  # --- Section: Activity Details ---
+  - fieldname: section_activity
+    fieldtype: Section Break
+    label: Activity Details
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: activity_type
+    fieldtype: Select
+    label: Type
+    options: |
+      Call
+      Meeting
+      Email
+      Task
+      Follow-up
+      Visit
+      Site Survey
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: subject
+    fieldtype: Data
+    label: Subject
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: priority
+    fieldtype: Select
+    label: Priority
+    options: |
+      Low
+      Medium
+      High
+    default: Medium
+    in_list_view: true
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Planned
+      In Progress
+      Completed
+      Cancelled
+    default: Planned
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: due_date
+    fieldtype: Date
+    label: Due Date
+    in_list_view: true
+
+  # --- Section: References ---
+  - fieldname: section_references
+    fieldtype: Section Break
+    label: References
+
+  - fieldname: contact
+    fieldtype: Link
+    label: Contact
+    options: Contact
+    in_list_view: true
+
+  - fieldname: company
+    fieldtype: Link
+    label: Company
+    options: Company
+
+  - fieldname: deal
+    fieldtype: Link
+    label: Deal
+    options: Deal
+
+  - fieldname: ticket
+    fieldtype: Link
+    label: Ticket
+    options: Ticket
+
+  # --- Section: Details ---
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: assigned_to
+    fieldtype: Data
+    label: Assigned To
+    in_list_view: true
+
+  - fieldname: description
+    fieldtype: Text
+    label: Description
+
+  - fieldname: outcome
+    fieldtype: Text
+    label: Outcome
+
+  - fieldname: created_on
+    fieldtype: Datetime
+    label: Created On
+    read_only: true
+
+  - fieldname: completed_on
+    fieldtype: Datetime
+    label: Completed On
+    read_only: true

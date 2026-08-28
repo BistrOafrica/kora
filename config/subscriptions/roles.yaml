@@ -1,0 +1,9 @@
+- name: Subscription and Recurring Services Operator
+  workspace_access: true
+  description: Creates and executes Subscription and Recurring Services work.
+- name: Subscription and Recurring Services Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Subscription and Recurring Services Administrator
+  workspace_access: true
+  description: Configures Subscription and Recurring Services and manages access.

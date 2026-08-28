@@ -150,6 +150,39 @@ type CreateSiteResult struct {
 func CreateSite(input CreateSiteInput) (*CreateSiteResult, error) {
 	input.applyDefaults()
 
+	// CLI setup commonly supplies only PlatformDBDSN. Open a short-lived
+	// platform connection for durable site discovery when no shared handle was
+	// provided, so sites created outside the console are loaded after restart.
+	var discoveredPlatformDB *sql.DB
+	if input.PlatformDB == nil && input.PlatformDBDSN != "" {
+		cfg := &SiteConfig{
+			DBType:     input.PlatformDBType,
+			DBHost:     input.PlatformDBHost,
+			DBPort:     input.PlatformDBPort,
+			DBUser:     input.PlatformDBUser,
+			DBPassword: input.PlatformDBPassword,
+		}
+		if cfg.DBType == "" {
+			cfg.DBType = input.DBType
+		}
+		if cfg.DBType == "" {
+			cfg.DBType = "mysql"
+		}
+		var err error
+		discoveredPlatformDB, err = sql.Open(cfg.DBType, input.PlatformDBDSN)
+		if err == nil {
+			err = discoveredPlatformDB.Ping()
+		}
+		if err != nil {
+			if discoveredPlatformDB != nil {
+				discoveredPlatformDB.Close()
+			}
+			return nil, fmt.Errorf("connecting to platform database: %w", err)
+		}
+		input.PlatformDB = discoveredPlatformDB
+		defer discoveredPlatformDB.Close()
+	}
+
 	domains := []string{input.Hostname}
 	domains = append(domains, input.ExtraDomains...)
 

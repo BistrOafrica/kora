@@ -1,0 +1,50 @@
+name: Warehouse
+module: Inventory
+title_field: warehouse_name
+search_fields: warehouse_name, warehouse_code
+sort_field: warehouse_name
+sort_order: ASC
+fields:
+  - fieldname: warehouse_name
+    fieldtype: Data
+    label: Warehouse Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: warehouse_code
+    fieldtype: Data
+    label: Warehouse Code
+    unique: true
+    in_list_view: true
+  - fieldname: location_type
+    fieldtype: Select
+    label: Location Type
+    options: |
+      Main Warehouse
+      Branch
+      Depot
+      Store
+      Van
+    in_list_view: true
+    in_standard_filter: true
+  - fieldname: address
+    fieldtype: Text
+    label: Address
+  - fieldname: contact_person
+    fieldtype: Data
+    label: Contact Person
+  - fieldname: contact_phone
+    fieldtype: Data
+    label: Contact Phone
+    options: Phone
+  - fieldname: is_active
+    fieldtype: Check
+    label: Is Active
+    default: "1"
+    in_list_view: true
+  - fieldname: parent_warehouse
+    fieldtype: Link
+    label: Parent Warehouse
+    options: Warehouse
+    description: For hierarchical warehouse structures (e.g., branch under main warehouse).

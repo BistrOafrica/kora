@@ -1,0 +1,20 @@
+- doctype: Purchase Request
+  role: Purchasing Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Purchase Request
+  role: Purchasing Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Goods Receipt
+  role: Purchasing Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

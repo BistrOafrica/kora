@@ -1,0 +1,9 @@
+- name: Light Manufacturing Operator
+  workspace_access: true
+  description: Executes Light Manufacturing work.
+- name: Light Manufacturing Reviewer
+  workspace_access: true
+  description: Reviews Light Manufacturing evidence.
+- name: Light Manufacturing Administrator
+  workspace_access: true
+  description: Configures Light Manufacturing.

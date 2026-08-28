@@ -1,0 +1,9 @@
+- name: Small Business Operations Operator
+  workspace_access: true
+  description: Creates and executes Small Business Operations work.
+- name: Small Business Operations Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Small Business Operations Administrator
+  workspace_access: true
+  description: Configures Small Business Operations and manages access.

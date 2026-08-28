@@ -24,27 +24,29 @@ const AdminSecretsPage = lazy(() => import('@/routes/workspace/admin/secrets'))
 const AdminScriptsPage = lazy(() => import('@/routes/workspace/admin/scripts'))
 const AdminExtensionsPage = lazy(() => import('@/routes/workspace/admin/extensions'))
 const AdminAnalyticsPage = lazy(() => import('@/routes/workspace/admin/analytics'))
-const AdminViewsPage = lazy(() => import('@/routes/workspace/admin/views'))
-const AdminViewEditorPage = lazy(() => import('@/routes/workspace/admin/views/editor'))
-const PageView = lazy(() => import('@/routes/workspace/pages/$viewName'))
+const AdminApprovalsPage = lazy(() => import('@/routes/workspace/admin/approvals'))
+const AdminPageManifestsPage = lazy(() => import('@/routes/workspace/admin/page-manifests'))
+const AdminPageManifestEditorPage = lazy(() => import('@/routes/workspace/admin/page-manifests/editor'))
 const ConsoleLoginPage = lazy(() => import('@/routes/console/login'))
 const ConsoleDashboard = lazy(() => import('@/routes/console/index'))
 
-function DelayedFallback() {
-  const [show, setShow] = useState(false)
-  useEffect(() => {
-    const id = window.setTimeout(() => setShow(true), 200)
-    return () => window.clearTimeout(id)
-  }, [])
-  if (!show) return null
-  return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+function RouteLoadingFallback() {
+  return (
+    <div className="flex min-h-svh items-center justify-center bg-background px-6">
+      <div className="w-full max-w-sm rounded-2xl border bg-card px-6 py-8 text-center shadow-sm">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" aria-label="Loading" />
+        <p className="mt-3 text-sm font-medium">Opening workspace</p>
+        <p className="mt-1 text-sm text-muted-foreground">Loading the page and your navigation.</p>
+      </div>
+    </div>
+  )
 }
 
 // Root — just auth guard, no layout.
 const rootRoute = createRootRoute({
   component: () => (
     <AuthGuard>
-      <Suspense fallback={<DelayedFallback />}>
+      <Suspense fallback={<RouteLoadingFallback />}>
         <Outlet />
       </Suspense>
     </AuthGuard>
@@ -94,18 +96,6 @@ const doctypeEditRoute = createRoute({
   getParentRoute: () => doctypeRoute,
   path: '$name',
   component: EditFormPage,
-})
-
-// Dynamic view routes — /workspace/pages/$viewName
-const pagesRoute = createRoute({
-  getParentRoute: () => workspaceLayout,
-  path: 'pages',
-})
-
-const pageViewRoute = createRoute({
-  getParentRoute: () => pagesRoute,
-  path: '$viewName',
-  component: PageView,
 })
 
 // Admin routes.
@@ -180,22 +170,28 @@ const adminAnalyticsRoute = createRoute({
   component: AdminAnalyticsPage,
 })
 
-const adminViewsListRoute = createRoute({
+const adminApprovalsRoute = createRoute({
   getParentRoute: () => adminRoute,
-  path: 'views',
-  component: AdminViewsPage,
+  path: 'approvals',
+  component: AdminApprovalsPage,
 })
 
-const adminViewsNewRoute = createRoute({
+const adminPageManifestsListRoute = createRoute({
   getParentRoute: () => adminRoute,
-  path: 'views/new',
-  component: AdminViewEditorPage,
+  path: 'page-manifests',
+  component: AdminPageManifestsPage,
 })
 
-const adminViewsEditRoute = createRoute({
+const adminPageManifestsNewRoute = createRoute({
   getParentRoute: () => adminRoute,
-  path: 'views/$name',
-  component: AdminViewEditorPage,
+  path: 'page-manifests/new',
+  component: AdminPageManifestEditorPage,
+})
+
+const adminPageManifestsEditRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: 'page-manifests/$name',
+  component: AdminPageManifestEditorPage,
 })
 
 // Settings (placeholder).
@@ -253,15 +249,15 @@ const routeTree = rootRoute.addChildren([
       adminWorkflowsRoute,
       adminUsersRoute,
       adminScriptsRoute,
-      adminExtensionsRoute,
-      adminSecretsRoute,
-      adminAnalyticsRoute,
-      adminViewsListRoute,
-      adminViewsNewRoute,
-      adminViewsEditRoute,
+  adminExtensionsRoute,
+  adminSecretsRoute,
+  adminAnalyticsRoute,
+  adminApprovalsRoute,
+  adminPageManifestsListRoute,
+      adminPageManifestsNewRoute,
+      adminPageManifestsEditRoute,
     ]),
     doctypeRoute.addChildren([doctypeListRoute, doctypeNewRoute, doctypeEditRoute]),
-    pagesRoute.addChildren([pageViewRoute]),
     settingsRoute,
   ]),
 ])

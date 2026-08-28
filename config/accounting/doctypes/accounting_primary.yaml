@@ -1,0 +1,36 @@
+name: Journal Entry
+module: Accounting
+is_submittable: true
+title_field: reference
+search_fields: reference, status
+sort_field: modified
+sort_order: DESC
+
+fields:
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference
+    reqd: true
+    unique: true
+    in_list_view: true
+  - fieldname: posting_date
+    fieldtype: Date
+    label: Posting Date
+    reqd: true
+  - fieldname: debit_total
+    fieldtype: Currency
+    label: Debit Total
+    reqd: true
+  - fieldname: credit_total
+    fieldtype: Currency
+    label: Credit Total
+    reqd: true
+  - fieldname: source_record
+    fieldtype: Data
+    label: Source Record
+  - fieldname: status
+    fieldtype: Data
+    label: Status
+    default: Draft
+    read_only: true
+    in_list_view: true

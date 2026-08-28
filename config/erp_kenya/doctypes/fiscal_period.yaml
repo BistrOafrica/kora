@@ -1,0 +1,48 @@
+name: Fiscal Period
+module: Finance
+title_field: period_name
+search_fields: period_name, fiscal_year
+sort_field: start_date
+sort_order: ASC
+fields:
+  - fieldname: period_name
+    fieldtype: Data
+    label: Period Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: fiscal_year
+    fieldtype: Data
+    label: Fiscal Year
+    reqd: true
+    in_list_view: true
+    search_index: true
+    description: E.g., 2026, 2026-2027
+  - fieldname: start_date
+    fieldtype: Date
+    label: Start Date
+    reqd: true
+    in_list_view: true
+  - fieldname: end_date
+    fieldtype: Date
+    label: End Date
+    reqd: true
+    in_list_view: true
+    constraints:
+      - type: min_date
+        value: start_date
+        message: "End date must be after start date."
+  - fieldname: is_closed
+    fieldtype: Check
+    label: Is Closed
+    in_list_view: true
+    description: Closed periods prevent posting of new transactions.
+  - fieldname: closed_by
+    fieldtype: Data
+    label: Closed By
+    read_only: true
+  - fieldname: closed_on
+    fieldtype: Datetime
+    label: Closed On
+    read_only: true

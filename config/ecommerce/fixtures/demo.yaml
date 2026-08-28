@@ -1,0 +1,6 @@
+pack: ecommerce
+seed_mode: demo
+records:
+  - doctype: Web Order
+    reference: DEMO-ECOMMERCE-001
+    status: Draft

@@ -1,0 +1,23 @@
+name: NGO and Grant Management Workspace
+route: /ngo
+type: workspace
+layout: two_panel
+label: NGO and Grant Management
+module: NGO and Grant Management
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Grant Award
+    label: Grant Award Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Grant Budget
+    label: Grant Budget Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

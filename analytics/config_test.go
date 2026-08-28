@@ -6,8 +6,6 @@ import (
 )
 
 func TestLoadConfig_Defaults(t *testing.T) {
-	// Clear analytics env vars.
-	os.Unsetenv("KORA_ANALYTICS")
 	os.Unsetenv("KORA_ANALYTICS_CHANNEL_SIZE")
 	os.Unsetenv("KORA_ANALYTICS_BATCH_SIZE")
 	os.Unsetenv("KORA_ANALYTICS_FLUSH_INTERVAL")
@@ -15,9 +13,6 @@ func TestLoadConfig_Defaults(t *testing.T) {
 
 	cfg := LoadConfig()
 
-	if cfg.Enabled {
-		t.Error("analytics should be disabled by default")
-	}
 	if cfg.ChannelSize != 1000 {
 		t.Errorf("default channel size should be 1000, got %d", cfg.ChannelSize)
 	}
@@ -32,35 +27,14 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_Enabled(t *testing.T) {
-	os.Setenv("KORA_ANALYTICS", "true")
-	defer os.Unsetenv("KORA_ANALYTICS")
-
-	cfg := LoadConfig()
-	if !cfg.Enabled {
-		t.Error("analytics should be enabled when KORA_ANALYTICS=true")
-	}
-}
-
-func TestLoadConfig_EnabledWith1(t *testing.T) {
-	os.Setenv("KORA_ANALYTICS", "1")
-	defer os.Unsetenv("KORA_ANALYTICS")
-
-	cfg := LoadConfig()
-	if !cfg.Enabled {
-		t.Error("analytics should be enabled when KORA_ANALYTICS=1")
-	}
-}
-
 func TestLoadConfig_CustomValues(t *testing.T) {
-	os.Setenv("KORA_ANALYTICS", "true")
 	os.Setenv("KORA_ANALYTICS_CHANNEL_SIZE", "500")
 	os.Setenv("KORA_ANALYTICS_BATCH_SIZE", "50")
 	os.Setenv("KORA_ANALYTICS_FLUSH_INTERVAL", "5s")
 	os.Setenv("KORA_ANALYTICS_RETENTION_DAYS", "90")
 	defer func() {
 		for _, k := range []string{
-			"KORA_ANALYTICS", "KORA_ANALYTICS_CHANNEL_SIZE",
+			"KORA_ANALYTICS_CHANNEL_SIZE",
 			"KORA_ANALYTICS_BATCH_SIZE", "KORA_ANALYTICS_FLUSH_INTERVAL",
 			"KORA_ANALYTICS_RETENTION_DAYS",
 		} {

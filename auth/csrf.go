@@ -70,8 +70,10 @@ func CSRFMiddleware() gin.HandlerFunc {
 		cookieToken, err := c.Cookie("kora_csrf")
 		if err != nil || cookieToken == "" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error":   "csrf_token_required",
-				"message": "CSRF token is required for state-changing requests.",
+				"error": gin.H{
+					"code":    "csrf.token_required",
+					"message": "CSRF token is required for state-changing requests.",
+				},
 			})
 			return
 		}
@@ -85,8 +87,10 @@ func CSRFMiddleware() gin.HandlerFunc {
 		// Constant-time comparison to prevent timing attacks.
 		if subtle.ConstantTimeCompare([]byte(headerToken), []byte(cookieToken)) != 1 {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error":   "csrf_token_mismatch",
-				"message": "CSRF token mismatch.",
+				"error": gin.H{
+					"code":    "csrf.token_mismatch",
+					"message": "CSRF token mismatch.",
+				},
 			})
 			return
 		}

@@ -20,22 +20,53 @@ import (
 	"github.com/asenawritescode/kora/api"
 	"github.com/asenawritescode/kora/auth"
 	"github.com/asenawritescode/kora/configstore"
+	"github.com/asenawritescode/kora/contract"
 	kdb "github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/doctype"
 	"github.com/asenawritescode/kora/email"
+	"github.com/asenawritescode/kora/kernel"
+	"github.com/asenawritescode/kora/natsprovider"
 	knet "github.com/asenawritescode/kora/net"
 	"github.com/asenawritescode/kora/orm"
+	"github.com/asenawritescode/kora/outbox"
 	"github.com/asenawritescode/kora/scheduler"
 	"github.com/asenawritescode/kora/schema"
 	"github.com/asenawritescode/kora/script"
 	"github.com/asenawritescode/kora/secret"
 	"github.com/asenawritescode/kora/site"
+	"github.com/asenawritescode/kora/storage"
 	"github.com/asenawritescode/kora/webhook"
 	"github.com/asenawritescode/kora/workspace"
 )
 
 // Version is set at build time via -ldflags "-X github.com/asenawritescode/kora/cli.Version=...".
 var Version = "dev"
+
+// resolveStorage builds the storage backend (local or S3-compatible) for a site.
+// Per-site FileStorage from the registry overrides the global KORA_STORAGE_BACKEND.
+func resolveStorage(siteCfg *site.SiteConfig) (storage.Backend, error) {
+	cfg := storage.Config{
+		Backend:         os.Getenv("KORA_STORAGE_BACKEND"),
+		LocalPath:       os.Getenv("KORA_STORAGE_LOCAL_PATH"),
+		S3Endpoint:      os.Getenv("KORA_STORAGE_S3_ENDPOINT"),
+		S3Region:        os.Getenv("KORA_STORAGE_S3_REGION"),
+		S3Bucket:        os.Getenv("KORA_STORAGE_S3_BUCKET"),
+		S3AccessKey:     os.Getenv("KORA_STORAGE_S3_ACCESS_KEY"),
+		S3SecretKey:     os.Getenv("KORA_STORAGE_S3_SECRET_KEY"),
+		S3UseSSL:        os.Getenv("KORA_STORAGE_S3_USE_SSL") != "false",
+		S3PublicBaseURL: os.Getenv("KORA_STORAGE_S3_PUBLIC_URL"),
+	}
+	if siteCfg != nil && siteCfg.FileStorage != "" {
+		cfg.Backend = siteCfg.FileStorage
+	}
+	if cfg.Backend == "" {
+		cfg.Backend = "local"
+	}
+	if cfg.LocalPath == "" {
+		cfg.LocalPath = "."
+	}
+	return storage.New(cfg)
+}
 
 var (
 	serveSiteFlag string
@@ -84,10 +115,7 @@ func runServe() error {
 			slog.Error("startup db check: ping failed", "type", sc.DBType, "error", err)
 			return fmt.Errorf("failed to ping %s: %w", sc.DBType, err)
 		}
-		if sc.DBType == "libsql" {
-			platformDB.SetMaxIdleConns(0)
-			platformDB.SetConnMaxLifetime(25 * time.Second)
-		}
+		tunePlatformDBPool(platformDB, sc.DBType)
 		slog.Info("database connected", "type", sc.DBType)
 	}
 
@@ -126,10 +154,17 @@ func runServe() error {
 	var loadedSites []*knet.LoadedSite
 	var allDomains []string
 	var firstDB *sql.DB
+	siteStorages := make(map[string]storage.Backend)
 
 	for _, info := range dbSites {
 		// Reconstruct site config from persisted registry metadata + platform defaults.
 		siteCfg := site.ReconstructSiteConfigFromDBInfo(info, common)
+
+		stBackend, stErr := resolveStorage(siteCfg)
+		if stErr != nil {
+			return fmt.Errorf("configuring storage for %s: %w", info.Name, stErr)
+		}
+		siteStorages[info.Name] = stBackend
 
 		slog.Info("connecting to database", "site", info.Name, "db", siteCfg.DBName)
 		db, err := site.Connect(siteCfg)
@@ -179,19 +214,17 @@ func runServe() error {
 			return fmt.Errorf("migrating %s: %w", info.Name, err)
 		}
 
-		// Initialize analytics for this site (if KORA_ANALYTICS=true).
+		// Initialize analytics for this site on every deployment.
 		analyticsCfg := analytics.LoadConfig()
 		var siteEventBus analytics.EventBus
 		var siteWorker *analytics.Worker
-		if analyticsCfg.Enabled {
-			if err := analytics.BootstrapTables(db, kdb.Resolve(common.DBType)); err != nil {
-				slog.Warn("analytics: bootstrap failed", "site", info.Name, "error", err)
-			} else {
-				siteEventBus = analytics.NewChannelBus(analyticsCfg.ChannelSize, analyticsCfg.WALDir)
-				siteWorker = analytics.NewWorker(siteEventBus, db, kdb.Resolve(common.DBType), registry, info.Name, analyticsCfg)
-				go siteWorker.Start()
-				slog.Info("analytics enabled", "site", info.Name)
-			}
+		if err := analytics.BootstrapTables(db, kdb.Resolve(common.DBType)); err != nil {
+			slog.Warn("analytics: bootstrap failed", "site", info.Name, "error", err)
+		} else {
+			siteEventBus = analytics.NewChannelBus(analyticsCfg.ChannelSize, analyticsCfg.WALDir)
+			siteWorker = analytics.NewWorker(siteEventBus, db, kdb.Resolve(common.DBType), registry, info.Name, analyticsCfg)
+			go siteWorker.Start()
+			slog.Info("analytics enabled", "site", info.Name)
 		}
 
 		domains := siteCfg.Domains()
@@ -317,6 +350,19 @@ func runServe() error {
 	apiLegacyGroup.Use(knet.CompressMiddleware()) // Gzip API responses
 	txManager := &orm.TxManager{DB: firstDB, Registry: primaryRegistry, Dialect: kdb.Resolve(common.DBType)}
 
+	// Config-defined command resources (KERNEL-008). Loaded from
+	// KORA_COMMANDS_DIR when set; invalid definitions fail startup rather
+	// than being silently discarded.
+	var kernelCommands *kernel.CommandRegistry
+	if dir := os.Getenv("KORA_COMMANDS_DIR"); dir != "" {
+		reg, err := kernel.LoadCommandDir(dir)
+		if err != nil {
+			return fmt.Errorf("loading command definitions from %s: %w", dir, err)
+		}
+		kernelCommands = reg
+		slog.Info("command definitions loaded", "dir", dir, "count", len(reg.List()))
+	}
+
 	publicV1Group := router.Group("/api/v1")
 	publicV1Group.Use(knet.CompressMiddleware())
 	publicLegacyGroup := router.Group("/api")
@@ -360,6 +406,7 @@ func runServe() error {
 	siteBuses := make(map[string]analytics.EventBus)
 	siteMultiBuses := make(map[string]*analytics.MultiBus)
 	siteWebhookWorkers := make(map[string]*webhook.Worker)
+	siteRealtimeProviders := make(map[string]*natsprovider.Provider)
 	cloudRelayCfg := analytics.LoadCloudRelayConfig()
 	for _, s := range loadedSites {
 		if s.AnalyticsEventBus != nil {
@@ -381,14 +428,80 @@ func runServe() error {
 				slog.Warn("failed to create multi-bus for webhooks", "site", s.Name, "error", mbErr)
 			}
 		}
+		if natsEnabled() {
+			natsCfg := natsprovider.FromEnv()
+			natsCfg.Name = s.Name + "-realtime"
+			p, err := natsprovider.New(context.Background(), natsCfg)
+			if err != nil {
+				return fmt.Errorf("connecting NATS provider for realtime: %w", err)
+			}
+			if err := p.Bootstrap(context.Background()); err != nil {
+				p.Close()
+				return fmt.Errorf("bootstrapping NATS provider for realtime: %w", err)
+			}
+			siteRealtimeProviders[s.Name] = p
+		}
 	}
+	for siteName, bus := range siteBuses {
+		provider := siteRealtimeProviders[siteName]
+		if provider == nil || bus == nil {
+			continue
+		}
+		go runRealtimeBridge(context.Background(), siteName, bus, provider)
+	}
+	// Transactional outbox (RFC §8.1). Opt-in via KORA_OUTBOX=true so the default
+	// durability mode never changes silently.
+	siteOutboxes := make(map[string]outbox.Writer)
+	if v := os.Getenv("KORA_OUTBOX"); v == "true" || v == "1" {
+		for _, s := range loadedSites {
+			if s.DB == nil {
+				continue
+			}
+			w := outbox.NewSQLWriter()
+			siteOutboxes[s.Name] = w
+
+			// Choose the provider explicitly. Local remains the fallback unless the
+			// operator sets KORA_EVENT_PROVIDER=nats and provides NATS config.
+			var dest contract.EventPublisher
+			var natsSideEffects *natsprovider.Provider
+			if natsEnabled() {
+				natsCfg := natsprovider.FromEnv()
+				natsCfg.Name = s.Name + "-outbox"
+				p, err := natsprovider.New(context.Background(), natsCfg)
+				if err != nil {
+					return fmt.Errorf("connecting NATS provider for outbox: %w", err)
+				}
+				if err := p.Bootstrap(context.Background()); err != nil {
+					p.Close()
+					return fmt.Errorf("bootstrapping NATS provider for outbox: %w", err)
+				}
+				dest = p
+				natsSideEffects = p
+			} else if s.AnalyticsEventBus != nil {
+				dest = analytics.NewLocalProvider(s.AnalyticsEventBus)
+			} else {
+				dest = analytics.NewLocalProvider(analytics.NewChannelBus(1000, analytics.LoadConfig().WALDir))
+			}
+			p := outbox.NewPublisher(s.DB, dest)
+			go runOutboxPublisher(p)
+			slog.Info("transactional outbox enabled", "site", s.Name)
+
+			// Side effects consume the broker stream and fan back into the site bus.
+			// This keeps the DB/outbox as the source of truth while making NATS the
+			// transport for analytics and downstream consumers.
+			if natsSideEffects != nil && s.AnalyticsEventBus != nil {
+				go runNATSOutboxSideEffects(context.Background(), s.Name, natsSideEffects, s.AnalyticsEventBus)
+			}
+		}
+	}
+
 	// Start async hook worker (processes after_* hooks in background).
 	asyncHookQueue := make(chan orm.AsyncHookRequest, 1000)
 	go runAsyncHookWorker(asyncHookQueue, scriptRunner, siteScriptStores, loadedSites, common.DBType, httpAllowlist)
 	slog.Info("async hook worker started", "queue_size", 1000)
 
-	api.RegisterRoutesOnGroupWithAnalytics(apiGroup, primaryRegistry, txManager, siteBuses, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueue)
-	api.RegisterRoutesOnGroupWithAnalytics(apiLegacyGroup, primaryRegistry, txManager, siteBuses, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueue)
+	api.RegisterRoutesOnGroupWithAnalytics(apiGroup, primaryRegistry, txManager, siteBuses, siteRealtimeProviders, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueueSink(asyncHookQueue), siteOutboxes, siteStorages, kernelCommands)
+	api.RegisterRoutesOnGroupWithAnalytics(apiLegacyGroup, primaryRegistry, txManager, siteBuses, siteRealtimeProviders, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueueSink(asyncHookQueue), siteOutboxes, siteStorages, kernelCommands)
 	api.RegisterPublicRoutesOnGroup(publicV1Group, primaryRegistry, txManager)
 	api.RegisterPublicRoutesOnGroup(publicLegacyGroup, primaryRegistry, txManager)
 
@@ -414,11 +527,13 @@ func runServe() error {
 	if systemGuard != nil {
 		// Console API (React SPA-driven, Bearer token auth).
 		// The /console frontend is served by the SPA via NoRoute handler.
-		ch := api.NewConsoleHandler(systemGuard, siteRouter, common.DBType, common.DBHost, common.DBUser, common.DBPassword, 3306, platformDB)
+		ch := api.NewConsoleHandler(systemGuard, siteRouter, common.DBType, common.DBHost, common.DBUser, common.DBPassword, 3306, platformDB, sc.AllowConsoleOnboarding)
 		ch.Start()
 		router.POST("/api/console/login", ch.HandleLogin)
 		router.POST("/api/console/change-password", ch.HandleChangePassword)
 		router.POST("/api/console/sites/onboard", ch.HandleOnboard) // public — no auth
+		router.GET("/api/console/sites/onboard", ch.HandleOnboardJobs)
+		router.GET("/api/console/sites/onboard/:job_id", ch.HandleOnboardStatus)
 		router.GET("/api/console/sites", ch.RequireConsoleAuth, ch.HandleListSites)
 		router.POST("/api/console/sites", ch.RequireConsoleAuth, ch.HandleCreateSite)
 		router.PUT("/api/console/sites/:name", ch.RequireConsoleAuth, ch.HandleUpdateSite)
@@ -500,6 +615,123 @@ func runServe() error {
 	}()
 
 	return srv.ListenAndServe()
+}
+
+func runRealtimeBridge(ctx context.Context, siteName string, bus analytics.EventBus, provider *natsprovider.Provider) {
+	ch, err := bus.Subscribe()
+	if err != nil {
+		slog.Warn("realtime bridge subscribe failed", "site", siteName, "error", err)
+		return
+	}
+	subjectPrefix := provider.Config().SubjectPrefix + ".realtime." + siteName + ".changes"
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-ch:
+			if !ok {
+				return
+			}
+			payload, err := json.Marshal(map[string]any{
+				"type":        "change",
+				"transport":   "nats",
+				"site":        event.Site,
+				"resource":    "doctype:" + event.Doctype,
+				"doctype":     event.Doctype,
+				"doc_name":    event.DocName,
+				"operation":   event.Operation,
+				"occurred_at": event.Timestamp,
+			})
+			if err != nil {
+				slog.Warn("realtime bridge marshal failed", "site", siteName, "error", err)
+				continue
+			}
+			_ = provider.PublishSubject(ctx, subjectPrefix, payload, contract.NewEventID())
+		}
+	}
+}
+
+func tunePlatformDBPool(db *sql.DB, driver string) {
+	switch driver {
+	case "libsql":
+		db.SetMaxIdleConns(0)
+		db.SetConnMaxLifetime(25 * time.Second)
+		db.SetConnMaxIdleTime(20 * time.Second)
+	case "mysql":
+		db.SetMaxIdleConns(5)
+		db.SetConnMaxIdleTime(2 * time.Minute)
+		db.SetConnMaxLifetime(10 * time.Minute)
+	}
+}
+
+func runNATSOutboxSideEffects(ctx context.Context, siteName string, provider *natsprovider.Provider, bus analytics.EventBus) {
+	cfg := provider.Config()
+	cfg.ConsumerName = siteName + "-sideeffects"
+	cfg.MaxDeliver = 5
+	consumer, err := natsprovider.NewConsumer(provider, cfg)
+	if err != nil {
+		slog.Warn("nats side-effect bridge init failed", "site", siteName, "error", err)
+		return
+	}
+
+	handler := func(ctx context.Context, delivery contract.Delivery) error {
+		event, err := decodeOutboxDelivery(delivery)
+		if err != nil {
+			return err
+		}
+		if bus != nil {
+			return bus.Publish(event)
+		}
+		return nil
+	}
+
+	slog.Info("nats side-effect bridge started", "site", siteName, "consumer", cfg.ConsumerName)
+	if err := consumer.Run(ctx, handler); err != nil {
+		slog.Warn("nats side-effect bridge stopped", "site", siteName, "error", err)
+	}
+}
+
+func decodeOutboxDelivery(delivery contract.Delivery) (analytics.ChangeEvent, error) {
+	var envelope contract.EventEnvelope
+	if err := json.Unmarshal(delivery.Data, &envelope); err != nil {
+		return analytics.ChangeEvent{}, err
+	}
+
+	var payload struct {
+		Data    map[string]any `json:"data"`
+		OldData map[string]any `json:"old_data"`
+	}
+	if len(envelope.Data) > 0 {
+		if err := json.Unmarshal(envelope.Data, &payload); err != nil {
+			return analytics.ChangeEvent{}, err
+		}
+	}
+
+	return analytics.ChangeEvent{
+		Site:       envelope.Site,
+		Doctype:    envelope.AggregateType,
+		DocName:    envelope.AggregateID,
+		Operation:  outboxEventOperation(envelope.Type),
+		Timestamp:  envelope.OccurredAt,
+		ModifiedBy: envelope.Source,
+		Data:       payload.Data,
+		OldData:    payload.OldData,
+	}, nil
+}
+
+func outboxEventOperation(eventType string) analytics.EventOp {
+	switch {
+	case strings.HasSuffix(eventType, ".after_insert"):
+		return analytics.EventInsert
+	case strings.HasSuffix(eventType, ".after_delete"):
+		return analytics.EventDelete
+	case strings.HasSuffix(eventType, ".after_submit"):
+		return analytics.EventSubmit
+	case strings.HasSuffix(eventType, ".after_cancel"):
+		return analytics.EventCancel
+	default:
+		return analytics.EventUpdate
+	}
 }
 
 func loadRuntimeSite(info site.DBSiteInfo, common *site.CommonConfig) (*knet.LoadedSite, error) {
@@ -630,6 +862,12 @@ func runAsyncHookWorker(queue chan orm.AsyncHookRequest, runner script.Runner, s
 			continue
 		}
 
+		dt := loadedSite.Registry.Get(req.Doctype)
+		if dt == nil {
+			slog.Warn("async hook worker: doctype not found", "doctype", req.Doctype, "site", req.Site)
+			continue
+		}
+
 		tm := &orm.TxManager{
 			DB:              loadedSite.DB,
 			Registry:        loadedSite.Registry,
@@ -644,20 +882,29 @@ func runAsyncHookWorker(queue chan orm.AsyncHookRequest, runner script.Runner, s
 		}
 		tm.ScriptProvider = api.NewScriptProvider(tm, loadedSite.Registry, req.Site, nil, httpAllowlist)
 
+		doc := orm.DocumentFromMap(loadedSite.Registry, req.Doctype, req.Doc)
+		if doc == nil {
+			doc = doctype.NewDocument(req.Doctype)
+		}
+		var oldDoc *doctype.Document
+		if req.OldDoc != nil {
+			oldDoc = orm.DocumentFromMap(loadedSite.Registry, req.Doctype, req.OldDoc)
+		}
+
 		execReq := script.ExecuteRequest{
 			Script:     req.Rec.Script,
 			ScriptType: req.Rec.ScriptType,
 			ScriptName: req.Rec.Name,
-			DocType:    req.DT.Name,
+			DocType:    req.Doctype,
 			Event:      req.Event,
-			Document:   req.Doc.ToMap(),
+			Document:   doc.ToMap(),
 			User:       req.User,
 			UserRoles:  []string{req.UserRole},
 			Site:       req.Site,
 			Provider:   tm.ScriptProvider,
 		}
-		if req.OldDoc != nil {
-			execReq.OldDocument = req.OldDoc.ToMap()
+		if oldDoc != nil {
+			execReq.OldDocument = oldDoc.ToMap()
 		}
 
 		result, execErr := runner.Execute(context.Background(), execReq)
@@ -673,7 +920,33 @@ func runAsyncHookWorker(queue chan orm.AsyncHookRequest, runner script.Runner, s
 		}
 
 		if store, ok := stores[req.Site]; ok {
-			_ = store.LogExecution(req.Site, req.Rec, req.DT.Name, req.Doc.Name, req.Event, req.User, durationMs, status, errMsg)
+			_ = store.LogExecution(req.Site, req.Rec, req.Doctype, doc.Name, req.Event, req.User, durationMs, status, errMsg)
 		}
+	}
+}
+
+type asyncHookQueueSink chan orm.AsyncHookRequest
+
+func (q asyncHookQueueSink) Enqueue(ctx context.Context, req orm.AsyncHookRequest) error {
+	select {
+	case q <- req:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// runOutboxPublisher drains _kora_outbox in a loop, publishing due events through
+// the configured destination. It is the Phase 1 background worker; in Phase 2 the
+// destination becomes a NATS JetStream publisher behind the same contract.
+func runOutboxPublisher(p *outbox.Publisher) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if _, err := p.PublishDue(ctx, 100); err != nil {
+			slog.Warn("outbox publisher: publish due failed", "error", err)
+		}
+		cancel()
 	}
 }

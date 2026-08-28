@@ -34,7 +34,7 @@ func TestLoadAll_Empty(t *testing.T) {
 			"reqd", "unique_constraint", "default_value", "hidden", "read_only",
 			"bold", "in_list_view", "in_standard_filter", "search_index",
 			"description", "depends_on", "mandatory_depends_on", "constraints_json",
-			"renamed_from", "linked_field", "computed", "idx",
+			"renamed_from", "linked_field", "computed", "accept", "idx",
 		}))
 
 	doctypes, err := s.LoadAll("")
@@ -70,11 +70,11 @@ func TestLoadAll_WithDoctypes(t *testing.T) {
 		"reqd", "unique_constraint", "default_value", "hidden", "read_only",
 		"bold", "in_list_view", "in_standard_filter", "search_index",
 		"description", "depends_on", "mandatory_depends_on", "constraints_json",
-		"renamed_from", "linked_field", "computed", "idx",
+		"renamed_from", "linked_field", "computed", "accept", "idx",
 	}).
-		AddRow("Task", "subject", "Data", "Subject", "", 1, 0, "", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", 0).
-		AddRow("Task", "status", "Select", "Status", "Open,Closed", 1, 0, "Open", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", 1).
-		AddRow("User", "email", "Data", "Email", "", 1, 1, "", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", 0)
+		AddRow("Task", "subject", "Data", "Subject", "", 1, 0, "", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", "", 0).
+		AddRow("Task", "status", "Select", "Status", "Open,Closed", 1, 0, "Open", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", "", 1).
+		AddRow("User", "email", "Data", "Email", "", 1, 1, "", 0, 0, 0, 1, 0, 0, "", "", "", "[]", "", "", "", "", 0)
 
 	mock.ExpectQuery("SELECT .* FROM _kora_field WHERE .* ORDER BY parent, idx").
 		WillReturnRows(fieldRows)
@@ -237,6 +237,50 @@ func TestLoadWorkflows(t *testing.T) {
 	}
 	if len(workflows[0].Transitions) != 1 {
 		t.Errorf("transitions = %d, want 1", len(workflows[0].Transitions))
+	}
+}
+
+func TestSaveWorkflows_NormalizesAllowEdit(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	s := newStore(db)
+	wf := &doctype.Workflow{
+		Name:               "Task Workflow",
+		DocumentType:       "Task",
+		IsActive:           true,
+		WorkflowStateField: "status",
+		States: []doctype.WorkflowState{
+			{State: "Draft", DocStatus: 0, AllowEdit: "Administrator", Style: "default"},
+			{State: "Approved", DocStatus: 1, AllowEdit: "", Style: "success"},
+		},
+		Transitions: []doctype.WorkflowTransition{
+			{Action: "Approve", From: "Draft", To: "Approved", Allowed: "Administrator"},
+		},
+	}
+
+	mock.ExpectExec("INSERT INTO _kora_workflow \\(name, document_type, is_active, workflow_state_field, config_json, site\\)").
+		WithArgs("Task Workflow", "Task", 1, "status", sqlmock.AnyArg(), "test").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO _kora_workflow_state \\(name, workflow, state, doc_status, allow_edit, style, idx\\)").
+		WithArgs("Task Workflow.Draft", "Task Workflow", "Draft", 0, 1, "default", 0).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO _kora_workflow_state \\(name, workflow, state, doc_status, allow_edit, style, idx\\)").
+		WithArgs("Task Workflow.Approved", "Task Workflow", "Approved", 1, 0, "success", 1).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO _kora_workflow_transition \\(name, workflow, action, from_state, to_state, allowed, condition_expr, require_fields, idx\\)").
+		WithArgs("Task Workflow.Approve", "Task Workflow", "Approve", "Draft", "Approved", "Administrator", "", "", 0).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	if err := s.SaveWorkflows([]*doctype.Workflow{wf}, "test"); err != nil {
+		t.Fatalf("SaveWorkflows error = %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
 	}
 }
 
@@ -415,6 +459,7 @@ func TestCreateConfigVersionWithBase_UsesExplicitBaseVersionID(t *testing.T) {
 		DocTypes: []*doctype.DocType{{Name: "Invoice", Module: "Accounts", Fields: []doctype.Field{{Fieldname: "total", Fieldtype: "Currency"}}}},
 	}
 
+	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT COALESCE\\(MAX\\(version\\), 0\\) FROM _kora_config_version WHERE site = \\?").
 		WithArgs("test").
 		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(3))
@@ -427,6 +472,7 @@ func TestCreateConfigVersionWithBase_UsesExplicitBaseVersionID(t *testing.T) {
 			nil, sqlmock.AnyArg(), "cv-test-2", "",
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 
 	versionID, versionNum, err := s.CreateConfigVersionWithBase("test", "system", "Draft invoice", "Draft", snapshot, "cv-test-2")
 	if err != nil {

@@ -1,0 +1,84 @@
+name: Journal Entry
+module: Finance
+is_submittable: true
+track_changes: true
+title_field: reference
+search_fields: reference, voucher_type
+sort_field: entry_date
+sort_order: DESC
+fields:
+  - fieldname: entry_date
+    fieldtype: Date
+    label: Entry Date
+    reqd: true
+    in_list_view: true
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: voucher_type
+    fieldtype: Select
+    label: Voucher Type
+    options: |
+      Journal Voucher
+      Cash Entry
+      Bank Entry
+      Contra Entry
+      Reversing Entry
+      Opening Entry
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+  - fieldname: fiscal_period
+    fieldtype: Link
+    label: Fiscal Period
+    options: Fiscal Period
+  - fieldname: cost_center
+    fieldtype: Link
+    label: Cost Center
+    options: Cost Center
+
+  - fieldname: section_items
+    fieldtype: Section Break
+    label: Journal Items
+
+  - fieldname: items
+    fieldtype: Table
+    label: Journal Items
+    options: Journal Entry Item
+    reqd: true
+    constraints:
+      - type: min_rows
+        value: 2
+        message: "At least two journal items are required (one debit and one credit)."
+
+  - fieldname: section_totals
+    fieldtype: Section Break
+    label: Totals
+
+  - fieldname: total_debit
+    fieldtype: Currency
+    label: Total Debit (KES)
+    computed: "SUM(items.debit_amount)"
+    read_only: true
+    description: Auto-computed sum of all debit amounts.
+
+  - fieldname: total_credit
+    fieldtype: Currency
+    label: Total Credit (KES)
+    computed: "SUM(items.credit_amount)"
+    read_only: true
+    description: Auto-computed sum of all credit amounts.
+
+  - fieldname: difference
+    fieldtype: Currency
+    label: Difference (KES)
+    computed: "total_debit - total_credit"
+    read_only: true
+    description: Must be zero for a balanced journal entry. Cannot submit if non-zero.
+
+  - fieldname: remarks
+    fieldtype: Text
+    label: Remarks

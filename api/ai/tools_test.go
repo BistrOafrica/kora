@@ -1,11 +1,16 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/doctype"
+	"github.com/asenawritescode/kora/orm"
 )
 
 func TestBuildToolCatalogAllowsWhatsAppWithGuards(t *testing.T) {
@@ -197,6 +202,314 @@ func TestBuildValidatedFindArgsBuildsTypedORMFilters(t *testing.T) {
 	}
 	if len(parsed) != 2 || parsed[0][0] != "due_date" || parsed[0][2] != "2026-07-15" || parsed[1][0] != "priority" || parsed[1][1] != ">=" || parsed[1][2] != float64(2) || limit != 7 || offset != 3 || orderBy != "modified DESC" {
 		t.Fatalf("unexpected find args: filter=%s limit=%d offset=%d order=%q", filter, limit, offset, orderBy)
+	}
+}
+
+func TestRequireRecentAuthForTool(t *testing.T) {
+	ctx := context.WithValue(context.Background(), "session_created_at", time.Now().Add(-5*time.Minute))
+	if err := requireRecentAuthForTool(ctx, "create_doctype_draft"); err != nil {
+		t.Fatalf("expected recent auth to pass, got %v", err)
+	}
+
+	oldCtx := context.WithValue(context.Background(), "session_created_at", time.Now().Add(-15*time.Minute))
+	if err := requireRecentAuthForTool(oldCtx, "create_doctype_draft"); err == nil {
+		t.Fatal("expected stale auth to be rejected")
+	}
+
+	if err := requireRecentAuthForTool(context.Background(), "list_doctypes"); err != nil {
+		t.Fatalf("non-guarded tool should not require recent auth, got %v", err)
+	}
+}
+
+func TestExecuteSingleToolScriptCreateRequiresApproval(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery(`SELECT COUNT\(1\)[\s\S]*FROM _kora_ai_approval[\s\S]*state = 'granted'[\s\S]*target_fingerprint = \?`).
+		WithArgs("site-a", "run-1", "script_create", sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectExec(`INSERT INTO _kora_ai_approval`).
+		WithArgs(
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	tx := &orm.TxManager{DB: db}
+	tx.Context = context.WithValue(context.Background(), "session_created_at", time.Now())
+	got := executeSingleTool(tx, doctype.NewRegistry(), "script_create", map[string]any{
+		"name":        "hello_script",
+		"script_type": "validate",
+		"script":      "return true;",
+	}, "alice", "site-a", "run-1", "")
+	if !strings.Contains(got, "Approval required for script_create") {
+		t.Fatalf("expected approval gate, got %q", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestExecuteSingleToolScriptCreateRejectsStaleAuth(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	tx := &orm.TxManager{DB: db}
+	tx.Context = context.WithValue(context.Background(), "session_created_at", time.Now().Add(-20*time.Minute))
+	got := executeSingleTool(tx, doctype.NewRegistry(), "script_create", map[string]any{
+		"name":        "hello_script",
+		"script_type": "validate",
+		"script":      "return true;",
+	}, "alice", "site-a", "run-1", "step-1")
+	if !strings.Contains(got, "recent authentication required") {
+		t.Fatalf("expected recent auth failure, got %q", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unexpected sql queries: %v", err)
+	}
+}
+
+func TestExecuteSingleToolUpdateDoctypeDraftRequiresApproval(t *testing.T) {
+	database, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer database.Close()
+
+	mock.ExpectQuery(`SELECT COUNT\(1\)[\s\S]*FROM _kora_ai_approval[\s\S]*state = 'granted'[\s\S]*target_fingerprint = \?`).
+		WithArgs("site-a", "run-1", "update_doctype_draft", sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectExec(`INSERT INTO _kora_ai_approval`).
+		WithArgs(
+			sqlmock.AnyArg(), "site-a", "run-1", "alice", "agent",
+			"update_doctype_draft", "pending_approval", sqlmock.AnyArg(), sqlmock.AnyArg(), 0,
+			sqlmock.AnyArg(), nil, nil, "", "",
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	tx := &orm.TxManager{DB: database}
+	tx.Context = context.WithValue(context.Background(), "session_created_at", time.Now())
+	got := executeSingleTool(tx, doctype.NewRegistry(), "update_doctype_draft", map[string]any{
+		"yaml": "name: Task\nfields:\n  - fieldname: title\n    fieldtype: Data\n",
+	}, "alice", "site-a", "run-1", "")
+	if !strings.Contains(got, "Approval required for update_doctype_draft") {
+		t.Fatalf("expected approval gate, got %q", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestExecuteSingleToolUpdateDoctypeDraftRejectsStaleAuth(t *testing.T) {
+	database, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer database.Close()
+
+	tx := &orm.TxManager{DB: database}
+	tx.Context = context.WithValue(context.Background(), "session_created_at", time.Now().Add(-20*time.Minute))
+	got := executeSingleTool(tx, doctype.NewRegistry(), "update_doctype_draft", map[string]any{
+		"yaml": "name: Task\nfields:\n  - fieldname: title\n    fieldtype: Data\n",
+	}, "alice", "site-a", "run-1", "step-1")
+	if !strings.Contains(got, "recent authentication required") {
+		t.Fatalf("expected recent auth failure, got %q", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unexpected sql queries: %v", err)
+	}
+}
+
+func TestExecuteSingleToolUpdateDoctypeDraftExecutesAfterApproval(t *testing.T) {
+	database, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer database.Close()
+
+	reg := doctype.NewRegistry()
+	reg.Register(&doctype.DocType{
+		Name: "Task",
+		Fields: []doctype.Field{
+			{Fieldname: "title", Fieldtype: "Data", Label: "Title"},
+		},
+	})
+
+	mock.ExpectQuery(`SELECT COUNT\(1\)[\s\S]*FROM _kora_ai_approval[\s\S]*state = 'granted'[\s\S]*target_fingerprint = \?`).
+		WithArgs("site-a", "run-1", "update_doctype_draft", sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`SELECT id, config FROM _kora_config_version[\s\S]*status IN \('Draft', 'Active'\)[\s\S]*LIMIT 1`).
+		WithArgs("site-a").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "config"}).
+			AddRow("cv-base-1", `{"doctypes":[]}`))
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT COALESCE\(MAX\(version\), 0\) FROM _kora_config_version WHERE site = \?`).
+		WithArgs("site-a").
+		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(0))
+	mock.ExpectQuery(`SELECT config FROM _kora_config_version WHERE site = \? AND version = \?`).
+		WithArgs("site-a", 0).
+		WillReturnRows(sqlmock.NewRows([]string{"config"}))
+	mock.ExpectExec(`INSERT INTO _kora_config_version`).
+		WithArgs(
+			sqlmock.AnyArg(), "site-a", 1, "alice", "Updated Task via AI (Draft)",
+			sqlmock.AnyArg(), "Draft", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+			"cv-base-1", "",
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery(`SELECT id[\s\S]*FROM _kora_ai_approval[\s\S]*state = 'pending_approval'[\s\S]*target_fingerprint = \?[\s\S]*LIMIT 1`).
+		WithArgs("site-a", "run-1", "update_doctype_draft", sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	tx := &orm.TxManager{DB: database, Dialect: db.Resolve("mysql")}
+	tx.Context = context.WithValue(context.Background(), "session_created_at", time.Now())
+	got := executeSingleTool(tx, reg, "update_doctype_draft", map[string]any{
+		"yaml": "name: Task\nmodule: Core\ntitle_field: title\nfields:\n  - fieldname: title\n    fieldtype: Data\n    label: Title\n    reqd: true\n",
+	}, "alice", "site-a", "run-1", "")
+	if !strings.Contains(got, `Updated DocType "Task" as DRAFT`) {
+		t.Fatalf("expected draft update result, got %q", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestExecuteToolCallsForAIRecordsAuditRows(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	ctx := enrichAuditContext(context.Background(), "user-1", "sid-1", "corr-1", "idem-1")
+	mock.ExpectExec(`INSERT INTO _kora_ai_audit`).
+		WithArgs(
+			sqlmock.AnyArg(),
+			"site-a",
+			"run-1",
+			"step-1",
+			"conv-1",
+			"tool_call",
+			"list_doctypes",
+			"completed",
+			"user-1",
+			"sid-1",
+			"corr-1",
+			"idem-1",
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	tx := &orm.TxManager{DB: db}
+	results := executeToolCallsForAI(ctx, tx, doctype.NewRegistry(), []any{
+		map[string]any{
+			"id": "tool-call-1",
+			"function": map[string]any{
+				"name":      "list_doctypes",
+				"arguments": "{}",
+			},
+		},
+	}, "alice", "site-a", "run-1", "step-1", "conv-1")
+
+	if len(results) != 1 {
+		t.Fatalf("expected one tool result, got %d", len(results))
+	}
+	if results[0]["tool_call_id"] != "tool-call-1" {
+		t.Fatalf("unexpected tool_call_id: %#v", results[0])
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestExecuteToolCallsForAIGuardedToolUsesSharedExecutor(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	ctx := enrichAuditContext(
+		context.WithValue(context.Background(), "session_created_at", time.Now()),
+		"user-1",
+		"sid-1",
+		"corr-1",
+		"idem-1",
+	)
+
+	mock.ExpectQuery(`SELECT COUNT\(1\)[\s\S]*FROM _kora_ai_approval[\s\S]*state = 'granted'[\s\S]*target_fingerprint = \?`).
+		WithArgs("site-a", "run-1", "script_create", sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectExec(`INSERT INTO _kora_ai_approval`).
+		WithArgs(
+			sqlmock.AnyArg(),
+			"site-a",
+			"run-1",
+			"alice",
+			"agent",
+			"script_create",
+			"pending_approval",
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			0,
+			sqlmock.AnyArg(),
+			nil,
+			nil,
+			"",
+			"",
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(`INSERT INTO _kora_ai_audit`).
+		WithArgs(
+			sqlmock.AnyArg(),
+			"site-a",
+			"run-1",
+			"step-1",
+			"conv-1",
+			"tool_call",
+			"script_create",
+			"completed",
+			"user-1",
+			"sid-1",
+			"corr-1",
+			"idem-1",
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	tx := &orm.TxManager{DB: db}
+	tx.Context = context.WithValue(context.Background(), "session_created_at", time.Now())
+	results := executeToolCallsForAI(ctx, tx, doctype.NewRegistry(), []any{
+		map[string]any{
+			"id": "tool-call-guarded-1",
+			"function": map[string]any{
+				"name":      "script_create",
+				"arguments": `{"name":"hello_script","script_type":"validate","script":"return true;"}`,
+			},
+		},
+	}, "alice", "site-a", "run-1", "step-1", "conv-1")
+
+	if len(results) != 1 {
+		t.Fatalf("expected one tool result, got %d", len(results))
+	}
+	if results[0]["tool_call_id"] != "tool-call-guarded-1" {
+		t.Fatalf("unexpected tool_call_id: %#v", results[0])
+	}
+	content, _ := results[0]["content"].(string)
+	if !strings.Contains(content, "Approval required for script_create") {
+		t.Fatalf("expected approval gate content, got %q", content)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
 	}
 }
 

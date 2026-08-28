@@ -23,6 +23,11 @@ fields:
     bold: true
     in_list_view: true
     search_index: true
+  - fieldname: customer_phone
+    fieldtype: Data
+    label: Customer Phone
+    options: Phone
+    in_list_view: true
   - fieldname: cashier
     fieldtype: Data
     label: Cashier
@@ -49,6 +54,24 @@ fields:
     default: Cash
     in_list_view: true
     in_standard_filter: true
+  - fieldname: payment_provider
+    fieldtype: Data
+    label: Payment Provider
+  - fieldname: external_operation
+    fieldtype: Link
+    label: External Operation
+    options: External Operation
+    in_list_view: true
+  - fieldname: payment_reference
+    fieldtype: Data
+    label: Payment Reference
+    in_list_view: true
+  - fieldname: payment_request_id
+    fieldtype: Data
+    label: Provider Request ID
+  - fieldname: payment_response
+    fieldtype: JSON
+    label: Provider Response
   - fieldname: subtotal
     fieldtype: Currency
     label: Subtotal

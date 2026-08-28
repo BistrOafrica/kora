@@ -1,0 +1,6 @@
+pack: hotel
+seed_mode: demo
+records:
+  - doctype: Reservation
+    reference: DEMO-HOTEL-001
+    status: Draft

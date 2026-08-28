@@ -1,0 +1,39 @@
+name: CRM & Help Desk Workspace
+route: /crm
+type: workspace
+layout: two_panel
+label: CRM & Help Desk
+module: CRM and Help Desk
+components:
+  - id: deals
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Deal
+    label: Deals Pipeline
+    desktop_columns: [name, deal_name, company, status, total, expected_close_date]
+    mobile_columns: [deal_name, status]
+  - id: tickets
+    type: record_table
+    region: main
+    position: 1
+    source_doctype: Ticket
+    label: Support Tickets
+    desktop_columns: [name, subject, contact, priority, status, sla_breach]
+    mobile_columns: [subject, priority, status]
+  - id: contacts
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Contact
+    label: Contacts
+    desktop_columns: [name, first_name, last_name, company, email, status]
+    mobile_columns: [first_name, last_name, company]
+  - id: activities
+    type: record_table
+    region: side
+    position: 1
+    source_doctype: Activity
+    label: Activities
+    desktop_columns: [name, subject, activity_type, due_date, priority, status]
+    mobile_columns: [subject, activity_type, status]

@@ -1,0 +1,165 @@
+name: M-Pesa Payment
+module: Finance
+track_changes: true
+title_field: transaction_id
+search_fields: transaction_id, phone_number, reference
+sort_field: transaction_date
+sort_order: DESC
+
+fields:
+  - fieldname: column_left
+    fieldtype: Column Break
+
+  - fieldname: transaction_date
+    fieldtype: Datetime
+    label: Transaction Date
+    reqd: true
+    in_list_view: true
+    description: Date and time of the M-Pesa transaction.
+
+  - fieldname: transaction_type
+    fieldtype: Select
+    label: Transaction Type
+    options: |
+      Customer Pay Bill
+      Customer Buy Goods
+      B2C Payment
+      C2B Payment
+      Till Number
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+    description: Type of M-Pesa transaction.
+
+  - fieldname: column_right
+    fieldtype: Column Break
+
+  - fieldname: transaction_id
+    fieldtype: Data
+    label: M-Pesa Receipt
+    reqd: true
+    unique: true
+    bold: true
+    in_list_view: true
+    search_index: true
+    description: M-Pesa transaction receipt/confirmation code (e.g., QK99K7HNGJ).
+
+  - fieldname: phone_number
+    fieldtype: Data
+    label: Phone Number
+    reqd: true
+    in_list_view: true
+    constraints:
+      - type: regex
+        pattern: "^\\+?254[0-9]{9}$"
+        message: "Enter a valid Kenyan phone number (e.g., +2547XXXXXXXX or 2547XXXXXXXX)."
+    description: M-Pesa account phone number.
+
+  - fieldname: section_amount
+    fieldtype: Section Break
+    label: Amount
+
+  - fieldname: amount
+    fieldtype: Currency
+    label: Amount (KES)
+    reqd: true
+    in_list_view: true
+    constraints:
+      - type: min
+        value: 1
+        message: "Amount must be at least KES 1."
+    description: Transaction amount in Kenya Shillings.
+
+  - fieldname: mpesa_balance
+    fieldtype: Currency
+    label: M-Pesa Balance (KES)
+    description: Account balance after transaction (from callback).
+
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference
+    in_list_view: true
+    search_index: true
+    description: Payment reference or account number provided by customer.
+
+  - fieldname: description
+    fieldtype: Data
+    label: Description
+    description: Additional transaction description.
+
+  - fieldname: section_matching
+    fieldtype: Section Break
+    label: Matching
+
+  - fieldname: matched
+    fieldtype: Check
+    label: Matched
+    default: "0"
+    in_list_view: true
+    description: Whether this payment has been matched to an invoice.
+
+  - fieldname: matched_invoice
+    fieldtype: Link
+    label: Matched Invoice
+    options: Sales Invoice
+    description: Sales invoice this payment is matched to.
+
+  - fieldname: matched_customer
+    fieldtype: Link
+    label: Matched Customer
+    options: Customer
+    linked_field: "matched_invoice.customer"
+    description: Customer from the matched invoice.
+
+  - fieldname: matched_payment
+    fieldtype: Link
+    label: Matched Payment Entry
+    options: Payment Entry
+    read_only: true
+    description: Payment entry created from this match (read-only).
+
+  - fieldname: section_callback
+    fieldtype: Section Break
+    label: Callback Data
+
+  - fieldname: checkout_request_id
+    fieldtype: Data
+    label: Checkout Request ID
+    description: M-Pesa STK Push checkout request ID.
+
+  - fieldname: merchant_request_id
+    fieldtype: Data
+    label: Merchant Request ID
+    description: M-Pesa API merchant request ID.
+
+  - fieldname: result_code
+    fieldtype: Int
+    label: Result Code
+    description: M-Pesa result code (0 = success).
+
+  - fieldname: result_description
+    fieldtype: Data
+    label: Result Description
+    description: M-Pesa result description from callback.
+
+  - fieldname: mpesa_raw
+    fieldtype: JSON
+    label: Full Callback JSON
+    description: Complete raw JSON payload from the M-Pesa callback.
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Pending
+      Matched
+      Unmatched
+      Failed
+      Reversed
+    default: Pending
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

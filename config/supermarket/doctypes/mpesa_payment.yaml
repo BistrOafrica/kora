@@ -5,12 +5,25 @@ search_fields: sale, customer_phone, checkout_request_id, mpesa_receipt_number
 sort_field: creation
 sort_order: DESC
 fields:
+  - fieldname: operation
+    fieldtype: Link
+    label: External Operation
+    options: External Operation
+    in_list_view: true
   - fieldname: sale
     fieldtype: Link
     label: Sale
     options: Sale
-    reqd: true
     in_list_view: true
+  - fieldname: provider
+    fieldtype: Data
+    label: Provider
+    default: M-Pesa
+    in_list_view: true
+  - fieldname: currency
+    fieldtype: Data
+    label: Currency
+    default: KES
   - fieldname: customer_phone
     fieldtype: Data
     label: Customer Phone
@@ -43,6 +56,12 @@ fields:
     default: Pending
     in_list_view: true
     in_standard_filter: true
+  - fieldname: initiated_at
+    fieldtype: Datetime
+    label: Initiated At
+  - fieldname: completed_at
+    fieldtype: Datetime
+    label: Completed At
   - fieldname: raw_request_json
     fieldtype: JSON
     label: Raw Request JSON

@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/doctype"
@@ -97,7 +98,7 @@ func (s *Store) saveDocTypeExec(ex db.Queryer, dt *doctype.DocType, site string)
 		args := make([]any, 0, len(batch)*24)
 		for j, field := range batch {
 			constraintsJSON, _ := json.Marshal(field.Constraints)
-			placeholders = append(placeholders, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			placeholders = append(placeholders, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			args = append(args,
 				fmt.Sprintf("%s.%s", dt.Name, field.Fieldname),
 				dt.Name, field.Fieldname, field.Fieldtype, field.Label, field.Options,
@@ -106,7 +107,7 @@ func (s *Store) saveDocTypeExec(ex db.Queryer, dt *doctype.DocType, site string)
 				boolToInt(field.InListView), boolToInt(field.InStandardFilter),
 				boolToInt(field.SearchIndex), field.Description,
 				field.DependsOn, field.MandatoryDependsOn, string(constraintsJSON),
-				field.RenamedFrom, field.LinkedField, field.Computed, start+j,
+				field.RenamedFrom, field.LinkedField, field.Computed, field.Accept, start+j,
 				site,
 			)
 		}
@@ -115,7 +116,7 @@ func (s *Store) saveDocTypeExec(ex db.Queryer, dt *doctype.DocType, site string)
 			`INSERT INTO _kora_field (name, parent, fieldname, fieldtype, label, options,
 				reqd, unique_constraint, default_value, hidden, read_only, bold,
 				in_list_view, in_standard_filter, search_index, description,
-					depends_on, mandatory_depends_on, constraints_json, renamed_from, linked_field, computed, idx, site)
+					depends_on, mandatory_depends_on, constraints_json, renamed_from, linked_field, computed, accept, idx, site)
 			VALUES %s`,
 			strings.Join(placeholders, ", "),
 		)
@@ -237,7 +238,7 @@ func (s *Store) loadAllFields(site string) (map[string][]doctype.Field, error) {
 		SELECT parent, fieldname, fieldtype, label, options, reqd, unique_constraint,
 			default_value, hidden, read_only, bold, in_list_view, in_standard_filter,
 			search_index, description, depends_on, mandatory_depends_on,
-			constraints_json, renamed_from, COALESCE(linked_field,'') as linked_field, COALESCE(computed,'') as computed, idx
+			constraints_json, renamed_from, COALESCE(linked_field,'') as linked_field, COALESCE(computed,'') as computed, COALESCE(accept,'') as accept, idx
 		FROM _kora_field
 		WHERE site = ? OR site = ''
 		ORDER BY parent, idx
@@ -259,7 +260,7 @@ func (s *Store) loadAllFields(site string) (map[string][]doctype.Field, error) {
 			&reqd, &unique, &f.Default, &hidden, &readOnly, &bold,
 			&inListView, &inStdFilter, &searchIdx, &f.Description,
 			&f.DependsOn, &f.MandatoryDependsOn, &constraintsJSON,
-			&f.RenamedFrom, &f.LinkedField, &f.Computed, &idxVal,
+			&f.RenamedFrom, &f.LinkedField, &f.Computed, &f.Accept, &idxVal,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning field: %w", err)
@@ -430,10 +431,11 @@ func (s *Store) SaveWorkflows(workflows []*doctype.Workflow, site string) error 
 		// Save states.
 		for i, state := range wf.States {
 			stateName := fmt.Sprintf("%s.%s", wf.Name, state.State)
+			allowEdit := normalizeWorkflowAllowEdit(state.AllowEdit)
 			upsertSQL := `INSERT INTO _kora_workflow_state (name, workflow, state, doc_status, allow_edit, style, idx)
 				VALUES (?, ?, ?, ?, ?, ?, ?) ` + s.Dialect.UpsertClause(
 				[]string{"name"}, []string{"doc_status", "allow_edit", "style"})
-			_, err := s.DB.Exec(upsertSQL, stateName, wf.Name, state.State, state.DocStatus, state.AllowEdit, state.Style, i)
+			_, err := s.DB.Exec(upsertSQL, stateName, wf.Name, state.State, state.DocStatus, allowEdit, state.Style, i)
 			if err != nil {
 				return fmt.Errorf("saving workflow state %s: %w", stateName, err)
 			}
@@ -471,10 +473,11 @@ func (s *Store) SaveWorkflowsTx(tx *sql.Tx, workflows []*doctype.Workflow, site 
 		// Save states.
 		for i, state := range wf.States {
 			stateName := fmt.Sprintf("%s.%s", wf.Name, state.State)
+			allowEdit := normalizeWorkflowAllowEdit(state.AllowEdit)
 			upsertSQL := `INSERT INTO _kora_workflow_state (name, workflow, state, doc_status, allow_edit, style, idx)
 				VALUES (?, ?, ?, ?, ?, ?, ?) ` + s.Dialect.UpsertClause(
 				[]string{"name"}, []string{"doc_status", "allow_edit", "style"})
-			_, err := tx.Exec(upsertSQL, stateName, wf.Name, state.State, state.DocStatus, state.AllowEdit, state.Style, i)
+			_, err := tx.Exec(upsertSQL, stateName, wf.Name, state.State, state.DocStatus, allowEdit, state.Style, i)
 			if err != nil {
 				return fmt.Errorf("saving workflow state %s: %w", stateName, err)
 			}
@@ -572,37 +575,60 @@ func (s *Store) CreateConfigVersionWithBase(siteName, createdBy, label, status s
 	if snapshot == nil {
 		return "", 0, fmt.Errorf("snapshot is required")
 	}
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		versionID, versionNum, err := s.createConfigVersionOnce(siteName, createdBy, label, status, snapshot, baseVersionID)
+		if err == nil {
+			slog.Debug("created config version", "id", versionID, "version", versionNum, "status", status)
+			return versionID, versionNum, nil
+		}
+		lastErr = err
+		if !isRetryableConfigVersionError(err) {
+			break
+		}
+		time.Sleep(time.Duration(attempt) * 25 * time.Millisecond)
+	}
+	return "", 0, fmt.Errorf("creating config version: %w", lastErr)
+}
+
+func (s *Store) createConfigVersionOnce(siteName, createdBy, label, status string, snapshot *doctype.ConfigSnapshot, baseVersionID string) (string, int, error) {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return "", 0, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	var currentVersion int
-	s.DB.QueryRow("SELECT COALESCE(MAX(version), 0) FROM _kora_config_version WHERE site = ?", siteName).Scan(&currentVersion)
+	if err := tx.QueryRow("SELECT COALESCE(MAX(version), 0) FROM _kora_config_version WHERE site = ?", siteName).Scan(&currentVersion); err != nil {
+		return "", 0, fmt.Errorf("reading current version: %w", err)
+	}
 	newVersion := currentVersion + 1
 
-	// If activating, deactivate all other versions first.
 	if status == "Active" {
-		s.DB.Exec("UPDATE _kora_config_version SET status = 'Superseded' WHERE site = ? AND status = 'Active'", siteName)
+		if _, err := tx.Exec("UPDATE _kora_config_version SET status = 'Superseded' WHERE site = ? AND status = 'Active'", siteName); err != nil {
+			return "", 0, fmt.Errorf("superseding active versions: %w", err)
+		}
 	}
-	// Serialize as canonical s-expression.
+
 	configSExpr := doctype.ToSExpr(snapshot)
 	h := sha256.Sum256([]byte(configSExpr))
 	configHash := hex.EncodeToString(h[:])
 
-	// Compute diff against previous version if one exists.
-	// Handles both old format (JSON array of doctypes) and new format (ConfigSnapshot).
 	var changelog any
 	var changeList any
 	var prevConfigRaw string
-	s.DB.QueryRow("SELECT config FROM _kora_config_version WHERE site = ? AND version = ?", siteName, currentVersion).Scan(&prevConfigRaw)
-
+	if err := tx.QueryRow("SELECT config FROM _kora_config_version WHERE site = ? AND version = ?", siteName, currentVersion).Scan(&prevConfigRaw); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", 0, fmt.Errorf("reading previous version: %w", err)
+	}
 	if prevConfigRaw != "" {
 		prevSnapshot, parseErr := doctype.ParseConfig(prevConfigRaw)
 		if parseErr == nil {
-			// Compute the full-snapshot diff using s-expression IR for field-level granularity.
 			prevSExpr := doctype.ToSExpr(prevSnapshot)
 			newSExpr := doctype.ToSExpr(snapshot)
 			if changes, err := doctype.DiffSExpr(prevSExpr, newSExpr); err == nil {
 				changeListBytes, _ := json.Marshal(changes)
 				changeList = string(changeListBytes)
 			}
-			// Also keep backward-compat changelog (doctype-only diff).
 			doctypeDiff := doctype.DiffConfigs(prevSnapshot.DocTypes, snapshot.DocTypes)
 			doctypeDiff.FromVersion = currentVersion
 			doctypeDiff.ToVersion = newVersion
@@ -611,22 +637,43 @@ func (s *Store) CreateConfigVersionWithBase(siteName, createdBy, label, status s
 		}
 	}
 
-	// Get min_kora_version from the snapshot, or use empty string.
-	minKoraVersion := snapshot.MinKoraVersion
-
 	versionID := fmt.Sprintf("cv-%s-%d", siteName, newVersion)
-	_, err := s.DB.Exec(
+	minKoraVersion := snapshot.MinKoraVersion
+	_, err = tx.Exec(
 		`INSERT INTO _kora_config_version (id, site, version, created_at, created_by, label, changelog, status, config, change_list, config_hash, base_version_id, min_kora_version)
 		 VALUES (?, ?, ?, `+s.Dialect.NowTimestamp()+`, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		versionID, siteName, newVersion, createdBy, label, changelog, status, configSExpr,
 		changeList, configHash, baseVersionID, minKoraVersion,
 	)
 	if err != nil {
-		return "", 0, fmt.Errorf("creating config version: %w", err)
+		if isDuplicateConfigVersionError(err) {
+			return "", 0, err
+		}
+		return "", 0, fmt.Errorf("inserting config version: %w", err)
 	}
-
-	slog.Debug("created config version", "id", versionID, "version", newVersion, "status", status)
+	if err := tx.Commit(); err != nil {
+		return "", 0, fmt.Errorf("committing config version: %w", err)
+	}
 	return versionID, newVersion, nil
+}
+
+func isRetryableConfigVersionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return isDuplicateConfigVersionError(err)
+}
+
+func isDuplicateConfigVersionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "duplicate entry") ||
+		strings.Contains(s, "unique constraint failed") ||
+		strings.Contains(s, "constraint failed") ||
+		strings.Contains(s, "duplicate key") ||
+		strings.Contains(s, "23505")
 }
 
 // SupersedeSiblingDrafts marks draft siblings from the same base snapshot as
@@ -721,6 +768,15 @@ func (s *Store) SaveAnalyticsMetricsTx(tx *sql.Tx, metrics []*doctype.AnalyticsM
 		}
 	}
 	return nil
+}
+
+func normalizeWorkflowAllowEdit(value string) int {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "0", "false", "no", "n":
+		return 0
+	default:
+		return 1
+	}
 }
 
 // LoadScriptSnapshots loads all active scripts as snapshots for versioning.

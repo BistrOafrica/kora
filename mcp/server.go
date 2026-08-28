@@ -8,24 +8,36 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/asenawritescode/kora/api/ai"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/asenawritescode/kora/doctype"
+)
+
+type Mode string
+
+const (
+	ModeValidationOnly Mode = "validation_only"
+	ModeExecutable     Mode = "executable"
 )
 
 // Server wraps the MCP server with Kora registry awareness.
 type Server struct {
 	srv      *mcp.Server
 	registry *doctype.Registry
+	mode     Mode
 }
 
 // New creates a new MCP server populated with tools for all doctypes in the registry.
-func New(reg *doctype.Registry, siteName string) *Server {
+func New(reg *doctype.Registry, siteName string, mode Mode) *Server {
+	if mode == "" {
+		mode = ModeExecutable
+	}
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "kora-" + siteName,
 		Version: "1.0.0",
 	}, nil)
 
-	ks := &Server{srv: srv, registry: reg}
+	ks := &Server{srv: srv, registry: reg, mode: mode}
 	ks.registerTools()
 	return ks
 }
@@ -40,12 +52,16 @@ func (s *Server) registerTools() {
 	// Config generation tools.
 	s.addConfigTools()
 
-	// Per-doctype CRUD tools.
-	for _, dt := range s.registry.All() {
-		if dt.IsChildTable {
+	if s.mode != ModeExecutable {
+		return
+	}
+
+	catalog := ai.BuildToolCatalog(s.registry)
+	for _, tool := range catalog.Tools {
+		if tool.Source != "tenant" {
 			continue
 		}
-		s.addDoctypeTools(dt)
+		s.addProjectedTool(tool)
 	}
 }
 
@@ -88,155 +104,26 @@ func (s *Server) addConfigTools() {
 	})
 }
 
-func (s *Server) addDoctypeTools(dt *doctype.DocType) {
-	lower := sanitizeName(dt.Name)
-	props := buildFieldSchema(dt)
-
-	// List tool.
-	mcp.AddTool(s.srv, &mcp.Tool{
-		Name:        lower + "_list",
-		Description: "List all " + dt.Name + " documents",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"limit":   map[string]any{"type": "integer", "description": "Maximum results"},
-				"offset":  map[string]any{"type": "integer", "description": "Pagination offset"},
-				"order_by": map[string]any{"type": "string", "description": "Sort field and direction"},
-				"filters":  map[string]any{"type": "string", "description": "JSON filter array"},
-			},
-		},
-	}, func(ctx context.Context, req *mcp.CallToolRequest, args struct {
-		Limit   int    `json:"limit"`
-		Offset  int    `json:"offset"`
-		OrderBy string `json:"order_by"`
-		Filters string `json:"filters"`
-	}) (*mcp.CallToolResult, any, error) {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{
-				Text: fmt.Sprintf("Call GET /api/resource/%s with limit=%d offset=%d", dt.Name, args.Limit, args.Offset),
-			}},
-		}, nil, nil
-	})
-
-	// Create tool.
-	mcp.AddTool(s.srv, &mcp.Tool{
-		Name:        lower + "_create",
-		Description: "Create a new " + dt.Name + " document",
-		InputSchema: map[string]any{
-			"type":       "object",
-			"properties": props,
-			"required":   requiredFields(dt),
-		},
-	}, func(ctx context.Context, req *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{
-				Text: fmt.Sprintf("Would call POST /api/resource/%s with fields: %v", dt.Name, args),
-			}},
-		}, nil, nil
-	})
-
-	// Get tool.
-	mcp.AddTool(s.srv, &mcp.Tool{
-		Name:        lower + "_get",
-		Description: "Get a single " + dt.Name + " document by name",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"name": map[string]any{"type": "string", "description": "Document name"},
-			},
-			"required": []string{"name"},
-		},
-	}, func(ctx context.Context, req *mcp.CallToolRequest, args struct {
-		Name string `json:"name"`
-	}) (*mcp.CallToolResult, any, error) {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{
-				Text: fmt.Sprintf("Would call GET /api/resource/%s/%s", dt.Name, args.Name),
-			}},
-		}, nil, nil
-	})
-
-	// Update tool.
-	mcp.AddTool(s.srv, &mcp.Tool{
-		Name:        lower + "_update",
-		Description: "Update an existing " + dt.Name + " document",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": mergeMaps(map[string]any{
-				"name": map[string]any{"type": "string", "description": "Document name to update"},
-			}, props),
-			"required": []string{"name"},
-		},
-	}, func(ctx context.Context, req *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{
-				Text: fmt.Sprintf("Would call PUT /api/resource/%s/%s", dt.Name, args["name"]),
-			}},
-		}, nil, nil
-	})
-
-	// Delete tool.
-	mcp.AddTool(s.srv, &mcp.Tool{
-		Name:        lower + "_delete",
-		Description: "Delete a " + dt.Name + " document by name",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"name": map[string]any{"type": "string", "description": "Document name to delete"},
-			},
-			"required": []string{"name"},
-		},
-	}, func(ctx context.Context, req *mcp.CallToolRequest, args struct {
-		Name string `json:"name"`
-	}) (*mcp.CallToolResult, any, error) {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{
-				Text: fmt.Sprintf("Would call DELETE /api/resource/%s/%s", dt.Name, args.Name),
-			}},
-		}, nil, nil
-	})
-}
-
-func buildFieldSchema(dt *doctype.DocType) map[string]any {
-	props := make(map[string]any)
-	for _, f := range dt.DataFields() {
-		if f.Fieldtype == "Table" {
-			continue
-		}
-		s := map[string]any{}
-		switch f.Fieldtype {
-		case "Int":
-			s["type"] = "integer"
-		case "Float", "Currency", "Percent":
-			s["type"] = "number"
-		case "Check":
-			s["type"] = "boolean"
-		default:
-			s["type"] = "string"
-		}
-		if f.Description != "" {
-			s["description"] = f.Description
-		}
-		props[f.Fieldname] = s
+func (s *Server) addProjectedTool(tool ai.ToolDescriptor) {
+	mcpTool := &mcp.Tool{
+		Name:        tool.Name,
+		Description: tool.Description,
+		InputSchema: tool.InputSchema,
 	}
-	return props
-}
-
-func requiredFields(dt *doctype.DocType) []string {
-	var req []string
-	for _, f := range dt.DataFields() {
-		if f.Reqd && f.Fieldtype != "Table" {
-			req = append(req, f.Fieldname)
-		}
+	switch tool.Operation {
+	case "find", "list", "get":
+		mcp.AddTool(s.srv, mcpTool, func(ctx context.Context, req *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: "Validation-only MCP deployment: execute this tool through the chat or API path."}},
+			}, nil, nil
+		})
+	default:
+		mcp.AddTool(s.srv, mcpTool, func(ctx context.Context, req *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Would call the %s path for %s.", tool.Operation, tool.Name)}},
+			}, nil, nil
+		})
 	}
-	return req
-}
-
-func mergeMaps(a, b map[string]any) map[string]any {
-	for k, v := range b {
-		a[k] = v
-	}
-	return a
 }
 
 func sanitizeName(name string) string {

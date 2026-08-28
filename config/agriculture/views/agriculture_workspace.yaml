@@ -1,0 +1,23 @@
+name: Agriculture and Farm Operations Workspace
+route: /agriculture
+type: workspace
+layout: two_panel
+label: Agriculture and Farm Operations
+module: Agriculture and Farm Operations
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Crop Plan
+    label: Crop Plan Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Farm Task
+    label: Farm Task Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

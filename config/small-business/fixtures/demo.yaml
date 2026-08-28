@@ -1,0 +1,6 @@
+pack: small-business
+seed_mode: demo
+records:
+  - doctype: Sales Commitment
+    reference: DEMO-SMALL-BUSINESS-001
+    status: Draft

@@ -267,6 +267,39 @@ func TestDeleteSession_NoDatabase(t *testing.T) {
 	sm.DeleteSession("some-sid")
 }
 
+
+func TestGetSessionRejectsCrossSiteCacheHit(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	sm := NewSessionManager(db)
+	user := &User{Name: "cached-user", Email: "cached@test.com", Roles: []string{"Admin"}, Enabled: true}
+	sm.cacheMu.Lock()
+	sm.cache["sid-123"] = &sessionCacheEntry{
+		user:      user,
+		site:      "site-a",
+		cachedAt:  time.Now(),
+		expiresAt: time.Now().Add(time.Hour),
+		createdAt: time.Now().Add(-time.Minute),
+	}
+	sm.cacheMu.Unlock()
+
+	mock.ExpectQuery(`SELECT data, expires_at, created_at FROM _kora_session WHERE site = \? AND sid = \?`).
+		WithArgs("site-b", "sid-123").
+		WillReturnError(sql.ErrNoRows)
+
+	got, _, err := sm.GetSession("site-b", "sid-123")
+	if err == nil || got != nil {
+		t.Fatalf("expected cross-site cache hit to be rejected, got user=%+v err=%v", got, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
 func TestGetSession_CacheHit(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -288,7 +321,7 @@ func TestGetSession_CacheHit(t *testing.T) {
 	sm.cacheMu.Unlock()
 
 	// GetSession from cache should NOT hit the database.
-	got, err := sm.GetSession("test-site", "cached-sid")
+	got, _, err := sm.GetSession("test-site", "cached-sid")
 	if err != nil {
 		t.Fatalf("GetSession error = %v", err)
 	}
@@ -497,9 +530,9 @@ func TestMagicLinks_ListRequiresSessionValidationWithinAuthRoutes(t *testing.T) 
 		t.Fatalf("marshal user json: %v", err)
 	}
 	expiresAt := time.Now().Add(time.Hour).Format("2006-01-02 15:04:05")
-	mock.ExpectQuery("SELECT data, expires_at FROM _kora_session WHERE site = \\? AND sid = \\?").
+	mock.ExpectQuery("SELECT data, expires_at, created_at FROM _kora_session WHERE site = \\? AND sid = \\?").
 		WithArgs("test.local", "valid-session").
-		WillReturnRows(sqlmock.NewRows([]string{"data", "expires_at"}).AddRow(string(userJSON), expiresAt))
+		WillReturnRows(sqlmock.NewRows([]string{"data", "expires_at", "created_at"}).AddRow(string(userJSON), expiresAt, time.Now().Add(-time.Minute)))
 	mock.ExpectQuery("SELECT id, email, created_at, expires_at, used_at, revoked_at FROM _kora_magic_link").
 		WithArgs("test.local", "john@test.com", sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "email", "created_at", "expires_at", "used_at", "revoked_at"}))
@@ -587,8 +620,8 @@ func TestMagicLinkLifecycle_EndToEnd(t *testing.T) {
 
 	magicLinkRows := sqlmock.NewRows([]string{"id", "email", "created_at", "expires_at", "used_at", "revoked_at"}).
 		AddRow("ml-1", "john@test.com", time.Now().Add(-time.Minute), time.Now().Add(time.Hour), nil, nil)
-	sessionRows := sqlmock.NewRows([]string{"data", "expires_at"}).
-		AddRow(`{"name":"john","email":"john@test.com","full_name":"John Doe","roles":["Administrator"]}`, time.Now().Add(time.Hour).Format("2006-01-02 15:04:05"))
+	sessionRows := sqlmock.NewRows([]string{"data", "expires_at", "created_at"}).
+		AddRow(`{"name":"john","email":"john@test.com","full_name":"John Doe","roles":["Administrator"]}`, time.Now().Add(time.Hour).Format("2006-01-02 15:04:05"), time.Now().Add(-time.Minute).Format("2006-01-02 15:04:05"))
 
 	mock.ExpectQuery("SELECT name, email, full_name, enabled, COALESCE\\(roles, ''\\) FROM _kora_user WHERE site = \\? AND email = \\?").
 		WithArgs("test.local", "john@test.com").
@@ -641,7 +674,7 @@ func TestMagicLinkLifecycle_EndToEnd(t *testing.T) {
 		t.Fatal("verify response did not include sid")
 	}
 
-	mock.ExpectQuery("SELECT data, expires_at FROM _kora_session WHERE site = \\? AND sid = \\?").
+	mock.ExpectQuery("SELECT data, expires_at, created_at FROM _kora_session WHERE site = \\? AND sid = \\?").
 		WithArgs("test.local", verifyResp.SID).
 		WillReturnRows(sessionRows)
 	mock.ExpectQuery("SELECT id, email, created_at, expires_at, used_at, revoked_at FROM _kora_magic_link").
@@ -668,6 +701,94 @@ func TestMagicLinkLifecycle_EndToEnd(t *testing.T) {
 		t.Fatalf("revoke status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
 	}
 
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestMagicLinkRevokeAll(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	sm := NewSessionManager(db)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("site_name", "test.local")
+		c.Set("site_db", db)
+		c.Next()
+	})
+	RegisterAuthRoutes(router, sm, db, nil)
+
+	userJSON, err := json.Marshal(map[string]any{
+		"name":      "john",
+		"email":     "john@test.com",
+		"full_name": "John Doe",
+		"roles":     []string{"Administrator"},
+	})
+	if err != nil {
+		t.Fatalf("marshal user json: %v", err)
+	}
+	sessionRows := sqlmock.NewRows([]string{"data", "expires_at", "created_at"}).
+		AddRow(string(userJSON), time.Now().Add(time.Hour).Format("2006-01-02 15:04:05"), time.Now().Add(-time.Minute).Format("2006-01-02 15:04:05"))
+
+	mock.ExpectQuery("SELECT data, expires_at, created_at FROM _kora_session WHERE site = \\? AND sid = \\?").
+		WithArgs("test.local", "valid-session").
+		WillReturnRows(sessionRows)
+	mock.ExpectExec("UPDATE _kora_magic_link\\s+SET revoked_at = COALESCE\\(revoked_at, \\?\\)\\s+WHERE site = \\? AND email = \\? AND revoked_at IS NULL AND used_at IS NULL").
+		WithArgs(sqlmock.AnyArg(), "test.local", "john@test.com").
+		WillReturnResult(sqlmock.NewResult(0, 2))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/magic-links/revoke-all", nil)
+	req.AddCookie(&http.Cookie{Name: "kora_sid", Value: "valid-session"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("revoke-all status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestMagicLinkVerifyRejectsRevokedLink(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	sm := NewSessionManager(db)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("site_name", "test.local")
+		c.Set("site_db", db)
+		c.Next()
+	})
+	RegisterAuthRoutes(router, sm, db, nil)
+
+	token := "magic-token"
+	tokenHash := hashMagicLinkToken(token)
+	future := time.Now().Add(time.Hour).Format(time.RFC3339)
+	mock.ExpectQuery("SELECT id, email, CASE WHEN used_at IS NULL THEN 0 ELSE 1 END, CASE WHEN revoked_at IS NULL THEN 0 ELSE 1 END, expires_at FROM _kora_magic_link").
+		WithArgs("test.local", tokenHash).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "email", "used_flag", "revoked_flag", "expires_at"}).
+			AddRow("ml-1", "john@test.com", 0, 1, future))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/magic-link/verify", strings.NewReader(`{"token":"magic-token"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusUnauthorized, w.Body.String())
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}

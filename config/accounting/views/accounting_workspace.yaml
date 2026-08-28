@@ -1,0 +1,23 @@
+name: Accounting Workspace
+route: /accounting
+type: workspace
+layout: two_panel
+label: Accounting
+module: Accounting
+components:
+  - id: journal_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Journal Entry
+    label: Journal Queue
+    desktop_columns: [name, reference, posting_date, status]
+    mobile_columns: [reference, status]
+  - id: reconciliation_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Reconciliation
+    label: Reconciliation Queue
+    desktop_columns: [name, reference, bank_account, status]
+    mobile_columns: [reference, status]

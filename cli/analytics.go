@@ -108,6 +108,12 @@ func runAnalyticsBackfill(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		if backfillDoctype != "" {
+			if err := resetAnalyticsForDoctype(db, target.Name, dt.Name); err != nil {
+				return fmt.Errorf("resetting analytics for %s: %w", dt.Name, err)
+			}
+		}
+
 		metrics := analytics.GenerateMetrics(dt)
 		if dt.IsSubmittable {
 			workflows, _ := store.LoadWorkflows(target.Name)
@@ -150,6 +156,15 @@ func runAnalyticsStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Daily rollup rows:    %d\n", daily)
 	fmt.Printf("Monthly rollup rows:  %d\n", monthly)
 	fmt.Printf("Workflow event rows:  %d\n", workflow)
+	return nil
+}
+
+func resetAnalyticsForDoctype(db *sql.DB, siteName, doctypeName string) error {
+	for _, table := range []string{"_kora_analytics_daily", "_kora_analytics_monthly", "_kora_analytics_workflow", "_kora_analytics_events"} {
+		if _, err := db.Exec(fmt.Sprintf("DELETE FROM %s WHERE site = ? AND doctype = ?", table), siteName, doctypeName); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

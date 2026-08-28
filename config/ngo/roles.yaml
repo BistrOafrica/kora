@@ -1,0 +1,9 @@
+- name: NGO and Grant Management Operator
+  workspace_access: true
+  description: Creates and executes NGO and Grant Management work.
+- name: NGO and Grant Management Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: NGO and Grant Management Administrator
+  workspace_access: true
+  description: Configures NGO and Grant Management and manages access.

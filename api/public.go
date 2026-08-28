@@ -32,7 +32,7 @@ func (h *Handler) HandlePublicList(c *gin.Context) {
 	}
 	filters, err := publicFiltersJSON(pa.Filters, c.Query("filters"), dt)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.failed", err.Error(), nil)
 		return
 	}
 	orderBy := pa.SortField + " " + pa.SortOrder
@@ -59,14 +59,14 @@ func (h *Handler) HandlePublicGet(c *gin.Context) {
 	doc, err := h.siteTx(c).GetDoc(dt, name, "")
 	if err != nil {
 		if errors.Is(err, orm.ErrNotFound) {
-			c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Document not found"}})
+			writeError(c, http.StatusNotFound, "resource.document_not_found", "Document not found", nil)
 			return
 		}
 		internalError(c, "public get query failed", err)
 		return
 	}
 	if !documentMatchesPublicFilters(doc, pa.Filters) {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Document not found"}})
+		writeError(c, http.StatusNotFound, "resource.document_not_found", "Document not found", nil)
 		return
 	}
 	setPublicCacheHeaders(c, pa)
@@ -77,20 +77,20 @@ func (h *Handler) publicDocType(c *gin.Context, list bool) (*doctype.DocType, bo
 	doctypeName := c.Param("doctype")
 	dt := h.siteRegistry(c).Get(doctypeName)
 	if dt == nil || dt.PublicAccess == nil || !dt.PublicAccess.Enabled {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Document type not found"}})
+		writeError(c, http.StatusNotFound, "resource.doctype_not_found", "Document type not found", nil)
 		return nil, false
 	}
 	dt.NormalizePublicAccess()
 	if list && !dt.PublicAccess.List {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: map[string]string{"message": "Public list is not enabled"}})
+		writeError(c, http.StatusForbidden, "permission.denied", "Public list is not enabled", nil)
 		return nil, false
 	}
 	if !list && !dt.PublicAccess.Read {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: map[string]string{"message": "Public read is not enabled"}})
+		writeError(c, http.StatusForbidden, "permission.denied", "Public read is not enabled", nil)
 		return nil, false
 	}
 	if err := dt.ValidatePublicAccess(); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Public access is misconfigured"}})
+		writeError(c, http.StatusInternalServerError, "public.access_misconfigured", "Public access is misconfigured", nil)
 		return nil, false
 	}
 	return dt, true

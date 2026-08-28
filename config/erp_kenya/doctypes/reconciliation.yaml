@@ -1,0 +1,73 @@
+name: Reconciliation
+module: Finance
+is_submittable: true
+title_field: name
+search_fields: bank_account, reconciliation_date
+sort_field: reconciliation_date
+sort_order: DESC
+
+fields:
+  - fieldname: bank_account
+    fieldtype: Link
+    label: Bank Account
+    options: Bank Account
+    reqd: true
+    in_list_view: true
+    description: Bank account being reconciled.
+
+  - fieldname: reconciliation_date
+    fieldtype: Date
+    label: Reconciliation Date
+    reqd: true
+    in_list_view: true
+    description: Date of the bank reconciliation.
+
+  - fieldname: statement_balance
+    fieldtype: Currency
+    label: Statement Balance (KES)
+    description: Closing balance per bank statement.
+
+  - fieldname: ledger_balance
+    fieldtype: Currency
+    label: Ledger Balance (KES)
+    description: Closing balance per company ledger.
+
+  - fieldname: cleared_amount
+    fieldtype: Currency
+    label: Cleared Amount (KES)
+    description: Total amount of cleared transactions.
+
+  - fieldname: uncleared_amount
+    fieldtype: Currency
+    label: Uncleared Amount (KES)
+    description: Total amount of outstanding/uncleared transactions.
+
+  - fieldname: variance
+    fieldtype: Currency
+    label: Variance (KES)
+    computed: "statement_balance - ledger_balance"
+    read_only: true
+    description: Auto-computed variance between statement and ledger.
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      In Progress
+      Reconciled
+      Variance Found
+    read_only: true
+    default: Draft
+    in_list_view: true
+    in_standard_filter: true
+    description: Current reconciliation status.
+
+  - fieldname: reconciled_by
+    fieldtype: Data
+    label: Reconciled By
+    description: Person who performed the reconciliation.
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

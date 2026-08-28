@@ -1,0 +1,33 @@
+- doctype: Reservation
+  role: Hotel and Guest Operations Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Reservation
+  role: Hotel and Guest Operations Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Reservation
+  role: Hotel and Guest Operations Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Guest Stay
+  role: Hotel and Guest Operations Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Housekeeping Task
+  role: Hotel and Guest Operations Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

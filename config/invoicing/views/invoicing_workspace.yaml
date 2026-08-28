@@ -1,0 +1,23 @@
+name: Invoicing and Receivables Workspace
+route: /invoicing
+type: workspace
+layout: two_panel
+label: Billing and Collections
+module: Invoicing and Receivables
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Invoice
+    label: Billing and Collections
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]
+  - id: exception_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Invoice
+    label: Exceptions
+    desktop_columns: [name, status, modified]
+    mobile_columns: [name, status]

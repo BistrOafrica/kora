@@ -1,0 +1,23 @@
+name: Document and Knowledge Management Workspace
+route: /documents
+type: workspace
+layout: two_panel
+label: Document and Knowledge Management
+module: Document and Knowledge Management
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Document
+    label: Document Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Document Version
+    label: Document Version Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

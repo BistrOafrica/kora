@@ -1,0 +1,23 @@
+name: Payroll Inputs and Compliance Workspace
+route: /payroll
+type: workspace
+layout: two_panel
+label: Payroll Inputs and Compliance
+module: Payroll Inputs and Compliance
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Payroll Period
+    label: Payroll Period Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Payroll Input
+    label: Payroll Input Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]

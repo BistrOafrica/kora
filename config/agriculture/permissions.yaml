@@ -1,0 +1,33 @@
+- doctype: Crop Plan
+  role: Agriculture and Farm Operations Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Crop Plan
+  role: Agriculture and Farm Operations Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Crop Plan
+  role: Agriculture and Farm Operations Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Farm Task
+  role: Agriculture and Farm Operations Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Harvest Batch
+  role: Agriculture and Farm Operations Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

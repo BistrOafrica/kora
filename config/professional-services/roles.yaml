@@ -1,0 +1,9 @@
+- name: Professional Services and Timesheets Operator
+  workspace_access: true
+  description: Creates and executes Professional Services and Timesheets work.
+- name: Professional Services and Timesheets Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Professional Services and Timesheets Administrator
+  workspace_access: true
+  description: Configures Professional Services and Timesheets and manages access.

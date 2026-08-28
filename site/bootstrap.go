@@ -55,11 +55,46 @@ func BootstrapSystemTables(database *sql.DB, dialect db.Dialect) error {
 	switch dialect.(type) {
 	case *db.LibSQLDialect:
 		extDDL = db.ExtensibilityTablesLibSQL()
+	case *db.PostgresDialect:
+		extDDL = db.ExtensibilityTablesMySQL()
 	default:
 		extDDL = db.ExtensibilityTablesMySQL()
 	}
 	for _, ddl := range extDDL {
 		if err := execDDL(ddl, "creating extensibility table"); err != nil {
+			return err
+		}
+	}
+
+	// Transactional outbox (RFC §8.1).
+	var outboxDDL []string
+	switch dialect.(type) {
+	case *db.LibSQLDialect:
+		outboxDDL = db.OutboxTablesLibSQL()
+	case *db.PostgresDialect:
+		outboxDDL = db.OutboxTablesPostgres()
+	default:
+		outboxDDL = db.OutboxTablesMySQL()
+	}
+	for _, ddl := range outboxDDL {
+		if err := execDDL(ddl, "creating outbox table"); err != nil {
+			return err
+		}
+	}
+
+	// Operation kernel tables: idempotency receipts + operation audit
+	// (KERNEL-006, KERNEL-007). PostgreSQL is the reference dialect.
+	var kernelDDL []string
+	switch dialect.(type) {
+	case *db.LibSQLDialect:
+		kernelDDL = db.KernelTablesLibSQL()
+	case *db.PostgresDialect:
+		kernelDDL = db.KernelTablesPostgres()
+	default:
+		kernelDDL = db.KernelTablesMySQL()
+	}
+	for _, ddl := range kernelDDL {
+		if err := execDDL(ddl, "creating kernel table"); err != nil {
 			return err
 		}
 	}
@@ -74,13 +109,14 @@ func BootstrapSystemTables(database *sql.DB, dialect db.Dialect) error {
 // platform DB (used for site discovery) is distinct from per-site databases.
 func BootstrapPlatformRegistry(database *sql.DB, dialect db.Dialect) error {
 	for _, ddl := range dialect.SystemTableSQL() {
-		if strings.Contains(ddl, "_kora_site_registry") {
-			if _, err := database.Exec(ddl); err != nil {
-				if isIdempotentSQLError(err) {
-					return nil
-				}
-				return fmt.Errorf("create _kora_site_registry: %w\nSQL: %s", err, ddl)
+		if !strings.Contains(ddl, "_kora_site_registry") {
+			continue
+		}
+		if _, err := database.Exec(ddl); err != nil {
+			if isIdempotentSQLError(err) {
+				continue
 			}
+			return fmt.Errorf("create _kora_site_registry: %w\nSQL: %s", err, ddl)
 		}
 	}
 	return nil

@@ -1,0 +1,167 @@
+name: Lead
+module: CRM
+is_submittable: true
+track_changes: true
+title_field: lead_name
+search_fields: lead_name, email, phone, company_name
+sort_field: modified
+sort_order: DESC
+
+fields:
+  # --- Section: Lead Information ---
+  - fieldname: section_lead
+    fieldtype: Section Break
+    label: Lead Information
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: lead_name
+    fieldtype: Data
+    label: Lead Name
+    reqd: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: company_name
+    fieldtype: Data
+    label: Company Name
+    in_list_view: true
+
+  - fieldname: email
+    fieldtype: Data
+    label: Email
+    options: Email
+    in_list_view: true
+    constraints:
+      - type: regex
+        pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+        message: "Enter a valid email address."
+
+  - fieldname: phone
+    fieldtype: Data
+    label: Phone
+    options: Phone
+
+  - fieldname: mobile
+    fieldtype: Data
+    label: Mobile
+    options: Phone
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: lead_source
+    fieldtype: Select
+    label: Lead Source
+    options: |
+      Website
+      Referral
+      Social Media
+      Event
+      Cold Call
+      Email Campaign
+      Partner
+      Existing Customer
+      Other
+    in_standard_filter: true
+
+  - fieldname: lead_owner
+    fieldtype: Data
+    label: Lead Owner
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      New
+      Contacted
+      Qualified
+      Unqualified
+      Junk
+    default: New
+    read_only: true
+    in_list_view: true
+    in_standard_filter: true
+
+  # --- Section: Details ---
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: industry
+    fieldtype: Select
+    label: Industry
+    options: |
+      Water
+      Energy
+      Telecom
+      Technology
+      Manufacturing
+      Retail
+      Financial Services
+      Healthcare
+      Construction
+      Agriculture
+      Other
+
+  - fieldname: job_title
+    fieldtype: Data
+    label: Job Title
+
+  - fieldname: address
+    fieldtype: Text
+    label: Address
+
+  - fieldname: city
+    fieldtype: Data
+    label: City
+
+  - fieldname: county
+    fieldtype: Data
+    label: County
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes
+
+  # --- Section: Qualification ---
+  - fieldname: section_qualification
+    fieldtype: Section Break
+    label: Qualification
+
+  - fieldname: expected_value
+    fieldtype: Currency
+    label: Expected Value
+    constraints:
+      - type: min
+        value: 0
+        message: "Expected value cannot be negative."
+
+  - fieldname: probability
+    fieldtype: Percent
+    label: Probability (%)
+    constraints:
+      - type: min
+        value: 0
+        message: "Probability cannot be less than 0%."
+      - type: max
+        value: 100
+        message: "Probability cannot exceed 100%."
+
+  - fieldname: next_follow_up
+    fieldtype: Date
+    label: Next Follow-up
+
+  - fieldname: converted_contact
+    fieldtype: Link
+    label: Converted Contact
+    options: Contact
+    read_only: true
+
+  - fieldname: converted_company
+    fieldtype: Link
+    label: Converted Company
+    options: Company
+    read_only: true

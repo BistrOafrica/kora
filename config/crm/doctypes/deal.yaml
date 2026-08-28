@@ -137,4 +137,4 @@ fields:
   - fieldname: loss_reason
     fieldtype: Text
     label: Loss Reason
-    depends_on: "doc.status == 'Closed Lost'"
+    depends_on: status

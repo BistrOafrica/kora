@@ -1,0 +1,6 @@
+pack: accounting
+seed_mode: demo
+records:
+  - doctype: Journal Entry
+    reference: DEMO-ACCOUNTING-001
+    status: Draft

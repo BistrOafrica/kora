@@ -1,0 +1,39 @@
+name: Inventory Workspace
+route: /inventory
+type: workspace
+layout: two_panel
+label: Inventory & Warehouse
+module: Inventory
+components:
+  - id: items
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Item
+    label: Items
+    desktop_columns: [name, item_code, item_name, item_type, current_stock, selling_price]
+    mobile_columns: [item_name, current_stock]
+  - id: stock_movements
+    type: record_table
+    region: main
+    position: 1
+    source_doctype: Stock Movement
+    label: Stock Movements
+    desktop_columns: [name, item, movement_type, quantity, from_warehouse, to_warehouse, movement_date]
+    mobile_columns: [name, item, movement_type]
+  - id: stock_counts
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Stock Count
+    label: Stock Counts
+    desktop_columns: [name, warehouse, count_date, total_variance_value, status]
+    mobile_columns: [name, warehouse, status]
+  - id: warehouses
+    type: record_table
+    region: side
+    position: 1
+    source_doctype: Warehouse
+    label: Warehouses
+    desktop_columns: [name, warehouse_code, warehouse_name, location_type]
+    mobile_columns: [warehouse_name, location_type]

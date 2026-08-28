@@ -1,0 +1,93 @@
+name: Goods Receipt
+module: Inventory
+is_submittable: true
+track_changes: true
+title_field: name
+search_fields: purchase_order, supplier, receipt_date
+sort_field: receipt_date
+sort_order: DESC
+
+fields:
+  - fieldname: column_left
+    fieldtype: Column Break
+
+  - fieldname: purchase_order
+    fieldtype: Link
+    label: Purchase Order
+    options: Purchase Order
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: supplier
+    fieldtype: Link
+    label: Supplier
+    options: Supplier
+    linked_field: "purchase_order.supplier"
+    in_list_view: true
+
+  - fieldname: receipt_date
+    fieldtype: Date
+    label: Receipt Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: column_right
+    fieldtype: Column Break
+
+  - fieldname: warehouse
+    fieldtype: Link
+    label: Warehouse
+    options: Warehouse
+    reqd: true
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Inspected
+      Completed
+      Cancelled
+    default: Draft
+    read_only: true
+    in_list_view: true
+
+  - fieldname: reference
+    fieldtype: Data
+    label: Reference
+
+  - fieldname: section_items
+    fieldtype: Section Break
+    label: Items
+
+  - fieldname: items
+    fieldtype: Table
+    label: Items
+    options: Goods Receipt Item
+    reqd: true
+    constraints:
+      - type: min_rows
+        value: 1
+        message: "At least one item is required."
+
+  - fieldname: section_inspection
+    fieldtype: Section Break
+    label: Inspection
+
+  - fieldname: inspection_required
+    fieldtype: Check
+    label: Inspection Required
+
+  - fieldname: inspection_status
+    fieldtype: Select
+    label: Inspection Status
+    options: |
+      Pending
+      Passed
+      Failed
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

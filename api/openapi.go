@@ -62,8 +62,12 @@ func GenerateOpenAPISpec(reg *doctype.Registry, siteName string) *openapi3.T {
 	}
 	for _, dt := range reg.All() {
 		spec.Components.Schemas[dt.Name] = doctypeToSchemaRef(dt, reg)
+		spec.Components.Schemas[dt.ResourceName] = doctypeToSchemaRef(dt, reg)
 		spec.Components.Schemas[dt.Name+"List"] = &openapi3.SchemaRef{
 			Value: openapi3.NewArraySchema().WithItems(ref(dt.Name).Value),
+		}
+		spec.Components.Schemas[dt.ResourceName+"List"] = &openapi3.SchemaRef{
+			Value: openapi3.NewArraySchema().WithItems(ref(dt.ResourceName).Value),
 		}
 	}
 	return spec
@@ -170,7 +174,8 @@ func addStaticPaths(spec *openapi3.T) {
 
 func addDoctypePaths(spec *openapi3.T, dt *doctype.DocType) {
 	name := dt.Name
-	listPath := "/api/resource/" + name
+	resourceName := dt.ResourceName
+	listPath := "/api/resource/" + resourceName
 	detailPath := listPath + "/{name}"
 	opID := strings.ToLower(name)
 

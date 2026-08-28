@@ -1,0 +1,302 @@
+name: Employee
+module: HR
+track_changes: true
+title_field: employee_id
+search_fields: employee_id, first_name, last_name, department
+sort_field: employee_id
+sort_order: ASC
+
+fields:
+  # --- Section: Personal Details ---
+  - fieldname: section_personal
+    fieldtype: Section Break
+    label: Personal Details
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: employee_id
+    fieldtype: Data
+    label: Employee ID
+    reqd: true
+    unique: true
+    bold: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: first_name
+    fieldtype: Data
+    label: First Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: middle_name
+    fieldtype: Data
+    label: Middle Name
+
+  - fieldname: last_name
+    fieldtype: Data
+    label: Last Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: gender
+    fieldtype: Select
+    label: Gender
+    options: |
+      Male
+      Female
+      Other
+
+  - fieldname: date_of_birth
+    fieldtype: Date
+    label: Date of Birth
+
+  - fieldname: marital_status
+    fieldtype: Select
+    label: Marital Status
+    options: |
+      Single
+      Married
+      Divorced
+      Widowed
+
+  # --- Section: Employment ---
+  - fieldname: section_employment
+    fieldtype: Section Break
+    label: Employment
+
+  - fieldname: col_emp_left
+    fieldtype: Column Break
+
+  - fieldname: employment_type
+    fieldtype: Select
+    label: Employment Type
+    options: |
+      Permanent
+      Contract
+      Temporary
+      Intern
+      Consultant
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: department
+    fieldtype: Link
+    label: Department
+    options: Cost Center
+
+  - fieldname: designation
+    fieldtype: Data
+    label: Designation
+    in_list_view: true
+
+  - fieldname: grade
+    fieldtype: Select
+    label: Grade
+    options: |
+      Junior
+      Mid
+      Senior
+      Manager
+      Director
+      Executive
+    in_list_view: true
+
+  - fieldname: col_emp_right
+    fieldtype: Column Break
+
+  - fieldname: joining_date
+    fieldtype: Date
+    label: Joining Date
+    reqd: true
+
+  - fieldname: confirmation_date
+    fieldtype: Date
+    label: Confirmation Date
+
+  - fieldname: contract_end_date
+    fieldtype: Date
+    label: Contract End Date
+
+  - fieldname: reports_to
+    fieldtype: Link
+    label: Reports To
+    options: Employee
+
+  # --- Section: Compensation ---
+  - fieldname: section_compensation
+    fieldtype: Section Break
+    label: Compensation
+
+  - fieldname: col_comp_left
+    fieldtype: Column Break
+
+  - fieldname: salary_mode
+    fieldtype: Select
+    label: Salary Mode
+    options: |
+      Bank
+      Cash
+      Cheque
+    default: Bank
+
+  - fieldname: basic_salary
+    fieldtype: Currency
+    label: Basic Salary
+    constraints:
+      - type: min
+        value: 0
+        message: "Basic salary cannot be negative."
+
+  - fieldname: housing_allowance
+    fieldtype: Currency
+    label: Housing Allowance
+    constraints:
+      - type: min
+        value: 0
+        message: "Housing allowance cannot be negative."
+
+  - fieldname: transport_allowance
+    fieldtype: Currency
+    label: Transport Allowance
+    constraints:
+      - type: min
+        value: 0
+        message: "Transport allowance cannot be negative."
+
+  - fieldname: other_allowance
+    fieldtype: Currency
+    label: Other Allowance
+    constraints:
+      - type: min
+        value: 0
+        message: "Other allowance cannot be negative."
+
+  - fieldname: gross_salary
+    fieldtype: Currency
+    label: Gross Salary
+    computed: "basic_salary + housing_allowance + transport_allowance + other_allowance"
+    read_only: true
+
+  - fieldname: col_comp_right
+    fieldtype: Column Break
+
+  - fieldname: nssf_number
+    fieldtype: Data
+    label: NSSF Number
+
+  - fieldname: nhif_number
+    fieldtype: Data
+    label: SHIF Number
+
+  - fieldname: kra_pin
+    fieldtype: Data
+    label: KRA PIN
+
+  - fieldname: bank_name
+    fieldtype: Data
+    label: Bank Name
+
+  - fieldname: bank_account
+    fieldtype: Data
+    label: Bank Account
+
+  - fieldname: bank_branch
+    fieldtype: Data
+    label: Bank Branch
+
+  # --- Section: Contact ---
+  - fieldname: section_contact
+    fieldtype: Section Break
+    label: Contact
+
+  - fieldname: col_contact_left
+    fieldtype: Column Break
+
+  - fieldname: personal_email
+    fieldtype: Data
+    label: Personal Email
+    options: Email
+    constraints:
+      - type: regex
+        pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+        message: "Enter a valid email address."
+
+  - fieldname: personal_phone
+    fieldtype: Data
+    label: Personal Phone
+    options: Phone
+
+  - fieldname: col_contact_right
+    fieldtype: Column Break
+
+  - fieldname: work_email
+    fieldtype: Data
+    label: Work Email
+    options: Email
+    constraints:
+      - type: regex
+        pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+        message: "Enter a valid email address."
+
+  - fieldname: work_phone
+    fieldtype: Data
+    label: Work Phone
+    options: Phone
+
+  # --- Section: Emergency Contact ---
+  - fieldname: section_emergency
+    fieldtype: Section Break
+    label: Emergency Contact
+
+  - fieldname: col_emerg_left
+    fieldtype: Column Break
+
+  - fieldname: emergency_contact_name
+    fieldtype: Data
+    label: Emergency Contact Name
+
+  - fieldname: emergency_contact_phone
+    fieldtype: Data
+    label: Emergency Contact Phone
+    options: Phone
+
+  - fieldname: col_emerg_right
+    fieldtype: Column Break
+
+  - fieldname: emergency_contact_relation
+    fieldtype: Data
+    label: Relationship
+
+  # --- Section: Other ---
+  - fieldname: section_other
+    fieldtype: Section Break
+    label: Other
+
+  - fieldname: employee_status
+    fieldtype: Select
+    label: Employee Status
+    options: |
+      Active
+      On Leave
+      Suspended
+      Terminated
+      Resigned
+    default: Active
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: address
+    fieldtype: Text
+    label: Address
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

@@ -1,0 +1,9 @@
+- name: E-commerce and Order Fulfillment Operator
+  workspace_access: true
+  description: Creates and executes E-commerce and Order Fulfillment work.
+- name: E-commerce and Order Fulfillment Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: E-commerce and Order Fulfillment Administrator
+  workspace_access: true
+  description: Configures E-commerce and Order Fulfillment and manages access.

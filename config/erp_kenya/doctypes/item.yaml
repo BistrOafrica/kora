@@ -1,0 +1,131 @@
+name: Item
+module: Inventory
+title_field: item_code
+search_fields: item_code, item_name, barcode
+sort_field: item_code
+sort_order: ASC
+fields:
+  - fieldname: item_code
+    fieldtype: Data
+    label: Item Code
+    reqd: true
+    unique: true
+    bold: true
+    in_list_view: true
+    search_index: true
+  - fieldname: item_name
+    fieldtype: Data
+    label: Item Name
+    reqd: true
+    in_list_view: true
+    search_index: true
+  - fieldname: item_type
+    fieldtype: Select
+    label: Item Type
+    options: |
+      Stock Item
+      Service
+      Asset
+      Consumable
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+  - fieldname: item_group
+    fieldtype: Select
+    label: Item Group
+    options: |
+      Raw Material
+      Finished Goods
+      Trading Goods
+      Service
+      Spare Parts
+      Chemicals
+      Other
+    in_list_view: true
+    in_standard_filter: true
+  - fieldname: unit
+    fieldtype: Select
+    label: Unit
+    options: |
+      Pieces
+      Kilograms
+      Litres
+      Metres
+      Boxes
+      Cartons
+      Each
+    default: Pieces
+  - fieldname: unit_price
+    fieldtype: Currency
+    label: Unit Price (KES)
+    constraints:
+      - type: min
+        value: 0
+        message: "Unit price cannot be negative."
+  - fieldname: cost_price
+    fieldtype: Currency
+    label: Cost Price (KES)
+    constraints:
+      - type: min
+        value: 0
+        message: "Cost price cannot be negative."
+  - fieldname: selling_price
+    fieldtype: Currency
+    label: Selling Price (KES)
+    in_list_view: true
+    constraints:
+      - type: min
+        value: 0
+        message: "Selling price cannot be negative."
+  - fieldname: tax_category
+    fieldtype: Link
+    label: Tax Category
+    options: Tax Category
+    description: Default tax category applied to this item on sales and purchase transactions.
+  - fieldname: reorder_level
+    fieldtype: Float
+    label: Reorder Level
+    default: "10"
+    description: Minimum stock level before reordering is triggered.
+  - fieldname: current_stock
+    fieldtype: Float
+    label: Current Stock
+    computed: "SUM(stock_moves.qty_change)"
+    read_only: true
+    in_list_view: true
+    description: Auto-computed from all stock movements.
+  - fieldname: warehouse
+    fieldtype: Link
+    label: Default Warehouse
+    options: Warehouse
+  - fieldname: barcode
+    fieldtype: Data
+    label: Barcode
+
+  - fieldname: digitax_item_id
+    fieldtype: Data
+    label: DigiTax Item ID
+    read_only: true
+    search_index: true
+    description: DigiTax item identifier populated after item synchronization.
+
+  - fieldname: digitax_item_code
+    fieldtype: Data
+    label: eTIMS Item Code
+    read_only: true
+    description: eTIMS item code returned by DigiTax.
+  - fieldname: description
+    fieldtype: Text
+    label: Description
+  - fieldname: is_active
+    fieldtype: Check
+    label: Is Active
+    default: "1"
+  - fieldname: has_expiry
+    fieldtype: Check
+    label: Has Expiry
+    description: Check if this item has an expiry date that needs tracking.
+  - fieldname: default_expiry_days
+    fieldtype: Int
+    label: Default Expiry Days
+    description: Default shelf life in days from manufacture/receipt date.

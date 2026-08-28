@@ -42,7 +42,7 @@ func executeAnalyticsInsights(tx *orm.TxManager, reg *doctype.Registry, doctypeN
 			siteName,
 		)
 		if err != nil {
-			return "Analytics not available. Set KORA_ANALYTICS=true and create documents first."
+			return "Analytics not available. Create documents first."
 		}
 		defer rows.Close()
 		var dts []string
@@ -72,7 +72,10 @@ func executeAnalyticsInsights(tx *orm.TxManager, reg *doctype.Registry, doctypeN
 	}
 	defer rows.Close()
 
-	type entry struct{ M, D string; V float64 }
+	type entry struct {
+		M, D string
+		V    float64
+	}
 	var entries []entry
 	for rows.Next() {
 		var e entry

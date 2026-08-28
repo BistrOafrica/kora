@@ -1,0 +1,141 @@
+name: Company
+module: CRM
+title_field: company_name
+search_fields: company_name, email, phone, industry
+sort_field: company_name
+sort_order: ASC
+
+fields:
+  # --- Section: Company Information ---
+  - fieldname: section_info
+    fieldtype: Section Break
+    label: Company Information
+
+  - fieldname: col_left
+    fieldtype: Column Break
+
+  - fieldname: company_name
+    fieldtype: Data
+    label: Company Name
+    reqd: true
+    bold: true
+    unique: true
+    in_list_view: true
+    search_index: true
+
+  - fieldname: company_type
+    fieldtype: Select
+    label: Company Type
+    options: |
+      Customer
+      Supplier
+      Partner
+      Competitor
+      Government
+      Other
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: industry
+    fieldtype: Select
+    label: Industry
+    options: |
+      Water
+      Energy
+      Telecom
+      Technology
+      Manufacturing
+      Retail
+      Financial Services
+      Healthcare
+      Construction
+      Agriculture
+      Other
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: col_right
+    fieldtype: Column Break
+
+  - fieldname: email
+    fieldtype: Data
+    label: Email
+    options: Email
+    in_list_view: true
+    constraints:
+      - type: regex
+        pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+        message: "Enter a valid email address."
+
+  - fieldname: phone
+    fieldtype: Data
+    label: Phone
+    options: Phone
+    in_list_view: true
+
+  - fieldname: website
+    fieldtype: Data
+    label: Website
+    options: URL
+
+  - fieldname: tax_id
+    fieldtype: Data
+    label: KRA PIN
+
+  # --- Section: Address ---
+  - fieldname: section_address
+    fieldtype: Section Break
+    label: Address
+
+  - fieldname: address
+    fieldtype: Text
+    label: Address
+
+  - fieldname: city
+    fieldtype: Data
+    label: City
+
+  - fieldname: county
+    fieldtype: Data
+    label: County
+
+  - fieldname: country
+    fieldtype: Data
+    label: Country
+    default: Kenya
+
+  # --- Section: Details ---
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: annual_revenue
+    fieldtype: Currency
+    label: Annual Revenue
+    constraints:
+      - type: min
+        value: 0
+        message: "Annual revenue cannot be negative."
+
+  - fieldname: employee_count
+    fieldtype: Int
+    label: Employee Count
+    constraints:
+      - type: min
+        value: 0
+        message: "Employee count cannot be negative."
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Active
+      Inactive
+      Lead
+    default: Active
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

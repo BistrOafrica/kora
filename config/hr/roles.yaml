@@ -1,0 +1,9 @@
+- name: Human Resources and Employee Lifecycle Operator
+  workspace_access: true
+  description: Creates and executes Human Resources and Employee Lifecycle work.
+- name: Human Resources and Employee Lifecycle Reviewer
+  workspace_access: true
+  description: Reviews evidence, exceptions, and approvals.
+- name: Human Resources and Employee Lifecycle Administrator
+  workspace_access: true
+  description: Configures Human Resources and Employee Lifecycle and manages access.

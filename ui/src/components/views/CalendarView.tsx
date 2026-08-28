@@ -49,11 +49,11 @@ export default function CalendarView(props: ViewComponentProps) {
   return (
     <div className="rounded-lg border">
       <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
-        <Button variant="ghost" size="icon" onClick={() => setCurrentDate(d => addDays(startOfMonth(d), -1))}>
+        <Button variant="ghost" size="icon-lg" className="min-h-11 min-w-11" aria-label="Previous month" title="Previous month" onClick={() => setCurrentDate(d => addDays(startOfMonth(d), -1))}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <h3 className="text-sm font-semibold">{format(currentDate, 'MMMM yyyy')}</h3>
-        <Button variant="ghost" size="icon" onClick={() => setCurrentDate(d => addDays(endOfMonth(d), 1))}>
+        <Button variant="ghost" size="icon-lg" className="min-h-11 min-w-11" aria-label="Next month" title="Next month" onClick={() => setCurrentDate(d => addDays(endOfMonth(d), 1))}>
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>

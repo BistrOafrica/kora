@@ -38,11 +38,18 @@ func ImportConfig(db *sql.DB, registry *doctype.Registry, dbName, siteName, conf
 		workflows = append(workflows, wf2...)
 	}
 
+	// Views live in the pack's dedicated views/ directory.
+	views, err := doctype.ParseViewsDirectory(configPath + "/views")
+	if err != nil {
+		return fmt.Errorf("parsing views: %w", err)
+	}
+
 	return ImportConfigFromSnapshot(db, registry, dbName, siteName, fmt.Sprintf("Config import from %s", configPath), &doctype.ConfigSnapshot{
 		DocTypes:    doctypes,
 		Roles:       roles,
 		Permissions: permissions,
 		Workflows:   workflows,
+		Views:       views,
 	}, dialect, nil)
 }
 

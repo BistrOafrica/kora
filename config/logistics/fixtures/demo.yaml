@@ -1,0 +1,6 @@
+pack: logistics
+seed_mode: demo
+records:
+  - doctype: Dispatch
+    reference: DEMO-LOGISTICS-001
+    status: Draft

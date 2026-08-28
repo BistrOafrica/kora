@@ -1,0 +1,6 @@
+pack: projectmgmt
+seed_mode: demo
+records:
+  - doctype: Project
+    reference: DEMO-PROJECTMGMT-001
+    status: Draft

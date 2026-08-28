@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/asenawritescode/kora/doctype"
 )
@@ -147,9 +148,16 @@ func (s *Store) LoadViews(site string) ([]*doctype.View, error) {
 			SourceDocType: sourceDoctype,
 		}
 
-		// Deserialize components from config_json.
+		// Deserialize native PageManifest payloads as their route/navigation
+		// projection for older registry consumers.
 		if configJSON.Valid && configJSON.String != "" {
-			if err := json.Unmarshal([]byte(configJSON.String), &v.Components); err != nil {
+			if isPageManifestJSON(configJSON.String) {
+				var manifest doctype.PageManifest
+				if err := json.Unmarshal([]byte(configJSON.String), &manifest); err != nil {
+					return nil, fmt.Errorf("unmarshaling page manifest for view %q: %w", name, err)
+				}
+				v = manifest.ToView()
+			} else if err := json.Unmarshal([]byte(configJSON.String), &v.Components); err != nil {
 				return nil, fmt.Errorf("unmarshaling components for view %q: %w", name, err)
 			}
 		}
@@ -210,7 +218,13 @@ func (s *Store) LoadView(name, site string) (*doctype.View, error) {
 	}
 
 	if configJSON.Valid && configJSON.String != "" {
-		if err := json.Unmarshal([]byte(configJSON.String), &v.Components); err != nil {
+		if isPageManifestJSON(configJSON.String) {
+			var manifest doctype.PageManifest
+			if err := json.Unmarshal([]byte(configJSON.String), &manifest); err != nil {
+				return nil, fmt.Errorf("unmarshaling page manifest: %w", err)
+			}
+			v = manifest.ToView()
+		} else if err := json.Unmarshal([]byte(configJSON.String), &v.Components); err != nil {
 			return nil, fmt.Errorf("unmarshaling components: %w", err)
 		}
 	}
@@ -226,6 +240,11 @@ func (s *Store) LoadView(name, site string) (*doctype.View, error) {
 
 	v.Normalize()
 	return v, nil
+}
+
+func isPageManifestJSON(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return strings.HasPrefix(trimmed, "{") && strings.Contains(trimmed, `"apiVersion"`) && strings.Contains(trimmed, `"ui.kora.dev/v1"`)
 }
 
 // DeleteView removes a View by name.

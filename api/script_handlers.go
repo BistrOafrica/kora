@@ -29,9 +29,7 @@ func (h *Handler) HandleScriptList(c *gin.Context) {
 	scripts, err := store.LoadAllForSite(siteNameStr)
 	if err != nil {
 		slog.Error("listing scripts", "site", siteNameStr, "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: map[string]string{"message": "Failed to list scripts"},
-		})
+		writeError(c, http.StatusInternalServerError, "script.list_failed", "Failed to list scripts", nil)
 		return
 	}
 	if scripts == nil {
@@ -48,22 +46,22 @@ func (h *Handler) HandleScriptGet(c *gin.Context) {
 	name := c.Param("name")
 
 	if h.SiteScriptStores == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Script not found"}})
+		writeError(c, http.StatusNotFound, "script.not_found", "Script not found", nil)
 		return
 	}
 	store, exists := h.SiteScriptStores[siteNameStr]
 	if !exists || store == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Script not found"}})
+		writeError(c, http.StatusNotFound, "script.not_found", "Script not found", nil)
 		return
 	}
 
 	rec, err := store.LoadByName(siteNameStr, name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to load script"}})
+		writeError(c, http.StatusInternalServerError, "script.load_failed", "Failed to load script", nil)
 		return
 	}
 	if rec == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Script not found"}})
+		writeError(c, http.StatusNotFound, "script.not_found", "Script not found", nil)
 		return
 	}
 
@@ -78,34 +76,37 @@ func (h *Handler) HandleScriptCreate(c *gin.Context) {
 	userStr, _ := user.(string)
 
 	if h.SiteScriptStores == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Script store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "Script store not available", nil)
 		return
 	}
 	store, exists := h.SiteScriptStores[siteNameStr]
 	if !exists || store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Script store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "Script store not available", nil)
 		return
 	}
 
 	var req struct {
-		Name          string `json:"name"`
-		ScriptType    string `json:"script_type"`
-		DocType       string `json:"doctype"`
-		Event         string `json:"event"`
-		MethodPath    string `json:"method_path"`
+		Name           string `json:"name"`
+		ScriptType     string `json:"script_type"`
+		DocType        string `json:"doctype"`
+		Event          string `json:"event"`
+		MethodPath     string `json:"method_path"`
 		WorkflowAction string `json:"workflow_action"`
-		Schedule      string `json:"schedule"`
-		Priority      int    `json:"priority"`
-		RunAs         string `json:"run_as"`
-		TimeoutMs     int    `json:"timeout_ms"`
-		Script        string `json:"script"`
+		Schedule       string `json:"schedule"`
+		Priority       int    `json:"priority"`
+		RunAs          string `json:"run_as"`
+		TimeoutMs      int    `json:"timeout_ms"`
+		Script         string `json:"script"`
 	}
+	// DEBUG: Check Content-Length and body state
+	slog.Info("HandleScriptCreate", "contentLength", c.Request.ContentLength, "method", c.Request.Method, "path", c.Request.URL.Path)
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request body"}})
+		slog.Error("HandleScriptCreate ShouldBindJSON failed", "error", err, "contentLength", c.Request.ContentLength)
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request body", nil)
 		return
 	}
 	if req.Name == "" || req.Script == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "name and script are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "name and script are required", map[string]any{"fields": []string{"name", "script"}})
 		return
 	}
 	if req.ScriptType == "" {
@@ -116,11 +117,11 @@ func (h *Handler) HandleScriptCreate(c *gin.Context) {
 	switch req.ScriptType {
 	case "doc_event":
 		if req.DocType == "" {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "doctype is required for doc_event scripts"}})
+			writeError(c, http.StatusBadRequest, "validation.required_field", "doctype is required for doc_event scripts", map[string]any{"field": "doctype"})
 			return
 		}
 		if req.Event == "" {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "event is required for doc_event scripts"}})
+			writeError(c, http.StatusBadRequest, "validation.required_field", "event is required for doc_event scripts", map[string]any{"field": "event"})
 			return
 		}
 		// Validate event is a known hook point.
@@ -133,22 +134,22 @@ func (h *Handler) HandleScriptCreate(c *gin.Context) {
 			"validate": true, "computed": true,
 		}
 		if !validEvents[req.Event] {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": fmt.Sprintf("unknown event %q. Valid events: before_save, after_save, validate, computed, etc.", req.Event)}})
+			writeError(c, http.StatusBadRequest, "validation.invalid_choice", fmt.Sprintf("unknown event %q. Valid events: before_save, after_save, validate, computed, etc.", req.Event), map[string]any{"field": "event"})
 			return
 		}
 	case "api_method":
 		if req.MethodPath == "" {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "method_path is required for api_method scripts"}})
+			writeError(c, http.StatusBadRequest, "validation.required_field", "method_path is required for api_method scripts", map[string]any{"field": "method_path"})
 			return
 		}
 	case "workflow_action":
 		if req.WorkflowAction == "" {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "workflow_action is required for workflow_action scripts"}})
+			writeError(c, http.StatusBadRequest, "validation.required_field", "workflow_action is required for workflow_action scripts", map[string]any{"field": "workflow_action"})
 			return
 		}
 	case "scheduled":
 		if req.Schedule == "" {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "schedule is required for scheduled scripts"}})
+			writeError(c, http.StatusBadRequest, "validation.required_field", "schedule is required for scheduled scripts", map[string]any{"field": "schedule"})
 			return
 		}
 	}
@@ -162,9 +163,7 @@ func (h *Handler) HandleScriptCreate(c *gin.Context) {
 	// Validate the script compiles.
 	if h.ScriptRunner != nil {
 		if err := h.ScriptRunner.Validate(req.Script); err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: map[string]string{"message": fmt.Sprintf("Script validation failed: %v", err)},
-			})
+			writeError(c, http.StatusBadRequest, "script.validation_failed", "Script validation failed", map[string]any{"error": err.Error()})
 			return
 		}
 	}
@@ -196,7 +195,7 @@ func (h *Handler) HandleScriptCreate(c *gin.Context) {
 
 	if err := store.Insert(rec); err != nil {
 		slog.Error("creating script", "name", req.Name, "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to create script"}})
+		writeError(c, http.StatusInternalServerError, "script.create_failed", "Failed to create script", nil)
 		return
 	}
 
@@ -213,30 +212,30 @@ func (h *Handler) HandleScriptUpdate(c *gin.Context) {
 	name := c.Param("name")
 
 	if h.SiteScriptStores == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Script not found"}})
+		writeError(c, http.StatusNotFound, "script.not_found", "Script not found", nil)
 		return
 	}
 	store, exists := h.SiteScriptStores[siteNameStr]
 	if !exists || store == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Script not found"}})
+		writeError(c, http.StatusNotFound, "script.not_found", "Script not found", nil)
 		return
 	}
 
 	var req struct {
-		ScriptType    *string `json:"script_type"`
-		DocType       *string `json:"doctype"`
-		Event         *string `json:"event"`
-		MethodPath    *string `json:"method_path"`
+		ScriptType     *string `json:"script_type"`
+		DocType        *string `json:"doctype"`
+		Event          *string `json:"event"`
+		MethodPath     *string `json:"method_path"`
 		WorkflowAction *string `json:"workflow_action"`
-		Schedule      *string `json:"schedule"`
-		Priority      *int    `json:"priority"`
-		IsActive      *bool   `json:"is_active"`
-		RunAs         *string `json:"run_as"`
-		TimeoutMs     *int    `json:"timeout_ms"`
-		Script        *string `json:"script"`
+		Schedule       *string `json:"schedule"`
+		Priority       *int    `json:"priority"`
+		IsActive       *bool   `json:"is_active"`
+		RunAs          *string `json:"run_as"`
+		TimeoutMs      *int    `json:"timeout_ms"`
+		Script         *string `json:"script"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request body"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request body", nil)
 		return
 	}
 
@@ -244,9 +243,7 @@ func (h *Handler) HandleScriptUpdate(c *gin.Context) {
 	if req.Script != nil {
 		if h.ScriptRunner != nil {
 			if err := h.ScriptRunner.Validate(*req.Script); err != nil {
-				c.JSON(http.StatusBadRequest, ErrorResponse{
-					Error: map[string]string{"message": fmt.Sprintf("Script validation failed: %v", err)},
-				})
+				writeError(c, http.StatusBadRequest, "script.validation_failed", "Script validation failed", map[string]any{"error": err.Error()})
 				return
 			}
 		}
@@ -259,11 +256,11 @@ func (h *Handler) HandleScriptUpdate(c *gin.Context) {
 	}
 	if err := store.Update(siteNameStr, name, updateReq, userStr); err != nil {
 		slog.Error("updating script", "name", name, "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to update script"}})
+		writeError(c, http.StatusInternalServerError, "script.update_failed", "Failed to update script", nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "ok"}})
+	c.JSON(http.StatusOK, Response{Data: scriptStatusResponse{Status: "ok"}})
 }
 
 // HandleScriptDelete deletes a script.
@@ -273,22 +270,22 @@ func (h *Handler) HandleScriptDelete(c *gin.Context) {
 	name := c.Param("name")
 
 	if h.SiteScriptStores == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Script not found"}})
+		writeError(c, http.StatusNotFound, "script.not_found", "Script not found", nil)
 		return
 	}
 	store, exists := h.SiteScriptStores[siteNameStr]
 	if !exists || store == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Script not found"}})
+		writeError(c, http.StatusNotFound, "script.not_found", "Script not found", nil)
 		return
 	}
 
 	if err := store.Delete(siteNameStr, name); err != nil {
 		slog.Error("deleting script", "name", name, "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to delete script"}})
+		writeError(c, http.StatusInternalServerError, "script.delete_failed", "Failed to delete script", nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, Response{Data: map[string]string{"status": "deleted"}})
+	c.JSON(http.StatusOK, Response{Data: scriptStatusResponse{Status: "deleted"}})
 }
 
 // HandleScriptValidate validates a script without saving it.
@@ -297,30 +294,26 @@ func (h *Handler) HandleScriptValidate(c *gin.Context) {
 		Script string `json:"script"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request body"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request body", nil)
 		return
 	}
 	if req.Script == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "script is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "script is required", map[string]any{"field": "script"})
 		return
 	}
 
 	if h.ScriptRunner == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Script runner not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "Script runner not available", nil)
 		return
 	}
 
 	if err := h.ScriptRunner.Validate(req.Script); err != nil {
-		c.JSON(http.StatusOK, Response{
-			Data: map[string]any{"valid": false, "error": err.Error()},
-		})
+		c.JSON(http.StatusOK, Response{Data: scriptValidateResponse{Valid: false, Error: err.Error()}})
 		return
 	}
 
 	issues := detectHardcodedSecrets(req.Script)
-	c.JSON(http.StatusOK, Response{
-		Data: map[string]any{"valid": true, "warnings": issues},
-	})
+	c.JSON(http.StatusOK, Response{Data: scriptValidateResponse{Valid: true, Warnings: issues}})
 }
 
 // HandleScriptExecutions returns the execution log for a script.
@@ -342,7 +335,7 @@ func (h *Handler) HandleScriptExecutions(c *gin.Context) {
 	execs, err := store.LoadExecutions(siteNameStr, name, 50)
 	if err != nil {
 		slog.Error("loading executions", "script", name, "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to load executions"}})
+		writeError(c, http.StatusInternalServerError, "script.execution_list_failed", "Failed to load executions", nil)
 		return
 	}
 
@@ -353,12 +346,12 @@ func (h *Handler) HandleScriptExecutions(c *gin.Context) {
 func detectHardcodedSecrets(script string) []string {
 	var issues []string
 	patterns := []string{
-		"sk_live_", "sk_test_",           // Stripe
-		"api_key", "api_secret",           // Generic
-		"Bearer ", "Authorization:",       // Auth headers
-		"password", "passwd", "pwd",       // Passwords
-		"PRIVATE KEY",                     // PEM keys
-		"-----BEGIN",                      // PEM blocks
+		"sk_live_", "sk_test_", // Stripe
+		"api_key", "api_secret", // Generic
+		"Bearer ", "Authorization:", // Auth headers
+		"password", "passwd", "pwd", // Passwords
+		"PRIVATE KEY", // PEM keys
+		"-----BEGIN",  // PEM blocks
 	}
 	for _, p := range patterns {
 		if containsIgnoreCase(script, p) {

@@ -1,0 +1,33 @@
+- doctype: Budget
+  role: Budgeting and Management Reporting Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+  can_submit: true
+- doctype: Budget
+  role: Budgeting and Management Reporting Reviewer
+  can_read: true
+  can_write: true
+  can_create: false
+  can_delete: false
+  can_submit: true
+- doctype: Budget
+  role: Budgeting and Management Reporting Administrator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: true
+  can_submit: true
+- doctype: Budget Line
+  role: Budgeting and Management Reporting Operator
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false
+- doctype: Variance
+  role: Budgeting and Management Reporting Reviewer
+  can_read: true
+  can_write: true
+  can_create: true
+  can_delete: false

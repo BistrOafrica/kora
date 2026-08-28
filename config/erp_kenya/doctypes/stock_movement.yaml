@@ -1,0 +1,104 @@
+name: Stock Movement
+module: Inventory
+is_submittable: true
+title_field: name
+search_fields: item, movement_date, movement_type
+sort_field: movement_date
+sort_order: DESC
+
+fields:
+  - fieldname: column_left
+    fieldtype: Column Break
+
+  - fieldname: movement_date
+    fieldtype: Date
+    label: Movement Date
+    reqd: true
+    in_list_view: true
+
+  - fieldname: movement_type
+    fieldtype: Select
+    label: Movement Type
+    options: |
+      Receipt
+      Shipment
+      Transfer
+      Adjustment
+      Return
+      Production
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: item
+    fieldtype: Link
+    label: Item
+    options: Item
+    reqd: true
+    in_list_view: true
+    in_standard_filter: true
+
+  - fieldname: column_right
+    fieldtype: Column Break
+
+  - fieldname: from_warehouse
+    fieldtype: Link
+    label: From Warehouse
+    options: Warehouse
+
+  - fieldname: to_warehouse
+    fieldtype: Link
+    label: To Warehouse
+    options: Warehouse
+
+  - fieldname: reference_doctype
+    fieldtype: Data
+    label: Source Document Type
+
+  - fieldname: reference_doc
+    fieldtype: Data
+    label: Source Document
+
+  - fieldname: status
+    fieldtype: Select
+    label: Status
+    options: |
+      Draft
+      Submitted
+      Completed
+      Cancelled
+    default: Draft
+    read_only: true
+    in_list_view: true
+
+  - fieldname: section_details
+    fieldtype: Section Break
+    label: Details
+
+  - fieldname: quantity
+    fieldtype: Float
+    label: Quantity
+    reqd: true
+
+  - fieldname: unit_price
+    fieldtype: Currency
+    label: Unit Price (KES)
+
+  - fieldname: total_value
+    fieldtype: Currency
+    label: Total Value (KES)
+    computed: "quantity * unit_price"
+    read_only: true
+    description: Auto-computed from quantity × unit price.
+
+  - fieldname: batch_no
+    fieldtype: Data
+    label: Batch No.
+
+  - fieldname: expiry_date
+    fieldtype: Date
+    label: Expiry Date
+
+  - fieldname: notes
+    fieldtype: Text
+    label: Notes

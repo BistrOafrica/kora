@@ -1,0 +1,23 @@
+name: Subscription and Recurring Services Workspace
+route: /subscriptions
+type: workspace
+layout: two_panel
+label: Subscription and Recurring Services
+module: Subscription and Recurring Services
+components:
+  - id: primary_queue
+    type: record_table
+    region: main
+    position: 0
+    source_doctype: Subscription
+    label: Subscription Queue
+    desktop_columns: [name, reference, owner, status, due_date]
+    mobile_columns: [reference, status]
+  - id: evidence_queue
+    type: record_table
+    region: side
+    position: 0
+    source_doctype: Billing Schedule
+    label: Billing Schedule Queue
+    desktop_columns: [name, reference, source_record, status]
+    mobile_columns: [reference, status]
