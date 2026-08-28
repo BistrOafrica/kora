@@ -1,5 +1,6 @@
 export interface DocType {
   name: string
+  resource_name?: string
   module: string
   is_submittable: boolean
   is_child_table: boolean
@@ -12,6 +13,7 @@ export interface DocType {
   description: string
   fields: Field[]
   doc_constraints?: DocConstraint[]
+  public_access?: PublicAccess
   status?: string  // "Active" | "Draft" — set by the API
 }
 
@@ -45,6 +47,7 @@ export interface Field {
   renamed_from: string
   linked_field?: string
   computed?: string
+  dependency_scope?: string
   accept?: string
 }
 
@@ -60,10 +63,41 @@ export interface Constraint {
 
 export interface DocConstraint {
   type: string
+  description?: string
   predicate?: string
   condition?: string
   message: string
   value?: any
+  require_fields?: string[]
+  field?: string
+  group_by?: string[]
+  lhs?: string
+  operator?: string
+  rhs?: string
+  fields?: string[]
+  status_field?: string
+  status_values?: string[]
+  immutable_fields?: string[]
+  constraints?: Constraint[]
+  max?: number
+}
+
+export interface PublicFilter {
+  field: string
+  op: string
+  value: any
+}
+
+export interface PublicAccess {
+  enabled: boolean
+  list: boolean
+  read: boolean
+  fields: string[]
+  filters: PublicFilter[]
+  sort_field: string
+  sort_order: string
+  max_limit: number
+  cache_max_age: number
 }
 
 export interface WorkflowState {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -146,6 +147,24 @@ func (h *Handler) HandleSystemPageManifestUpdate(c *gin.Context) {
 		return
 	}
 
+	existing, err := store.LoadPageManifest(name, site)
+	if err != nil {
+		writeError(c, http.StatusNotFound, "page_manifest.not_found", "Page manifest not found", map[string]any{"name": name})
+		return
+	}
+
+	manifest.EnsurePrimaryDataBindings()
+	existing.EnsurePrimaryDataBindings()
+	if pageManifestEquivalent(existing, &manifest) {
+		c.JSON(http.StatusOK, Response{Data: map[string]any{
+			"manifest":    existing,
+			"version_id":  "",
+			"version_num": 0,
+			"status":      existing.Metadata.Status,
+		}})
+		return
+	}
+
 	if err := store.SavePageManifest(&manifest, site); err != nil {
 		internalError(c, "saving page manifest", err)
 		return
@@ -241,4 +260,120 @@ func pageManifestETag(value any) string {
 	b, _ := json.Marshal(value)
 	sum := sha256.Sum256(b)
 	return `"` + hex.EncodeToString(sum[:8]) + `"`
+}
+
+func pageManifestEquivalent(a, b *doctype.PageManifest) bool {
+	return bytes.Equal(canonicalPageManifestJSON(a), canonicalPageManifestJSON(b))
+}
+
+func canonicalPageManifestJSON(manifest *doctype.PageManifest) []byte {
+	if manifest == nil {
+		return []byte("null")
+	}
+	canonical := canonicalizePageManifest(*manifest)
+	b, err := json.Marshal(canonical)
+	if err != nil {
+		return []byte("null")
+	}
+	return b
+}
+
+func canonicalizePageManifest(manifest doctype.PageManifest) doctype.PageManifest {
+	manifest.Spec = canonicalizePageManifestSpec(manifest.Spec)
+	return manifest
+}
+
+func canonicalizePageManifestSpec(spec doctype.PageManifestSpec) doctype.PageManifestSpec {
+	spec.Permissions = canonicalStrings(spec.Permissions)
+	spec.Capabilities = canonicalStrings(spec.Capabilities)
+	spec.Resources = canonicalPageResources(spec.Resources)
+	spec.Actions = canonicalPageActions(spec.Actions)
+	spec.Layout = canonicalizePageManifestLayout(spec.Layout)
+	return spec
+}
+
+func canonicalizePageManifestLayout(layout doctype.PageManifestLayout) doctype.PageManifestLayout {
+	layout.Children = canonicalPageComponents(layout.Children)
+	return layout
+}
+
+func canonicalPageResources(resources []doctype.PageResource) []doctype.PageResource {
+	out := make([]doctype.PageResource, 0, len(resources))
+	for _, resource := range resources {
+		resource.Params = canonicalAnyMap(resource.Params)
+		resource.DependsOn = canonicalStrings(resource.DependsOn)
+		out = append(out, resource)
+	}
+	return out
+}
+
+func canonicalPageActions(actions []doctype.PageAction) []doctype.PageAction {
+	out := make([]doctype.PageAction, 0, len(actions))
+	for _, action := range actions {
+		action.Input = canonicalAnyMap(action.Input)
+		action.Invalidate = canonicalStrings(action.Invalidate)
+		out = append(out, action)
+	}
+	return out
+}
+
+func canonicalPageComponents(components []doctype.PageComponent) []doctype.PageComponent {
+	out := make([]doctype.PageComponent, 0, len(components))
+	for _, component := range components {
+		component.Props = canonicalAnyMap(component.Props)
+		component.Actions = canonicalStrings(component.Actions)
+		component.RequiredCapabilities = canonicalStrings(component.RequiredCapabilities)
+		component.Permissions = canonicalStrings(component.Permissions)
+		component.Children = canonicalPageComponents(component.Children)
+		out = append(out, component)
+	}
+	return out
+}
+
+func canonicalStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	out = append(out, values...)
+	return out
+}
+
+func canonicalAnyMap(values map[string]any) map[string]any {
+	if values == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(values))
+	for key, value := range values {
+		out[key] = canonicalJSONValue(value)
+	}
+	return out
+}
+
+func canonicalJSONValue(value any) any {
+	switch typed := value.(type) {
+	case nil:
+		return nil
+	case map[string]any:
+		return canonicalAnyMap(typed)
+	case map[string]string:
+		out := make(map[string]any, len(typed))
+		for key, entry := range typed {
+			out[key] = entry
+		}
+		return out
+	case []string:
+		return canonicalStrings(typed)
+	case []any:
+		out := make([]any, 0, len(typed))
+		for _, entry := range typed {
+			out = append(out, canonicalJSONValue(entry))
+		}
+		return out
+	case []doctype.PageComponent:
+		return canonicalPageComponents(typed)
+	case []doctype.PageResource:
+		return canonicalPageResources(typed)
+	case []doctype.PageAction:
+		return canonicalPageActions(typed)
+	default:
+		return value
+	}
 }

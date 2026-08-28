@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { fetchDoctypes, createDoctype, updateDoctype } from '@/lib/api/system'
 import { createPageManifest } from '@/lib/api/page-manifests'
 import { dryRunDoctype } from '@/lib/api/system'
-import type { DocType, Field } from '@/types/kora'
+import type { Constraint, DocConstraint, DocType, Field, PublicAccess, PublicFilter } from '@/types/kora'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -55,10 +55,44 @@ const EMPTY_FIELD: Field = {
   renamed_from: '',
   linked_field: '',
   computed: '',
+  dependency_scope: '',
+  accept: '',
+}
+
+const EMPTY_PUBLIC_ACCESS = {
+  enabled: false,
+  list: false,
+  read: false,
+  fields: [] as string[],
+  filters: [] as Array<{ field: string; op: string; value: any }>,
+  sort_field: '',
+  sort_order: 'DESC',
+  max_limit: 50,
+  cache_max_age: 60,
+}
+
+const EMPTY_DOC_CONSTRAINT = {
+  type: 'Predicate',
+  description: '',
+  predicate: '',
+  condition: '',
+  message: '',
+  require_fields: [] as string[],
+  field: '',
+  group_by: [] as string[],
+  lhs: '',
+  operator: '',
+  rhs: '',
+  fields: [] as string[],
+  status_field: '',
+  status_values: [] as string[],
+  immutable_fields: [] as string[],
+  constraints: [] as Array<{ type: string; value?: any; values?: string[]; pattern?: string; message: string; condition?: string; scope?: string }>,
 }
 
 const EMPTY_DOCTYPE: DocType = {
   name: '',
+  resource_name: '',
   module: '',
   is_submittable: false,
   is_child_table: false,
@@ -72,9 +106,11 @@ const EMPTY_DOCTYPE: DocType = {
   fields: [
     { ...EMPTY_FIELD, fieldname: 'title', fieldtype: 'Data', label: 'Title', reqd: true, in_list_view: true, search_index: true },
   ],
+  doc_constraints: [],
+  public_access: { ...EMPTY_PUBLIC_ACCESS },
 }
 
-const WIZARD_STEPS = ['Basics', 'Fields', 'Screens', 'Review'] as const
+const WIZARD_STEPS = ['Basics', 'Fields', 'Advanced', 'Screens', 'Review'] as const
 type WizardStep = typeof WIZARD_STEPS[number]
 type AssistantDraft = {
   reply: string
@@ -260,6 +296,8 @@ export default function AdminDoctypeEditorPage() {
         setForm={setForm}
         step={wizardStep}
         setStep={setWizardStep}
+        expandedField={expandedField}
+        setExpandedField={setExpandedField}
         selectedScreens={selectedScreens}
         setSelectedScreens={setSelectedScreens}
         doctypes={doctypes ?? []}
@@ -268,6 +306,9 @@ export default function AdminDoctypeEditorPage() {
         issues={validateWizardDoctype(form, doctypes ?? [])}
         onCancel={() => navigate({ to: '/workspace/admin/doctypes' })}
         onCreate={handleWizardCreate}
+        onFieldChange={updateField}
+        onFieldRemove={removeField}
+        onFieldMove={moveField}
       />
     )
   }
@@ -594,6 +635,8 @@ function DoctypeCreationWizard({
   setForm,
   step,
   setStep,
+  expandedField,
+  setExpandedField,
   selectedScreens,
   setSelectedScreens,
   doctypes,
@@ -602,11 +645,16 @@ function DoctypeCreationWizard({
   saving,
   onCancel,
   onCreate,
+  onFieldChange,
+  onFieldRemove,
+  onFieldMove,
 }: {
   form: DocType
   setForm: (value: DocType | ((previous: DocType) => DocType)) => void
   step: WizardStep
   setStep: (step: WizardStep) => void
+  expandedField: number | null
+  setExpandedField: (value: number | null) => void
   selectedScreens: StandardPageKind[]
   setSelectedScreens: (screens: StandardPageKind[]) => void
   doctypes: DocType[]
@@ -615,6 +663,9 @@ function DoctypeCreationWizard({
   saving: boolean
   onCancel: () => void
   onCreate: () => void
+  onFieldChange: (index: number, updates: Partial<Field>) => void
+  onFieldRemove: (index: number) => void
+  onFieldMove: (index: number, direction: -1 | 1) => void
 }) {
   const stepIndex = WIZARD_STEPS.indexOf(step)
   const progress = Math.round(((stepIndex + 1) / WIZARD_STEPS.length) * 100)
@@ -622,6 +673,7 @@ function DoctypeCreationWizard({
   const stepTitle: Record<WizardStep, string> = {
     Basics: 'Name the data object',
     Fields: 'Add the fields',
+    Advanced: 'Configure YAML-level settings',
     Screens: 'Pick the screens',
     Review: 'Review',
   }
@@ -739,6 +791,14 @@ function DoctypeCreationWizard({
                     placeholder="Field Service"
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <FieldLabelWithHelp label="Resource name" help="Optional. Use this if the API/resource name should differ from the display name." />
+                  <Input
+                    value={form.resource_name || ''}
+                    onChange={(event) => setForm((previous) => ({ ...previous, resource_name: event.target.value }))}
+                    placeholder="customer_visit"
+                  />
+                </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <FieldLabelWithHelp label="Description" help="Optional. Keep it short; it is for admin context, not customer-facing copy." />
                   <Input
@@ -746,6 +806,42 @@ function DoctypeCreationWizard({
                     onChange={(event) => setForm((previous) => ({ ...previous, description: event.target.value }))}
                     placeholder="Tracks visits, outcomes, and next actions."
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <FieldLabelWithHelp label="Title field" help="The field used as the main label in records and references." />
+                  <Input
+                    value={form.title_field}
+                    onChange={(event) => setForm((previous) => ({ ...previous, title_field: event.target.value }))}
+                    placeholder="title"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <FieldLabelWithHelp label="Search fields" help="Comma-separated field names to include in quick search." />
+                  <Input
+                    value={form.search_fields}
+                    onChange={(event) => setForm((previous) => ({ ...previous, search_fields: event.target.value }))}
+                    placeholder="title, status"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <FieldLabelWithHelp label="Sort field" help="Default field used when records are listed." />
+                  <Input
+                    value={form.sort_field}
+                    onChange={(event) => setForm((previous) => ({ ...previous, sort_field: event.target.value }))}
+                    placeholder="modified"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <FieldLabelWithHelp label="Sort order" help="Default order used when records are listed." />
+                  <Select value={form.sort_order} onValueChange={(value) => setForm((previous) => ({ ...previous, sort_order: value || 'DESC' }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ASC">ASC</SelectItem>
+                      <SelectItem value="DESC">DESC</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <label className="flex items-center gap-2 rounded-lg border bg-muted/20 p-3 text-sm">
                   <Switch checked={form.track_changes} onCheckedChange={(value) => setForm((previous) => ({ ...previous, track_changes: value }))} />
@@ -761,6 +857,20 @@ function DoctypeCreationWizard({
                     <HelpTooltip label="Approval step help">Use when records must be submitted before they are final.</HelpTooltip>
                   </span>
                 </label>
+                <label className="flex items-center gap-2 rounded-lg border bg-muted/20 p-3 text-sm">
+                  <Switch checked={form.is_child_table} onCheckedChange={(value) => setForm((previous) => ({ ...previous, is_child_table: value }))} />
+                  <span className="flex items-center gap-1.5">
+                    Child table
+                    <HelpTooltip label="Child table help">Use when this doctype only lives inside another record.</HelpTooltip>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 rounded-lg border bg-muted/20 p-3 text-sm">
+                  <Switch checked={form.is_single} onCheckedChange={(value) => setForm((previous) => ({ ...previous, is_single: value }))} />
+                  <span className="flex items-center gap-1.5">
+                    Single record
+                    <HelpTooltip label="Single record help">Use when there should only ever be one document of this type.</HelpTooltip>
+                  </span>
+                </label>
               </CardContent>
             </Card>
           )}
@@ -770,7 +880,7 @@ function DoctypeCreationWizard({
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2">
                   What information should it collect?
-                  <HelpTooltip label="Fields help">Start with what users fill in. Advanced rules can be added later.</HelpTooltip>
+                  <HelpTooltip label="Fields help">Use the full field editor. The wizard keeps attachments, computed fields, dependencies, and other advanced settings available.</HelpTooltip>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -791,14 +901,19 @@ function DoctypeCreationWizard({
                 </div>
                 <div className="space-y-2">
                   {form.fields.map((field, index) => (
-                    <SimpleFieldRow
+                    <FieldRow
                       key={index}
                       field={field}
                       index={index}
-                      canRemove={form.fields.length > 1}
+                      expanded={expandedField === index}
+                      onToggle={() => setExpandedField(expandedField === index ? null : index)}
+                      onChange={(patch) => onFieldChange(index, patch)}
+                      onRemove={() => onFieldRemove(index)}
+                      onMoveUp={() => onFieldMove(index, -1)}
+                      onMoveDown={() => onFieldMove(index, 1)}
+                      canMoveUp={index > 0}
+                      canMoveDown={index < form.fields.length - 1}
                       allDoctypes={doctypes.map((doctype) => doctype.name)}
-                      onChange={(patch) => setForm((previous) => updateWizardField(previous, index, patch))}
-                      onRemove={() => setForm((previous) => ({ ...previous, fields: previous.fields.filter((_, i) => i !== index) }))}
                     />
                   ))}
                 </div>
@@ -811,6 +926,13 @@ function DoctypeCreationWizard({
                 </Button>
               </CardContent>
             </Card>
+          )}
+
+          {step === 'Advanced' && (
+            <div className="space-y-4">
+              <DocConstraintsEditor form={form} setForm={setForm} />
+              <PublicAccessEditor form={form} setForm={setForm} />
+            </div>
           )}
 
           {step === 'Screens' && (
@@ -1089,6 +1211,375 @@ function WizardAssistantPanel({
   )
 }
 
+function DocConstraintsEditor({
+  form,
+  setForm,
+}: {
+  form: DocType
+  setForm: (value: DocType | ((previous: DocType) => DocType)) => void
+}) {
+  const constraints = form.doc_constraints || []
+
+  const updateConstraint = (index: number, updates: Partial<DocConstraint>) => {
+    setForm((previous) => {
+      const next = [...(previous.doc_constraints || [])]
+      next[index] = { ...next[index], ...updates }
+      return { ...previous, doc_constraints: next }
+    })
+  }
+
+  const addConstraint = () => {
+    setForm((previous) => ({
+      ...previous,
+      doc_constraints: [...(previous.doc_constraints || []), { ...EMPTY_DOC_CONSTRAINT }],
+    }))
+  }
+
+  const removeConstraint = (index: number) => {
+    setForm((previous) => ({
+      ...previous,
+      doc_constraints: (previous.doc_constraints || []).filter((_, i) => i !== index),
+    }))
+  }
+
+  return (
+    <Card className="shadow-none">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center justify-between gap-3">
+          <span>Document constraints</span>
+          <Button variant="outline" size="sm" onClick={addConstraint}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add rule
+          </Button>
+        </CardTitle>
+        <CardDescription>Expose the full doc_constraints YAML surface here.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {constraints.length === 0 && (
+          <p className="text-sm text-muted-foreground">No document constraints yet.</p>
+        )}
+        {constraints.map((constraint, index) => (
+          <div key={index} className="rounded-lg border p-3 space-y-3">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>Type</Label>
+                <Select value={constraint.type || ''} onValueChange={(value) => updateConstraint(index, { type: value || 'Predicate' })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['Predicate', 'field_dependency', 'cross_field', 'immutable_after'].map((type) => (
+                      <SelectItem key={type} value={type}>{type}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Description</Label>
+                <Input value={constraint.description || ''} onChange={(event) => updateConstraint(index, { description: event.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Message</Label>
+                <Input value={constraint.message} onChange={(event) => updateConstraint(index, { message: event.target.value })} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Predicate</Label>
+                <LispAutocomplete
+                  value={constraint.predicate || ''}
+                  onChange={(value) => updateConstraint(index, { predicate: value })}
+                  placeholder="(> end_date start_date)"
+                  fieldNames={form.fields.map((field) => field.fieldname)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Condition</Label>
+                <Input value={constraint.condition || ''} onChange={(event) => updateConstraint(index, { condition: event.target.value })} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>Require fields</Label>
+                <Textarea value={joinList(constraint.require_fields)} onChange={(event) => updateConstraint(index, { require_fields: splitList(event.target.value) })} className="min-h-20" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Field</Label>
+                <Input value={constraint.field || ''} onChange={(event) => updateConstraint(index, { field: event.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Group by</Label>
+                <Textarea value={joinList(constraint.group_by)} onChange={(event) => updateConstraint(index, { group_by: splitList(event.target.value) })} className="min-h-20" />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>LHS</Label>
+                <Input value={constraint.lhs || ''} onChange={(event) => updateConstraint(index, { lhs: event.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Operator</Label>
+                <Input value={constraint.operator || ''} onChange={(event) => updateConstraint(index, { operator: event.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>RHS</Label>
+                <Input value={constraint.rhs || ''} onChange={(event) => updateConstraint(index, { rhs: event.target.value })} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>Fields</Label>
+                <Textarea value={joinList(constraint.fields)} onChange={(event) => updateConstraint(index, { fields: splitList(event.target.value) })} className="min-h-20" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status field</Label>
+                <Input value={constraint.status_field || ''} onChange={(event) => updateConstraint(index, { status_field: event.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status values</Label>
+                <Textarea value={joinList(constraint.status_values)} onChange={(event) => updateConstraint(index, { status_values: splitList(event.target.value) })} className="min-h-20" />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>Immutable fields</Label>
+                <Textarea value={joinList(constraint.immutable_fields)} onChange={(event) => updateConstraint(index, { immutable_fields: splitList(event.target.value) })} className="min-h-20" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Value</Label>
+                <Input value={constraint.value != null ? String(constraint.value) : ''} onChange={(event) => updateConstraint(index, { value: parseConstraintValue(event.target.value) })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nested constraints</Label>
+                <ConstraintListEditor
+                  constraints={constraint.constraints || []}
+                  onChange={(next) => updateConstraint(index, { constraints: next })}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => removeConstraint(index)}>Remove rule</Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+function PublicAccessEditor({
+  form,
+  setForm,
+}: {
+  form: DocType
+  setForm: (value: DocType | ((previous: DocType) => DocType)) => void
+}) {
+  const pa = form.public_access || { ...EMPTY_PUBLIC_ACCESS }
+  const updateAccess = (updates: Partial<PublicAccess>) => {
+    setForm((previous) => ({
+      ...previous,
+      public_access: {
+        ...(previous.public_access || { ...EMPTY_PUBLIC_ACCESS }),
+        ...updates,
+      },
+    }))
+  }
+  const updateFilter = (index: number, updates: Partial<PublicFilter>) => {
+    setForm((previous) => {
+      const current = previous.public_access || { ...EMPTY_PUBLIC_ACCESS }
+      const nextFilters = [...(current.filters || [])]
+      nextFilters[index] = { ...nextFilters[index], ...updates }
+      return {
+        ...previous,
+        public_access: {
+          ...current,
+          filters: nextFilters,
+        },
+      }
+    })
+  }
+
+  return (
+    <Card className="shadow-none">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center justify-between gap-3">
+          <span>Public access</span>
+          <label className="flex items-center gap-2 text-sm font-normal">
+            <Switch checked={pa.enabled} onCheckedChange={(value) => updateAccess({ enabled: value })} />
+            Enable
+          </label>
+        </CardTitle>
+        <CardDescription>Expose the full public_access YAML surface here.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="flex items-center gap-2 rounded-lg border bg-muted/20 p-3 text-sm">
+            <Switch checked={pa.list} onCheckedChange={(value) => updateAccess({ list: value })} />
+            <span>Allow list</span>
+          </label>
+          <label className="flex items-center gap-2 rounded-lg border bg-muted/20 p-3 text-sm">
+            <Switch checked={pa.read} onCheckedChange={(value) => updateAccess({ read: value })} />
+            <span>Allow read</span>
+          </label>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Fields</Label>
+            <Textarea value={joinList(pa.fields)} onChange={(event) => updateAccess({ fields: splitList(event.target.value) })} className="min-h-20" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Sort field</Label>
+            <Input value={pa.sort_field} onChange={(event) => updateAccess({ sort_field: event.target.value })} />
+            <Label className="mt-3 block">Sort order</Label>
+            <Select value={pa.sort_order} onValueChange={(value) => updateAccess({ sort_order: value || 'DESC' })}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ASC">ASC</SelectItem>
+                <SelectItem value="DESC">DESC</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Max limit</Label>
+            <Input value={String(pa.max_limit ?? '')} onChange={(event) => updateAccess({ max_limit: toNumberOrZero(event.target.value) })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Cache max age</Label>
+            <Input value={String(pa.cache_max_age ?? '')} onChange={(event) => updateAccess({ cache_max_age: toNumberOrZero(event.target.value) })} />
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Filters</Label>
+            <Button variant="outline" size="sm" onClick={() => updateAccess({ filters: [...pa.filters, { field: '', op: 'equals', value: '' }] })}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add filter
+            </Button>
+          </div>
+          {(pa.filters || []).map((filter, index) => (
+            <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
+              <Input value={filter.field} onChange={(event) => updateFilter(index, { field: event.target.value })} placeholder="status" />
+              <Select value={filter.op || ''} onValueChange={(value) => updateFilter(index, { op: value || 'equals' })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="equals">equals</SelectItem>
+                  <SelectItem value="not_equals">not_equals</SelectItem>
+                  <SelectItem value="in">in</SelectItem>
+                  <SelectItem value="is_set">is_set</SelectItem>
+                  <SelectItem value="is_not_set">is_not_set</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input value={String(filter.value ?? '')} onChange={(event) => updateFilter(index, { value: event.target.value })} placeholder="published" />
+              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => updateAccess({ filters: pa.filters.filter((_, i) => i !== index) })}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ConstraintListEditor({
+  constraints,
+  onChange,
+  addLabel = 'Add nested constraint',
+  emptyLabel = 'No nested constraints.',
+}: {
+  constraints: Constraint[]
+  onChange: (constraints: Constraint[]) => void
+  addLabel?: string
+  emptyLabel?: string
+}) {
+  const updateConstraint = (index: number, updates: Partial<Constraint>) => {
+    const next = [...constraints]
+    next[index] = { ...next[index], ...updates }
+    onChange(next)
+  }
+
+  return (
+    <div className="space-y-3">
+      {(constraints || []).length === 0 && <p className="text-xs text-muted-foreground">{emptyLabel}</p>}
+      {(constraints || []).map((constraint, index) => (
+        <div key={index} className="rounded-md border p-2 space-y-2">
+          <div className="grid gap-2 md:grid-cols-2">
+            <Select value={constraint.type || ''} onValueChange={(value) => updateConstraint(index, { type: value || 'max' })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {['max', 'min', 'max_length', 'min_length', 'max_rows', 'min_rows', 'regex', 'one_of', 'not_one_of', 'min_date', 'max_date', 'exists', 'unique_in', 'required_if'].map((type) => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input value={constraint.message} onChange={(event) => updateConstraint(index, { message: event.target.value })} placeholder="message" />
+          </div>
+          <ConstraintFieldsEditor constraint={constraint} onChange={(updates) => updateConstraint(index, updates)} />
+          <div className="flex justify-end">
+            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onChange(constraints.filter((_, i) => i !== index))}>Remove</Button>
+          </div>
+        </div>
+      ))}
+      <Button variant="outline" size="sm" onClick={() => onChange([...(constraints || []), { type: 'max', message: '' }])}>
+        <Plus className="mr-2 h-4 w-4" />
+        {addLabel}
+      </Button>
+    </div>
+  )
+}
+
+function ConstraintFieldsEditor({
+  constraint,
+  onChange,
+}: {
+  constraint: Constraint
+  onChange: (updates: Partial<Constraint>) => void
+}) {
+  return (
+    <div className="grid gap-2 md:grid-cols-3">
+      <Input value={constraint.value != null ? String(constraint.value) : ''} onChange={(event) => onChange({ value: parseConstraintValue(event.target.value) })} placeholder="value" />
+      <Input value={joinList(constraint.values)} onChange={(event) => onChange({ values: splitList(event.target.value) })} placeholder="values" />
+      <Input value={constraint.pattern || ''} onChange={(event) => onChange({ pattern: event.target.value })} placeholder="pattern" />
+      <Input value={constraint.condition || ''} onChange={(event) => onChange({ condition: event.target.value })} placeholder="condition" />
+      <Input value={constraint.scope || ''} onChange={(event) => onChange({ scope: event.target.value })} placeholder="scope" />
+    </div>
+  )
+}
+
+function joinList(values?: string[]): string {
+  return (values || []).join('\n')
+}
+
+function splitList(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function parseConstraintValue(value: string): any {
+  const trimmed = value.trim()
+  if (trimmed === '') return undefined
+  const numeric = Number(trimmed)
+  if (!Number.isNaN(numeric) && trimmed === String(numeric)) return numeric
+  if (trimmed === 'true') return true
+  if (trimmed === 'false') return false
+  return value
+}
+
+function toNumberOrZero(value: string): number {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : 0
+}
+
 function validateWizardStep(form: DocType, step: WizardStep): string | null {
   if (step === 'Basics') {
     if (!form.name.trim()) return 'Name is required.'
@@ -1206,9 +1697,16 @@ function inferFieldType(name: string): Field['fieldtype'] {
   const normalized = name.toLowerCase()
   if (normalized.includes('date') || normalized.includes('deadline') || normalized.includes('due')) return 'Date'
   if (normalized.includes('time')) return 'Datetime'
+  if (normalized.includes('percent') || normalized.includes('percentage') || normalized.includes('margin')) return 'Percent'
+  if (normalized.includes('rate') || normalized.includes('ratio') || normalized.includes('precision') || normalized.includes('factor')) return 'Float'
   if (normalized.includes('amount') || normalized.includes('price') || normalized.includes('cost') || normalized.includes('total')) return 'Currency'
   if (normalized.includes('qty') || normalized.includes('quantity') || normalized.includes('count') || normalized.includes('stock')) return 'Int'
   if (normalized.includes('status') || normalized.includes('stage') || normalized.includes('priority') || normalized.includes('type')) return 'Select'
+  if (normalized.includes('secret') || normalized.includes('password') || normalized.includes('token')) return 'Password'
+  if (normalized.includes('json') || normalized.includes('config') || normalized.includes('metadata') || normalized.includes('payload')) return 'JSON'
+  if (normalized.includes('details') || normalized.includes('description') || normalized.includes('body') || normalized.includes('content') || normalized.includes('notes') || normalized.includes('remarks')) return 'Text Editor'
+  if (normalized.includes('table') || normalized.includes('items') || normalized.includes('lines') || normalized.includes('rows')) return 'Table'
+  if (normalized.includes('reference') || normalized.includes('related doctype') || normalized.includes('dynamic link')) return 'Dynamic Link'
   if (normalized.includes('customer') || normalized.includes('owner') || normalized.includes('user') || normalized.includes('supplier')) return 'Link'
   if (normalized.includes('note') || normalized.includes('description') || normalized.includes('comment')) return 'Text'
   if (normalized.includes('audio') || normalized.includes('voice') || normalized.includes('recording') || normalized.includes('sound')) return 'Attach Audio'
@@ -1254,18 +1752,20 @@ function normalizeWizardDoctype(form: DocType): DocType {
       fieldname: slugField(field.fieldname || field.label || `field_${index + 1}`),
       label: field.label || titleCase(field.fieldname || `Field ${index + 1}`),
       options: field.fieldtype === 'Select' ? normalizeSelectOptions(field.options) : field.options,
-      in_list_view: index < 5 || field.in_list_view,
-      search_index: index < 3 || field.search_index,
     }))
     .filter((field) => field.fieldname)
 
   return {
     ...form,
+    resource_name: form.resource_name?.trim() || slugField(form.name),
     name: titleCase(form.name.trim()),
     module: titleCase(form.module.trim()),
-    title_field: fields[0]?.fieldname || 'title',
-    search_fields: fields.slice(0, 4).map((field) => field.fieldname).join(','),
-    track_changes: form.track_changes,
+    title_field: form.title_field.trim() || fields[0]?.fieldname || 'title',
+    search_fields: form.search_fields.trim() || fields.slice(0, 4).map((field) => field.fieldname).join(','),
+    sort_field: form.sort_field.trim() || 'modified',
+    sort_order: form.sort_order || 'DESC',
+    doc_constraints: form.doc_constraints?.filter((constraint) => constraint.type?.trim()) || [],
+    public_access: form.public_access,
     fields,
   }
 }
@@ -1473,6 +1973,17 @@ function FieldRow({
               />
             </div>
           )}
+          {(field.fieldtype === 'Attach' || field.fieldtype === 'Attach Image' || field.fieldtype === 'Attach Audio') && (
+            <div className="mt-3">
+              <Label>Allowed files</Label>
+              <Input
+                className="mt-1"
+                value={field.accept || ''}
+                onChange={(e) => onChange({ accept: e.target.value })}
+                placeholder=".pdf,.docx or image/*"
+              />
+            </div>
+          )}
 
           {/* Display options */}
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-4 mt-4">
@@ -1520,6 +2031,49 @@ function FieldRow({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4">
+            <div>
+              <Label>Show when</Label>
+              <Input
+                value={field.depends_on}
+                onChange={(e) => onChange({ depends_on: e.target.value })}
+                placeholder='status == "Open"'
+              />
+            </div>
+            <div>
+              <Label>Require when</Label>
+              <Input
+                value={field.mandatory_depends_on}
+                onChange={(e) => onChange({ mandatory_depends_on: e.target.value })}
+                placeholder='status == "Open"'
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4">
+            <div>
+              <Label>Dependency scope</Label>
+              <Select value={field.dependency_scope || ''} onValueChange={(value) => onChange({ dependency_scope: value || '' })}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Choose scope" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="self">This record</SelectItem>
+                  <SelectItem value="children">Child rows</SelectItem>
+                  <SelectItem value="cross_doctype">Linked records</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Renamed from</Label>
+              <Input
+                value={field.renamed_from}
+                onChange={(e) => onChange({ renamed_from: e.target.value })}
+                placeholder="old_field_name"
+              />
+            </div>
+          </div>
+
           {/* Linked Field */}
           {!isLayout && (
             <div className="mt-3">
@@ -1551,69 +2105,13 @@ function FieldRow({
             <div className="mt-3 border-t pt-3">
               <div className="flex items-center justify-between mb-2">
                 <Label>Constraints</Label>
-                <Button
-                  variant="ghost" size="sm"
-                  onClick={() => {
-                    const updated = [...(field.constraints || []), { type: 'max', value: undefined as any, message: '' }]
-                    onChange({ constraints: updated })
-                  }}
-                >+ Add</Button>
               </div>
-              {(field.constraints || []).map((c, ci) => (
-                <div key={ci} className="grid grid-cols-12 gap-2 mb-2 items-start">
-                  <select
-                    className="col-span-3 h-9 rounded-md border bg-background px-2 text-sm"
-                    value={c.type}
-                    onChange={(e) => {
-                      const updated = [...(field.constraints || [])]
-                      updated[ci] = { ...updated[ci], type: e.target.value }
-                      onChange({ constraints: updated })
-                    }}
-                  >
-                    <option value="max">max</option>
-                    <option value="min">min</option>
-                    <option value="max_length">max_length</option>
-                    <option value="min_length">min_length</option>
-                    <option value="max_rows">max_rows</option>
-                    <option value="min_rows">min_rows</option>
-                    <option value="regex">regex</option>
-                    <option value="one_of">one_of</option>
-                    <option value="not_one_of">not_one_of</option>
-                    <option value="min_date">min_date</option>
-                    <option value="max_date">max_date</option>
-                  </select>
-                  <Input
-                    className="col-span-3 h-9 text-sm"
-                    value={c.value != null ? String(c.value) : ''}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      const num = Number(v)
-                      const updated = [...(field.constraints || [])]
-                      updated[ci] = { ...updated[ci], value: isNaN(num) ? v : num }
-                      onChange({ constraints: updated })
-                    }}
-                    placeholder="value"
-                  />
-                  <Input
-                    className="col-span-5 h-9 text-sm"
-                    value={c.message || ''}
-                    onChange={(e) => {
-                      const updated = [...(field.constraints || [])]
-                      updated[ci] = { ...updated[ci], message: e.target.value }
-                      onChange({ constraints: updated })
-                    }}
-                    placeholder="Error message"
-                  />
-                  <Button
-                    variant="ghost" size="sm"
-                    className="col-span-1 h-9 text-destructive"
-                    onClick={() => {
-                      const updated = (field.constraints || []).filter((_, i) => i !== ci)
-                      onChange({ constraints: updated.length > 0 ? updated : null })
-                    }}
-                  >✕</Button>
-                </div>
-              ))}
+              <ConstraintListEditor
+                constraints={field.constraints || []}
+                addLabel="Add constraint"
+                emptyLabel="No field constraints yet."
+                onChange={(next) => onChange({ constraints: next.length > 0 ? next : null })}
+              />
             </div>
           )}
         </div>
