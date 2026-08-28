@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PAGE_COMPONENT_LIBRARY, createBlankPageManifest, validatePageManifestContract, type PageManifest } from './page'
+import { PAGE_COMPONENT_LIBRARY, createBlankPageManifest, normalizePageManifest, validatePageManifestContract, type PageManifest } from './page'
 
 function validManifest(): PageManifest {
   return {
@@ -154,5 +154,71 @@ describe('PageManifest validation', () => {
     expect(validatePageManifestContract(manifest)).toEqual(expect.arrayContaining([
       { path: 'spec.layout.children.0.props.source_doctype', message: 'Component source_doctype must match resource doctype Sales Order.' },
     ]))
+  })
+
+  it('normalizes manifest ordering before persistence', () => {
+    const manifest = validManifest()
+    manifest.spec.permissions = ['write', 'read', 'write']
+    manifest.spec.capabilities = ['charts', 'dashboard', 'charts']
+    manifest.spec.resources = [
+      { id: 'z', query: 'document.list', params: { doctype: 'Sales Order' } },
+      { id: 'a', query: 'document.list', params: { doctype: 'Customer' } },
+    ]
+    manifest.spec.actions = [
+      { id: 'z_action', command: 'document.submit', input: {}, invalidate: ['z', 'a'] },
+      { id: 'a_action', command: 'document.create', input: {}, invalidate: ['a'] },
+    ]
+    manifest.spec.layout.children = [
+      { id: 'b', component: 'record_table', version: 1, region: 'main', position: 7, props: { title: 'B' }, data: 'z.data' },
+      { id: 'a', component: 'record_list', version: 1, region: 'main', position: 3, props: { title: 'A' }, data: 'a.data' },
+    ]
+
+    const normalized = normalizePageManifest(manifest)
+    expect(normalized.spec.capabilities).toEqual(['charts', 'dashboard'])
+    expect(normalized.spec.permissions).toEqual(['read', 'write'])
+    expect(normalized.spec.resources.map((resource) => resource.id)).toEqual(['a', 'z'])
+    expect(normalized.spec.actions.map((action) => action.id)).toEqual(['a_action', 'z_action'])
+    expect(normalized.spec.layout.children.map((component) => component.id)).toEqual(['a', 'b'])
+    expect(normalized.spec.layout.children.map((component) => component.position)).toEqual([0, 1])
+  })
+
+  it('normalizes nested component trees deterministically for source round-trips', () => {
+    const manifest = validManifest()
+    manifest.spec.layout.children = [
+      {
+        id: 'parent',
+        component: 'dashboard_grid',
+        version: 1,
+        region: 'main',
+        position: 4,
+        props: { title: 'Parent', desktop_columns: ['b', 'a', 'b'] },
+        children: [
+          {
+            id: 'child-b',
+            component: 'metric_card',
+            version: 1,
+            region: 'main',
+            position: 2,
+            props: { title: 'Child B' },
+          },
+          {
+            id: 'child-a',
+            component: 'metric_card',
+            version: 1,
+            region: 'main',
+            position: 0,
+            props: { title: 'Child A' },
+          },
+        ],
+      },
+    ]
+
+    const normalized = normalizePageManifest(manifest)
+    const roundTripped = JSON.parse(JSON.stringify(normalized)) as PageManifest
+
+    expect(normalized.spec.layout.children[0].position).toBe(0)
+    expect(normalized.spec.layout.children[0].children?.map((child) => child.id)).toEqual(['child-b', 'child-a'])
+    expect(normalized.spec.layout.children[0].children?.map((child) => child.position)).toEqual([0, 1])
+    expect(roundTripped).toEqual(normalized)
   })
 })

@@ -319,7 +319,7 @@ function resolveComponentResource(
 }
 
 function shouldRenderResourceState(state: ManifestResourceState | undefined): boolean {
-  return !!state && ['error', 'permission_denied', 'offline', 'conflict'].includes(state.kind)
+  return !!state && ['error', 'permission_denied', 'offline', 'conflict', 'stale'].includes(state.kind)
 }
 
 function ResourceStateBlock({ state }: { state?: ManifestResourceState }) {

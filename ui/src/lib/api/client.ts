@@ -1,6 +1,7 @@
 import type { ApiResponse, ApiErrorResponse, OperationEnvelope, OperationStatus } from '@/types/api'
-import { sitePath } from '@/lib/basepath'
-import { loadRuntimeConfig } from '@/lib/runtime-config'
+import { getApiErrorMessage, getApiErrorCode } from './error-messages'
+import { sitePath } from '../basepath'
+import { loadRuntimeConfig } from '../runtime-config'
 
 function getCsrfToken(): string {
   const match = document.cookie.match(/(?:^|;\s*)kora_csrf=([^;]*)/)
@@ -8,16 +9,18 @@ function getCsrfToken(): string {
 }
 
 export class KoraApiError extends Error {
-  type: string
+  code: string
   field?: string
+  details?: Record<string, unknown>
   status: number
 
-  constructor(message: string, type: string, status: number, field?: string) {
+  constructor(message: string, code: string, status: number, field?: string, details?: Record<string, unknown>) {
     super(message)
     this.name = 'KoraApiError'
-    this.type = type
+    this.code = code
     this.status = status
     this.field = field
+    this.details = details
   }
 }
 
@@ -79,15 +82,17 @@ async function apiRequest<T>(
     if (typeof errorData.error === 'string') {
       throw new KoraApiError(errorData.error, 'error', response.status)
     }
-    // Single error: {"error": {"message": "...", "field": "..."}}
+    // Single error: {"error": {"code": "...", "message": "...", "field": "..."}}
     if (errorData.error && typeof errorData.error === 'object' && 'message' in errorData.error) {
       const err = errorData.error as any
-      throw new KoraApiError(err.message, err.type || 'error', response.status, err.field)
+      const code = getApiErrorCode(err)
+      throw new KoraApiError(getApiErrorMessage(err), code, response.status, err.field, err.details)
     }
     // Multiple errors: {"error": {"errors": [...]}}
     if (errorData.error && typeof errorData.error === 'object' && 'errors' in errorData.error) {
       const err = (errorData.error as any).errors[0]
-      throw new KoraApiError(err.message, err.type || 'error', response.status, err.field)
+      const code = getApiErrorCode(err)
+      throw new KoraApiError(getApiErrorMessage(err), code, response.status, err.field, err.details)
     }
     throw new KoraApiError('Unknown error', 'unknown', response.status)
   }
@@ -120,7 +125,7 @@ export async function apiRequestOperation<T>(
         operation_id: idempotencyKey,
         status: mapErrorStatus(error.status),
         error: {
-          code: error.type || 'error',
+          code: error.code || 'error',
           message: error.message,
           field: error.field,
           retryable: error.status >= 500,
@@ -198,8 +203,15 @@ async function apiRequestEnvelope<T>(
       throw new KoraApiError(`Request failed with status ${response.status}`, 'network_error', response.status)
     }
     const err = (errorData.error as any)
-    if (err?.message) throw new KoraApiError(err.message, err.type || 'error', response.status, err.field)
-    if (err?.errors?.[0]) throw new KoraApiError(err.errors[0].message, err.errors[0].type || 'error', response.status, err.errors[0].field)
+    if (err?.message || err?.code || err?.type) {
+      const code = getApiErrorCode(err)
+      throw new KoraApiError(getApiErrorMessage(err), code, response.status, err.field, err.details)
+    }
+    if (err?.errors?.[0]) {
+      const first = err.errors[0]
+      const code = getApiErrorCode(first)
+      throw new KoraApiError(getApiErrorMessage(first), code, response.status, first.field, first.details)
+    }
     throw new KoraApiError('Unknown error', 'unknown', response.status)
   }
 
@@ -263,11 +275,13 @@ async function toApiError(response: Response): Promise<KoraApiError> {
   }
   if (errorData.error && typeof errorData.error === 'object' && 'message' in errorData.error) {
     const err = errorData.error as any
-    return new KoraApiError(err.message, err.type || 'error', response.status, err.field)
+    const code = getApiErrorCode(err)
+    return new KoraApiError(getApiErrorMessage(err), code, response.status, err.field, err.details)
   }
   if (errorData.error && typeof errorData.error === 'object' && 'errors' in errorData.error) {
     const err = (errorData.error as any).errors[0]
-    return new KoraApiError(err.message, err.type || 'error', response.status, err.field)
+    const code = getApiErrorCode(err)
+    return new KoraApiError(getApiErrorMessage(err), code, response.status, err.field, err.details)
   }
   return new KoraApiError('Unknown error', 'unknown', response.status)
 }

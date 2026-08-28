@@ -33,6 +33,7 @@ describe('standard page generator', () => {
     const manifest = createStandardPageManifest(doctype, 'table')
 
     expect(manifest.spec.route).toBe('/sales-order-table')
+    expect(manifest.spec.capabilities).toEqual(['dashboard', 'tables', 'filters', 'analytics', 'charts'])
     expect(manifest.spec.resources[0]).toMatchObject({
       id: 'primary',
       query: 'document.list',
@@ -46,12 +47,15 @@ describe('standard page generator', () => {
       ]),
     })
     expect(manifest.spec.layout.children[1]).toMatchObject({
-      component: 'search_box',
+      component: 'insights_panel',
     })
     expect(manifest.spec.layout.children[2]).toMatchObject({
-      component: 'filter_bar',
+      component: 'search_box',
     })
     expect(manifest.spec.layout.children[3]).toMatchObject({
+      component: 'filter_bar',
+    })
+    expect(manifest.spec.layout.children[4]).toMatchObject({
       component: 'record_table',
       data: 'primary.data',
       props: {
@@ -59,6 +63,51 @@ describe('standard page generator', () => {
         desktop_columns: ['name', 'customer_name', 'status', 'total'],
       },
     })
+  })
+
+  it('binds guided card pages to the primary resource and summary fields', () => {
+    const manifest = createStandardPageManifest(doctype, 'cards')
+
+    expect(manifest.spec.layout.type).toBe('single')
+    expect(manifest.spec.layout.children.map((component) => component.component)).toEqual([
+      'dashboard_grid',
+      'insights_panel',
+      'search_box',
+      'filter_bar',
+      'record_cards',
+    ])
+    expect(manifest.spec.layout.children[2]).toMatchObject({
+      component: 'search_box',
+      data: 'primary.data',
+    })
+    expect(manifest.spec.layout.children[3]).toMatchObject({
+      component: 'filter_bar',
+      data: 'primary.data',
+    })
+    expect(manifest.spec.layout.children[4]).toMatchObject({
+      data: 'primary.data',
+      props: {
+        source_doctype: 'Sales Order',
+        bindings: {
+          title: 'customer_name',
+          subtitle: 'status',
+        },
+      },
+    })
+  })
+
+  it('generates contract-valid guided templates for every supported preset', () => {
+    for (const kind of ['table', 'cards', 'form', 'detail', 'overview'] as const) {
+      const manifest = createStandardPageManifest(doctype, kind)
+
+      expect(validatePageManifestContract(manifest)).toEqual([])
+      expect(manifest.metadata.name).toBe(`sales-order-${kind}`)
+      expect(manifest.spec.route).toBe(`/${'sales-order'}-${kind}`)
+      expect(manifest.spec.layout.children.length).toBeGreaterThan(0)
+      expect(manifest.spec.layout.children.every((component) => component.region === 'main' || component.region === 'side')).toBe(true)
+      const bound = manifest.spec.layout.children.find((component) => component.props.source_doctype === 'Sales Order')
+      expect(bound).toBeDefined()
+    }
   })
 
   it('binds added components to the primary resource and doctype', () => {
@@ -75,6 +124,16 @@ describe('standard page generator', () => {
       data: 'primary.data',
       position: 2,
       props: { source_doctype: 'Sales Order' },
+    })
+  })
+
+  it('adds charts capability for overview pages so insights panels resolve', () => {
+    const manifest = createStandardPageManifest(doctype, 'overview')
+
+    expect(manifest.spec.capabilities).toContain('charts')
+    expect(manifest.spec.layout.children[1]).toMatchObject({
+      component: 'insights_panel',
+      required_capabilities: ['dashboard', 'charts', 'analytics'],
     })
   })
 

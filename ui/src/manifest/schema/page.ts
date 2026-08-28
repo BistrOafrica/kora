@@ -220,7 +220,7 @@ export function addManifestComponent(manifest: PageManifest, componentType: stri
     offline: manifest.spec.offline,
   }
 
-  return {
+  return normalizePageManifest({
     ...manifest,
     spec: {
       ...manifest.spec,
@@ -230,11 +230,11 @@ export function addManifestComponent(manifest: PageManifest, componentType: stri
         children: [...manifest.spec.layout.children, component],
       },
     },
-  }
+  })
 }
 
 export function removeManifestComponent(manifest: PageManifest, id: string): PageManifest {
-  return {
+  return normalizePageManifest({
     ...manifest,
     spec: {
       ...manifest.spec,
@@ -243,6 +243,39 @@ export function removeManifestComponent(manifest: PageManifest, id: string): Pag
         children: manifest.spec.layout.children.filter((component) => component.id !== id),
       },
     },
+  })
+}
+
+export function normalizePageManifest(manifest: PageManifest): PageManifest {
+  const layout = manifest.spec.layout
+  const normalizedChildren = [...layout.children]
+    .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))
+    .map((component, index) => normalizePageComponent(component, index))
+
+  return {
+    ...manifest,
+    spec: {
+      ...manifest.spec,
+      capabilities: Array.from(new Set(manifest.spec.capabilities)).sort(),
+      permissions: Array.from(new Set(manifest.spec.permissions)).sort(),
+      resources: [...manifest.spec.resources].sort((a, b) => a.id.localeCompare(b.id)),
+      actions: [...manifest.spec.actions].sort((a, b) => a.id.localeCompare(b.id)),
+      layout: {
+        ...layout,
+        children: normalizedChildren,
+      },
+    },
+  }
+}
+
+function normalizePageComponent(component: PageComponent, position: number): PageComponent {
+  return {
+    ...component,
+    position,
+    required_capabilities: component.required_capabilities ? [...new Set(component.required_capabilities)].sort() : undefined,
+    permissions: component.permissions ? [...new Set(component.permissions)].sort() : undefined,
+    actions: component.actions ? [...new Set(component.actions)].sort() : undefined,
+    children: component.children ? [...component.children].map((child, index) => normalizePageComponent(child, index)) : undefined,
   }
 }
 

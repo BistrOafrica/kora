@@ -18,6 +18,8 @@ export function createStandardPageManifest(doctype: DocType, kind: StandardPageK
   const title = doctype.title_field || listFields[0] || 'name'
   const withInsights = kind !== 'form'
   const manifest = createBlankPageManifest()
+  const baseCapabilities = capabilitiesForKind(kind)
+  const capabilities = withInsights ? uniqueStrings([...baseCapabilities, 'analytics', 'charts']) : baseCapabilities
   const resources: PageResource[] = [
     {
       id: 'primary',
@@ -43,7 +45,7 @@ export function createStandardPageManifest(doctype: DocType, kind: StandardPageK
     spec: {
       ...manifest.spec,
       route,
-      capabilities: withInsights ? uniqueStrings([...capabilitiesForKind(kind), 'analytics']) : capabilitiesForKind(kind),
+      capabilities,
       resources,
       layout: {
         type: layoutForKind(kind),

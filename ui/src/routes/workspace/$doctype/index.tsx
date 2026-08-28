@@ -24,6 +24,12 @@ export default function ListPage() {
   const dt: DocType | undefined = schemaQuery.data?.doctype
   const manifest = useMemo(() => (dt ? createStandardPageManifest(dt, 'overview') : null), [dt])
   const issues = useMemo(() => (manifest ? validatePageManifestContract(manifest) : []), [manifest])
+  const handleAction = useMemo(() => (actionId: string, context: Record<string, unknown>) => {
+    if (actionId !== 'select') return
+    const name = typeof context.name === 'string' ? context.name : ''
+    if (!name) return
+    navigate({ to: '/workspace/$doctype/$name', params: { doctype, name } })
+  }, [doctype, navigate])
 
   if (schemaQuery.isLoading || !manifest) {
     return (
@@ -80,7 +86,7 @@ export default function ListPage() {
           </ul>
         </div>
       ) : (
-        <ManifestRenderer manifest={manifest} mode="runtime" />
+        <ManifestRenderer manifest={manifest} mode="runtime" onAction={handleAction} />
       )}
     </div>
   )

@@ -21,6 +21,54 @@ export interface RealtimeEvent {
   read?: boolean
 }
 
+export function describeRealtimeState(state: RealtimeConnectionState): { label: string; tone: 'default' | 'outline' | 'secondary' | 'destructive'; detail: string } {
+  switch (state.state) {
+    case 'connected':
+      return {
+        label: 'Live',
+        tone: 'default',
+        detail: state.detail || 'Live updates are connected',
+      }
+    case 'reconnecting':
+      return {
+        label: 'Reconnecting',
+        tone: 'outline',
+        detail: state.detail || 'Live updates are reconnecting',
+      }
+    case 'unauthorized':
+      return {
+        label: 'Unavailable',
+        tone: 'destructive',
+        detail: state.detail || 'Live updates require authentication',
+      }
+    case 'offline':
+      return {
+        label: 'Offline',
+        tone: 'secondary',
+        detail: state.detail || 'Live updates are offline',
+      }
+    case 'closed':
+      return {
+        label: 'Closed',
+        tone: 'secondary',
+        detail: state.detail || 'Live updates are closed',
+      }
+    case 'degraded':
+      return {
+        label: 'Degraded',
+        tone: 'outline',
+        detail: state.detail || 'Live updates are degraded',
+      }
+    case 'connecting':
+    default:
+      return {
+        label: 'Connecting',
+        tone: 'outline',
+        detail: state.detail || 'Live updates are connecting',
+      }
+  }
+}
+
 export function useRealtimeConnection(): RealtimeConnectionState {
   const runtime = useMemo(() => loadRuntimeConfig(), [])
   const [state, setState] = useState<RealtimeConnectionState>(() => ({

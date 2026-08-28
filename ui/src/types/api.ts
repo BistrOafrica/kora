@@ -9,13 +9,15 @@ export interface ApiResponse<T = any> {
 }
 
 export interface ApiError {
+  code?: string
   type?: string
   message: string
   field?: string
+  details?: Record<string, unknown>
 }
 
 export interface ApiErrorResponse {
-  error: ApiError | { errors: ApiError[] }
+  error: ApiError | string | { errors: ApiError[] }
 }
 
 export interface AuthProvider {

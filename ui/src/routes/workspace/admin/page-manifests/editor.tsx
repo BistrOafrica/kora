@@ -7,6 +7,7 @@ import type { DocType } from '@/types/kora'
 import {
   PAGE_COMPONENT_LIBRARY,
   createBlankPageManifest,
+  normalizePageManifest,
   removeManifestComponent,
   validatePageManifestContract,
   type OfflinePolicy,
@@ -16,6 +17,20 @@ import {
   type PageResource,
   type PageAction,
 } from '@/manifest/schema/page'
+import {
+  buildPublishPreflight,
+  buildResourceBindingOptions,
+  clearManifestDraft,
+  readManifestDraft,
+  previewViewportClass,
+  previewViewportOptions,
+  writeManifestDraft,
+} from './editor-helpers'
+import {
+  addBoundComponent,
+  getPrimaryDoctypeName,
+  withDoctypeDefaults,
+} from './editor-builders'
 import {
   ManifestRenderer,
   createSimulatedResourceState,
@@ -76,7 +91,9 @@ export default function PageManifestWorkbench() {
   const [redoStack, setRedoStack] = useState<PageManifest[]>([])
   const [mode, setMode] = useState<WorkbenchMode>('design')
   const [resourceState, setResourceState] = useState<ResourceSimulationKind>('normal')
+  const [previewViewport, setPreviewViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
   const [saving, setSaving] = useState(false)
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'restored' | 'saved' | 'error'>('idle')
 
   const { data: existingManifest, isLoading, error } = useQuery({
     queryKey: ['page-manifest', name],
@@ -92,9 +109,17 @@ export default function PageManifestWorkbench() {
 
   useEffect(() => {
     if (existingManifest) {
-      const next = existingManifest
-      setManifest(next)
-      setSourceDraft(JSON.stringify(next, null, 2))
+      const next = normalizePageManifest(existingManifest)
+      const restored = readManifestDraft(name)
+      if (restored) {
+        const restoredManifest = normalizePageManifest(restored.manifest)
+        setManifest(restoredManifest)
+        setSourceDraft(JSON.stringify(restoredManifest, null, 2))
+        setDraftStatus('restored')
+      } else {
+        setManifest(next)
+        setSourceDraft(JSON.stringify(next, null, 2))
+      }
       setUndoStack([])
       setRedoStack([])
       setSelectedComponentId(null)
@@ -114,11 +139,26 @@ export default function PageManifestWorkbench() {
     setSourceDraft(JSON.stringify(manifest, null, 2))
   }, [manifest])
 
+  useEffect(() => {
+    const nextDraft = {
+      manifest: normalizePageManifest(manifest),
+      savedAt: new Date().toISOString(),
+      source: mode === 'source' ? 'source' : 'editor',
+    } as const
+    const timeout = window.setTimeout(() => {
+      writeManifestDraft(name, nextDraft)
+      setDraftStatus('saved')
+    }, 300)
+    return () => window.clearTimeout(timeout)
+  }, [manifest, mode, name])
+
   const selectedComponent = useMemo(
     () => manifest.spec.layout.children.find((component) => component.id === selectedComponentId) ?? null,
     [manifest.spec.layout.children, selectedComponentId],
   )
   const issues = useMemo(() => validatePageManifestContract(manifest), [manifest])
+  const publishPreflight = useMemo(() => buildPublishPreflight(manifest), [manifest])
+  const resourceBindingOptions = useMemo(() => buildResourceBindingOptions(manifest), [manifest])
   const primaryDoctypeName = getPrimaryDoctypeName(manifest)
   const primaryDoctype = useMemo(
     () => doctypes?.find((doctype) => doctype.name === primaryDoctypeName) ?? null,
@@ -223,7 +263,7 @@ export default function PageManifestWorkbench() {
 
   const saveDraft = async () => {
     const currentIssues = validatePageManifestContract(manifest)
-    if (currentIssues.length > 0) {
+    if (currentIssues.length > 0 || !publishPreflight.canPublish) {
       toast('error', 'Fix manifest validation issues before saving.')
       return
     }
@@ -231,14 +271,17 @@ export default function PageManifestWorkbench() {
     setSaving(true)
     try {
       if (isNew) {
-        await createPageManifest(manifest)
+        await createPageManifest(normalizePageManifest(manifest))
         toast('success', 'Draft page manifest saved.')
         navigate({ to: '/workspace/admin/page-manifests/$name', params: { name: manifest.metadata.name } })
       } else {
-        await updatePageManifest(name!, manifest)
+        await updatePageManifest(name!, normalizePageManifest(manifest))
         toast('success', 'Draft page manifest saved.')
       }
+      clearManifestDraft(name)
+      setDraftStatus('saved')
     } catch (err) {
+      setDraftStatus('error')
       toast('error', err instanceof Error ? err.message : 'Failed to save manifest.')
     } finally {
       setSaving(false)
@@ -253,7 +296,7 @@ export default function PageManifestWorkbench() {
         setSourceError(issues[0].message)
         return
       }
-      setManifest(parsed)
+      setManifest(normalizePageManifest(parsed))
       setSourceError(null)
     } catch (err) {
       setSourceError(err instanceof Error ? err.message : 'Invalid JSON.')
@@ -293,6 +336,23 @@ export default function PageManifestWorkbench() {
           <WifiOff className="h-3.5 w-3.5" />
           {manifest.spec.offline}
         </Badge>
+        <Badge variant={draftStatus === 'error' ? 'destructive' : draftStatus === 'restored' ? 'secondary' : 'outline'}>
+          Draft {draftStatus}
+        </Badge>
+        <div className="flex items-center gap-1 rounded-lg border bg-muted/20 p-0.5">
+          {previewViewportOptions().map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              variant={previewViewport === option.value ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setPreviewViewport(option.value as 'desktop' | 'tablet' | 'mobile')}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
         <div className="ml-auto flex items-center gap-2">
           <div className="flex items-center rounded-lg border bg-muted/20 p-0.5" aria-label="Workbench mode">
             {(['design', 'preview', 'source'] as const).map((nextMode) => (
@@ -357,6 +417,7 @@ export default function PageManifestWorkbench() {
             }}
           />
           <ValidationSummary issues={issues} />
+          <PublishPreflightPanel preflight={publishPreflight} />
           <ComponentPalette
             primaryDoctype={primaryDoctype}
             onAdd={(component) => {
@@ -372,6 +433,7 @@ export default function PageManifestWorkbench() {
             <ManifestCanvas
               manifest={manifest}
               mode={mode}
+              viewport={previewViewport}
               resourceState={resourceState}
               selectedComponentId={selectedComponentId}
               onSelect={setSelectedComponentId}
@@ -403,6 +465,7 @@ export default function PageManifestWorkbench() {
           <ShortcutPanel />
           <ComponentInspector
             component={selectedComponent}
+            resourceOptions={resourceBindingOptions}
             updateComponent={(patch) => updateManifest((current) => ({
               ...current,
               spec: {
@@ -707,6 +770,7 @@ function ComponentPalette({ primaryDoctype, onAdd }: { primaryDoctype: DocType |
 function ManifestCanvas({
   manifest,
   mode,
+  viewport,
   resourceState,
   selectedComponentId,
   onSelect,
@@ -715,6 +779,7 @@ function ManifestCanvas({
 }: {
   manifest: PageManifest
   mode: Exclude<WorkbenchMode, 'source'>
+  viewport: 'desktop' | 'tablet' | 'mobile'
   resourceState: ResourceSimulationKind
   selectedComponentId: string | null
   onSelect: (id: string | null) => void
@@ -726,23 +791,25 @@ function ManifestCanvas({
       <Card>
         <CardHeader>
           <CardTitle>{mode === 'design' ? 'Design canvas' : 'Preview runtime'}</CardTitle>
-          <CardDescription>
-            {mode === 'design'
-              ? 'Editor chrome wraps the real registered Kora components without changing the manifest tree.'
-              : 'Preview renders the same manifest path without editor controls or unsafe actions.'}
-          </CardDescription>
-        </CardHeader>
-      </Card>
-      <ManifestRenderer
-        manifest={manifest}
-        mode={mode === 'design' ? 'editor' : 'preview'}
-        resourceState={createSimulatedResourceState(manifest, resourceState)}
-        selectedComponentId={selectedComponentId}
-        onSelectComponent={onSelect}
-        onDuplicateComponent={onDuplicate}
-        onRemoveComponent={onRemove}
-        className="rounded-xl border bg-background p-4"
-      />
+      <CardDescription>
+        {mode === 'design'
+          ? `Editor chrome wraps the real registered Kora components without changing the manifest tree. ${viewport === 'desktop' ? 'Desktop' : viewport === 'tablet' ? 'Tablet' : 'Mobile'} preview keeps the same manifest tree and only changes the rendering width.`
+          : `Preview renders the same manifest path without editor controls or unsafe actions. ${viewport === 'desktop' ? 'Desktop' : viewport === 'tablet' ? 'Tablet' : 'Mobile'} preview keeps the same manifest tree and only changes the rendering width.`}
+      </CardDescription>
+      </CardHeader>
+    </Card>
+      <div className={previewViewportClass(viewport)}>
+        <ManifestRenderer
+          manifest={manifest}
+          mode={mode === 'design' ? 'editor' : 'preview'}
+          resourceState={createSimulatedResourceState(manifest, resourceState)}
+          selectedComponentId={selectedComponentId}
+          onSelectComponent={onSelect}
+          onDuplicateComponent={onDuplicate}
+          onRemoveComponent={onRemove}
+          className="rounded-xl border bg-background p-4"
+        />
+      </div>
     </div>
   )
 }
@@ -818,7 +885,7 @@ function ResourceActionPanel({
         }))} remove={() => updateManifest((current) => ({
           ...current,
           spec: { ...current.spec, actions: current.spec.actions.filter((_, i) => i !== index) },
-        }))} />
+        }))} resources={manifest.spec.resources} />
       ))}
       <Button variant="outline" size="sm" className="w-full" onClick={() => updateManifest((current) => ({
         ...current,
@@ -841,21 +908,78 @@ function ResourceEditor({ resource, update, remove }: { resource: PageResource; 
         <Input value={resource.id} onChange={(event) => update({ id: event.target.value })} className="h-8 text-xs" />
         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
       </div>
-      <Input value={resource.query} onChange={(event) => update({ query: event.target.value })} className="h-8 font-mono text-xs" placeholder="document.list" />
+      <SelectField
+        label="Query"
+        value={resource.query}
+        options={['document.list', 'analytics.insights']}
+        onChange={(query) => update({ query })}
+      />
       <Textarea value={JSON.stringify(resource.params, null, 2)} onChange={(event) => update({ params: parseJsonObject(event.target.value) })} className="min-h-20 font-mono text-xs" />
     </div>
   )
 }
 
-function ActionEditor({ action, update, remove }: { action: PageAction; update: (patch: Partial<PageAction>) => void; remove: () => void }) {
+function ActionEditor({
+  action,
+  update,
+  remove,
+  resources,
+}: {
+  action: PageAction
+  update: (patch: Partial<PageAction>) => void
+  remove: () => void
+  resources: PageResource[]
+}) {
   return (
     <div className="space-y-2 rounded-lg border p-3">
       <div className="flex items-center gap-2">
         <Input value={action.id} onChange={(event) => update({ id: event.target.value })} className="h-8 text-xs" />
         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
       </div>
-      <Input value={action.command} onChange={(event) => update({ command: event.target.value })} className="h-8 font-mono text-xs" placeholder="document.create" />
-      <TokenField label="Invalidate" value={action.invalidate} onChange={(invalidate) => update({ invalidate })} />
+      <SelectField
+        label="Command"
+        value={action.command}
+        options={['document.create', 'document.update', 'document.delete', 'document.submit', 'document.cancel', 'workflow.transition']}
+        onChange={(command) => update({ command })}
+      />
+      <ActionInvalidatePicker action={action} resources={resources} update={update} />
+    </div>
+  )
+}
+
+function ActionInvalidatePicker({
+  action,
+  resources,
+  update,
+}: {
+  action: PageAction
+  resources: PageResource[]
+  update: (patch: Partial<PageAction>) => void
+}) {
+  const [selected, setSelected] = useState(action.invalidate[0] || '')
+  const options = useMemo(() => resources.map((resource) => ({
+    value: resource.id,
+    label: resource.id,
+    description: `${resource.query}${resource.params?.doctype ? ` for ${String(resource.params.doctype)}` : ''}`,
+  })), [resources])
+  useEffect(() => {
+    if (action.invalidate[0]) setSelected(action.invalidate[0])
+  }, [action.invalidate])
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">Invalidate</Label>
+      <div className="flex gap-2">
+        <Select value={selected} onValueChange={(next) => { setSelected(next || ''); update({ invalidate: next ? [next] : [] }) }}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder="Choose resource..." />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   )
 }
@@ -876,6 +1000,29 @@ function ShortcutPanel() {
   )
 }
 
+function PublishPreflightPanel({ preflight }: { preflight: ReturnType<typeof buildPublishPreflight> }) {
+  return (
+    <div className="space-y-3 border-b p-4">
+      <SectionTitle icon={ShieldCheck} title="Publish preflight" />
+      <p className={cn('rounded-lg border p-3 text-xs', preflight.canPublish ? 'bg-emerald-50 text-emerald-900' : 'bg-amber-50 text-amber-900')}>
+        {preflight.canPublish
+          ? `Ready to publish: ${preflight.resourceCount} resource(s), ${preflight.actionCount} action(s).`
+          : `Fix manifest issues before publishing: ${preflight.issues.length} validation problem(s).`}
+      </p>
+      {(preflight.unsupportedResources.length > 0 || preflight.unsupportedActions.length > 0) && (
+        <div className="space-y-2 text-xs">
+          {preflight.unsupportedResources.length > 0 && (
+            <p className="text-destructive">Unsupported resources: {preflight.unsupportedResources.join(', ')}</p>
+          )}
+          {preflight.unsupportedActions.length > 0 && (
+            <p className="text-destructive">Unsupported actions: {preflight.unsupportedActions.join(', ')}</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ShortcutHint({ label, keys }: { label: string; keys: string }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/20 px-2 py-1.5">
@@ -887,9 +1034,11 @@ function ShortcutHint({ label, keys }: { label: string; keys: string }) {
 
 function ComponentInspector({
   component,
+  resourceOptions,
   updateComponent,
 }: {
   component: PageComponent | null
+  resourceOptions: Array<{ value: string; label: string; description?: string }>
   updateComponent: (patch: Partial<PageComponent>) => void
 }) {
   if (!component) {
@@ -907,7 +1056,12 @@ function ComponentInspector({
       <TextField label="ID" value={component.id} onChange={(id) => updateComponent({ id })} />
       <TextField label="Type" value={component.component} onChange={(value) => updateComponent({ component: value })} />
       <TextField label="Title prop" value={String(component.props.title || '')} onChange={(title) => updateComponent({ props: { ...component.props, title } })} />
-      <TextField label="Data binding" value={component.data || ''} onChange={(data) => updateComponent({ data })} />
+      <SelectField
+        label="Data binding"
+        value={component.data || ''}
+        options={resourceOptions.map((option) => option.value)}
+        onChange={(data) => updateComponent({ data })}
+      />
       <SelectField label="Region" value={component.region} options={['main', 'side', 'left', 'right', 'header', 'footer']} onChange={(region) => updateComponent({ region })} />
       <TokenField label="Required capabilities" value={component.required_capabilities || []} onChange={(required_capabilities) => updateComponent({ required_capabilities })} />
       <TokenField label="Actions" value={component.actions || []} onChange={(actions) => updateComponent({ actions })} />
@@ -994,73 +1148,6 @@ function parseJsonObject(value: string): Record<string, unknown> {
   } catch {
     return {}
   }
-}
-
-function addBoundComponent(manifest: PageManifest, componentType: string, doctype: DocType | null): PageManifest {
-  const libraryEntry = PAGE_COMPONENT_LIBRARY.find((entry) => entry.component === componentType)
-  const position = manifest.spec.layout.children.length
-  const base: PageComponent = {
-    id: `${componentType}_${Date.now()}`,
-    component: componentType,
-    version: 1,
-    region: defaultRegionForLayout(manifest.spec.layout.type),
-    position,
-    span: manifest.spec.layout.type === 'grid' ? 6 : undefined,
-    props: { title: libraryEntry?.label ?? componentType.replace(/_/g, ' ') },
-    required_capabilities: [...(libraryEntry?.capabilities ?? [])],
-    offline: manifest.spec.offline,
-  }
-  const component = doctype ? withDoctypeDefaults(base, doctype, position) : base
-
-  return {
-    ...manifest,
-    spec: {
-      ...manifest.spec,
-      capabilities: Array.from(new Set([...manifest.spec.capabilities, ...(libraryEntry?.capabilities ?? [])])),
-      layout: {
-        ...manifest.spec.layout,
-        children: [...manifest.spec.layout.children, component],
-      },
-    },
-  }
-}
-
-function withDoctypeDefaults(component: PageComponent, doctype: DocType, position: number): PageComponent {
-  const fields = selectListFields(doctype)
-  const title = doctype.title_field || fields[0] || 'name'
-  const bound = bindComponentToPrimaryResource(component, doctype, position)
-
-  if (bound.component === 'record_table') {
-    return {
-      ...bound,
-      props: {
-        ...bound.props,
-        desktop_columns: fields,
-        mobile_columns: fields.slice(0, 3),
-      },
-    }
-  }
-  if (bound.component === 'record_cards') {
-    return {
-      ...bound,
-      props: {
-        ...bound.props,
-        bindings: {
-          title,
-          subtitle: fields.find((field) => field !== title && field !== 'name') || title,
-        },
-      },
-    }
-  }
-  return bound
-}
-
-function getPrimaryDoctypeName(manifest: PageManifest): string {
-  return String(manifest.spec.resources.find((resource) => resource.id === 'primary')?.params.doctype || '')
-}
-
-function defaultRegionForLayout(layout: PageLayoutType): string {
-  return layout === 'three_panel' ? 'main' : 'main'
 }
 
 function isDataDisplayComponent(component: string): boolean {

@@ -1,5 +1,5 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { fetchPageManifestByRoute } from '@/lib/api/page-manifests'
+import { fetchPageManifestByRoute } from './api/page-manifests'
 
 export interface PageRuntimeRequest {
   route: string

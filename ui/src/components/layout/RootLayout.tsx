@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Menu, X, Bell, ExternalLink } from 'lucide-react'
 import { ToastContainer } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/badge'
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { loadRuntimeConfig } from '@/lib/runtime-config'
 import { attachRealtimeInvalidation, type RealtimeEvent } from '@/lib/realtime'
 import type { RealtimeConnectionState } from '@/types/api'
 import { toast } from '@/components/ui/Toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatRealtimeNotificationMessage, formatRealtimeNotificationTitle, getRootRealtimeBadge } from './root-layout-helpers'
 
 function WorkspaceRouteFallback() {
   return (
@@ -39,6 +40,7 @@ export function RootLayout() {
   const [realtime, setRealtime] = useState<RealtimeConnectionState>({ state: runtime.realtimeBaseUrl ? 'connecting' : 'offline' })
   const [notifications, setNotifications] = useState<RealtimeEvent[]>([])
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const lastRealtimeState = useRef<RealtimeConnectionState['state']>(realtime.state)
   const queryClient = useQueryClient()
 
   const { data: navigation } = useQuery({
@@ -72,6 +74,15 @@ export function RootLayout() {
   }, [navigation?.modules, pathname, setActiveModule, setShellMode])
 
   useEffect(() => attachRealtimeInvalidation(runtime.realtimeBaseUrl, queryClient, setRealtime), [runtime.realtimeBaseUrl, queryClient])
+
+  useEffect(() => {
+    if (realtime.state !== 'connected' || lastRealtimeState.current === 'connected') {
+      lastRealtimeState.current = realtime.state
+      return
+    }
+    lastRealtimeState.current = realtime.state
+    void queryClient.invalidateQueries()
+  }, [queryClient, realtime.state])
 
   useEffect(() => {
     const onNotification = (event: Event) => {
@@ -119,9 +130,14 @@ export function RootLayout() {
           <Badge variant={online ? 'outline' : 'destructive'}>
             {online ? 'Online' : 'Offline'}
           </Badge>
-          <Badge variant={realtime.state === 'connected' ? 'default' : 'secondary'}>
-            Realtime {realtime.state}
+          <Badge variant={getRootRealtimeBadge(realtime).variant}>
+            {getRootRealtimeBadge(realtime).label}
           </Badge>
+          {realtime.state !== 'connected' && (
+            <span className="max-w-72 truncate text-xs text-muted-foreground">
+              {getRootRealtimeBadge(realtime).detail}
+            </span>
+          )}
           <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Notifications" onClick={() => setNotificationsOpen((v) => !v)}>
             <Bell className="h-4 w-4" />
           </Button>
@@ -141,9 +157,14 @@ export function RootLayout() {
             <Badge variant={online ? 'outline' : 'destructive'}>
               {online ? 'Online' : 'Offline'}
             </Badge>
-            <Badge variant={realtime.state === 'connected' ? 'default' : 'secondary'}>
-              Realtime {realtime.state}
+            <Badge variant={getRootRealtimeBadge(realtime).variant}>
+              {getRootRealtimeBadge(realtime).label}
             </Badge>
+            {realtime.state !== 'connected' && (
+              <span className="max-w-56 truncate text-[11px] text-muted-foreground">
+                {getRootRealtimeBadge(realtime).detail}
+              </span>
+            )}
             <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Notifications" onClick={() => setNotificationsOpen((v) => !v)}>
               <Bell className="h-4 w-4" />
             </Button>
@@ -177,8 +198,8 @@ export function RootLayout() {
                 <p className="text-sm text-muted-foreground">No recent updates.</p>
               ) : notifications.map((item, index) => (
                 <div key={`${item.type}-${item.occurred_at ?? index}-${item.doc_name ?? index}`} className="rounded-lg border p-3 text-sm">
-                  <div className="font-medium">{item.title || item.doc_name || item.type}</div>
-                  <div className="text-muted-foreground">{item.message || item.doctype || 'Update received'}</div>
+                  <div className="font-medium">{formatRealtimeNotificationTitle(item)}</div>
+                  <div className="text-muted-foreground">{formatRealtimeNotificationMessage(item)}</div>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <Badge variant="outline">{item.severity || 'info'}</Badge>
                     {item.action?.href && (

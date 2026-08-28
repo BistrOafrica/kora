@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { History, Eye, Play, X, RotateCcw, AlertTriangle, RefreshCw, Download } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { getVersionConfirmDescription, getVersionConfirmLabel, getVersionConfirmTitle } from './versions-helpers'
 
 type ConfirmAction =
   | { type: 'activate'; id: string }
@@ -201,41 +202,6 @@ export default function AdminVersionsPage() {
     }
   }
 
-  const getConfirmTitle = () => {
-    switch (confirmAction?.type) {
-      case 'activate': return 'Activate Version'
-      case 'discard': return 'Discard Draft'
-      case 'rollback': return 'Rollback Version'
-      case 'activateAll': return 'Activate All Drafts'
-      default: return ''
-    }
-  }
-
-  const getConfirmDescription = () => {
-    if (dialogError) return dialogError
-
-    switch (confirmAction?.type) {
-      case 'activate':
-        return 'This will promote the selected draft to the live configuration.'
-      case 'discard':
-        return 'This draft will be marked as Superseded and removed from the pending queue.'
-      case 'rollback':
-        return 'This will replace the current config with the selected historical version.'
-      case 'activateAll':
-        return 'This will activate the latest draft and fold in all earlier draft changes.'
-      default:
-        return ''
-    }
-  }
-
-  const getConfirmLabel = () => {
-    switch (confirmAction?.type) {
-      case 'discard': return 'Discard'
-      case 'rollback': return 'Rollback'
-      default: return 'Activate'
-    }
-  }
-
   const confirmVariant = confirmAction?.type === 'discard' ? 'destructive' : 'default'
 
   const handleConfirm = async () => {
@@ -341,9 +307,9 @@ export default function AdminVersionsPage() {
             setDialogError(null)
           }
         }}
-        title={getConfirmTitle()}
-        description={getConfirmDescription()}
-        confirmLabel={getConfirmLabel()}
+        title={getVersionConfirmTitle(confirmAction?.type ?? null)}
+        description={getVersionConfirmDescription(confirmAction?.type ?? null, dialogError)}
+        confirmLabel={getVersionConfirmLabel(confirmAction?.type ?? null)}
         variant={confirmVariant}
         loading={acting !== null || previewLoading}
         confirmDisabled={

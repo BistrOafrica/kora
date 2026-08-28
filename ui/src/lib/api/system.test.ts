@@ -10,6 +10,8 @@ vi.mock('./client', () => ({
 }))
 
 import {
+  fetchRollbackVersionPreview,
+  rollbackVersion,
   isImmutableConfigVersion,
   selectRollbackTargetVersion,
 } from './system'
@@ -35,5 +37,17 @@ describe('config version rollback helpers', () => {
     expect(selectRollbackTargetVersion([
       { id: '1', site: 's', version: 1, created_at: '2026-08-13T00:00:00Z', created_by: 'a', label: 'v1', status: 'Draft' },
     ])).toBeNull()
+  })
+
+  it('builds rollback preview and rollback endpoints for config versions', async () => {
+    const { api } = await import('./client')
+    vi.mocked(api.get).mockResolvedValueOnce({ version_id: '3', status: 'ok' })
+    vi.mocked(api.post).mockResolvedValueOnce({ message: 'rolled back', status: 'ok' })
+
+    await fetchRollbackVersionPreview('3')
+    await rollbackVersion('3')
+
+    expect(api.get).toHaveBeenCalledWith('/api/v1/system/config/versions/3/rollback-preview')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/system/config/versions/3/rollback')
   })
 })

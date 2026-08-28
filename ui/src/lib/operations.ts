@@ -4,7 +4,7 @@ import { api, KoraApiError } from '@/lib/api/client'
 export function toOperationError(error: unknown): OperationError {
   if (error instanceof KoraApiError) {
     return {
-      code: error.type || 'error',
+      code: error.code || 'error',
       message: error.message,
       field: error.field,
       retryable: error.status >= 500,

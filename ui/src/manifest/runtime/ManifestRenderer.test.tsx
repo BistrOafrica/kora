@@ -1,8 +1,27 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type React from 'react'
 import type { PageManifest } from '@/manifest/schema/page'
 import { createSimulatedResourceState, ManifestRenderer } from './ManifestRenderer'
+
+vi.mock('../../components/views/registry', () => ({
+  resolveComponentEntry: (component: string) => {
+    if (component === 'not_registered') return undefined
+    return {
+      component: ({ children, config, data }: { children?: React.ReactNode; config: { label?: string }; data?: unknown }) => (
+        <div aria-label={config.label || 'Orders'}>{data ? JSON.stringify(data) : null}{children}</div>
+      ),
+    }
+  },
+  UnsupportedComponent: ({ config }: { config: { type?: string } }) => (
+    <div>Unsupported component type: {config.type}</div>
+  ),
+}))
+
+vi.mock('@/lib/api/analytics', () => ({
+  fetchInsights: async () => ({ data: [] }),
+}))
 
 function manifest(overrides: Partial<PageManifest> = {}): PageManifest {
   const base: PageManifest = {
@@ -51,7 +70,11 @@ function manifest(overrides: Partial<PageManifest> = {}): PageManifest {
   }
 }
 
-function renderManifest(page: PageManifest, mode: 'editor' | 'preview' | 'runtime' = 'preview') {
+function renderManifest(
+  page: PageManifest,
+  mode: 'editor' | 'preview' | 'runtime' = 'preview',
+  resourceKind: Parameters<typeof createSimulatedResourceState>[1] = 'normal',
+) {
   const client = new QueryClient()
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
@@ -59,7 +82,7 @@ function renderManifest(page: PageManifest, mode: 'editor' | 'preview' | 'runtim
         manifest={page}
         mode={mode}
         selectedComponentId="orders_table"
-        resourceState={createSimulatedResourceState(page, 'normal')}
+        resourceState={createSimulatedResourceState(page, resourceKind)}
       />
     </QueryClientProvider>,
   )
@@ -114,6 +137,25 @@ describe('ManifestRenderer', () => {
     expect(markup).not.toContain('aria-pressed')
     expect(markup).not.toContain('Duplicate')
     expect(markup).not.toContain('Remove')
+  })
+
+  it('renders permission-denied state as a closed gate', () => {
+    const markup = renderManifest(manifest(), 'preview', 'permission_denied')
+
+    expect(markup).toContain('You do not have access to this yet')
+    expect(markup).toContain('You do not have access to this data yet.')
+  })
+
+  it('renders offline and conflict states with explicit copy', () => {
+    expect(renderManifest(manifest(), 'preview', 'offline')).toContain('This data is unavailable while offline.')
+    expect(renderManifest(manifest(), 'preview', 'conflict')).toContain('This data has a conflict that needs review.')
+  })
+
+  it('renders stale state as a refreshable read path', () => {
+    const markup = renderManifest(manifest(), 'preview', 'stale')
+
+    expect(markup).toContain('Refreshing')
+    expect(markup).toContain('Showing stale data while the resource refreshes.')
   })
 
   it('valid source edits rerender through the same manifest runtime path', () => {

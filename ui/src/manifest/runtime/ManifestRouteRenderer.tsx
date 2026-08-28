@@ -1,9 +1,9 @@
 import { useSearch } from '@tanstack/react-router'
 import { AlertTriangle } from 'lucide-react'
-import { usePageManifest } from '@/lib/page-runtime'
-import { ManifestRenderer } from '@/manifest/runtime/ManifestRenderer'
-import { normalizeManifestRoute } from '@/manifest/runtime/policy'
-import { validatePageManifestContract } from '@/manifest/schema/page'
+import { usePageManifest } from '../../lib/page-runtime'
+import { ManifestRenderer } from './ManifestRenderer'
+import { normalizeManifestRoute } from './policy'
+import { validatePageManifestContract } from '../schema/page'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export function ManifestRouteRenderer({ route }: { route: string }) {

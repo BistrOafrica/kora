@@ -49,6 +49,7 @@ export function WorkflowActions({ doctype, name, currentState }: Props) {
       queryClient.invalidateQueries({ queryKey: ['resource', doctype, name] })
       queryClient.invalidateQueries({ queryKey: ['resource', doctype] })
       queryClient.invalidateQueries({ queryKey: ['doctype', doctype] })
+      queryClient.invalidateQueries({ queryKey: ['manifest-resource'] })
     } catch (err: any) {
       setLastError(err.message || 'Action failed')
     } finally {

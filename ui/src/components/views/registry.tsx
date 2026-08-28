@@ -193,15 +193,39 @@ function RecordCards(props: ViewComponentProps) {
 }
 
 function FilterBar(props: ViewComponentProps) {
-  return <div className="flex flex-wrap gap-2 rounded-lg border bg-card p-3">
-    <input
-      type="text"
-      placeholder="Search..."
-      aria-label="Filter records"
-      className="rounded-md border px-3 py-1.5 text-sm"
-      onChange={(e) => props.onAction('search', { value: e.target.value })}
-    />
-  </div>
+  const rows = Array.isArray(props.data?.data) ? props.data.data : []
+  const candidates = ['status', 'network', 'product_type', 'doc_status']
+  const field = candidates.find((candidate) => rows.some((row: Record<string, any>) => row?.[candidate] != null))
+  const values = field
+    ? [...new Set(rows.map((row: Record<string, any>) => row?.[field]).filter((value: unknown) => value != null && value !== ''))].slice(0, 6)
+    : []
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filter</span>
+      <button
+        type="button"
+        className="rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+        onClick={() => props.onAction('filter', { field: field || '', value: '' })}
+      >
+        All
+      </button>
+      {values.length > 0 ? (
+        values.map((value) => (
+          <button
+            key={String(value)}
+            type="button"
+            className="rounded-full bg-muted px-3 py-1.5 text-xs font-medium hover:bg-muted/80"
+            onClick={() => props.onAction('filter', { field: field || '', value })}
+          >
+            {String(value)}
+          </button>
+        ))
+      ) : (
+        <span className="text-sm text-muted-foreground">No filters available</span>
+      )}
+    </div>
+  )
 }
 
 function SearchBox(props: ViewComponentProps) {

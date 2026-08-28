@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
 import type { Field, DocType } from '@/types/kora'
 import { buildDefaultFormData, buildFormSections } from './form-runtime'
+import { ProgressBar } from './ProgressBar'
 
 export interface DocumentFormProps {
   doctype: string
@@ -124,6 +125,7 @@ export function DocumentForm({ doctype, label, onCreated, disabled = false, read
       </div>
 
       <div className="space-y-4 p-4 md:p-6">
+        <ProgressBar filled={filledRequired} total={requiredFields.length} />
         {sections.map((section, index) => (
           <section key={`${section.title}-${index}`} id={`section-${index}`} className="space-y-4 rounded-xl border p-4">
             <h4 className="text-sm font-semibold">{section.title}</h4>
