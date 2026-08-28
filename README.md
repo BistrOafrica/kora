@@ -1,6 +1,6 @@
 # Kora — Config-Driven Application Engine
 
-Describe your application in YAML. Kora gives you a database, REST API, React admin UI, and background jobs. No code generation.
+Kora is currently a DocType-centric application runtime with a real kernel, typed contracts, workflow runtime, AI/MCP surfaces, cloud primitives, and a React admin UI. The original RFC is broader than the codebase today, so this repository should be read as an implemented platform plus target-state architecture notes, not a finished match to the RFC.
 
 [![Docker Hub](https://img.shields.io/badge/docker-smitdockerhub%2Fkora-blue?logo=docker)](https://hub.docker.com/r/smitdockerhub/kora)
 [![GitHub](https://img.shields.io/badge/github-asenawritescode%2Fkora-black?logo=github)](https://github.com/asenawritescode/kora)
@@ -27,7 +27,7 @@ docker run -d --name kora -p 8000:8000 \
   smitdockerhub/kora:latest
 ```
 
-Open **http://localhost:8000/console** → create your first site. All config via env vars, all data in the database. No YAML files to lose.
+Open **http://localhost:8000/console** → create your first site. Runtime configuration is loaded from environment and persisted site metadata; application configuration is still DocType/config-pack driven rather than the RFC's full generic application-definition model.
 
 ## Local Development
 
@@ -56,21 +56,23 @@ KORA_DB_TYPE=mysql KORA_DB_HOST=127.0.0.1 KORA_DB_USER=root KORA_DB_PASSWORD=kor
 
 ## Features
 
-- **AI Chat Assistant** — floating chat widget. Create, find, update records via natural language. OpenAI, DeepSeek, Anthropic. Multi-turn tool execution. Keys configured at `/workspace/admin/secrets`.
-- **AI Doctype Generator** — describe a form in plain English, AI generates validated YAML saved as Draft.
-- **Config-Driven Admin** — forms, lists, filters, workflows rendered from doctype definitions. No per-doctype code.
-- **Multi-Site** — path-based (`/s/:site/workspace`) by default, with host-based routing only for domains you explicitly configure. Sites created from console UI are persisted in DB.
-- **Multi-Database** — MySQL, MariaDB, or remote LibSQL. SQL dialect abstraction handles all differences.
+- **AI Chat Assistant** — floating chat widget with tool execution over the current contract surface. Marked experimental in the capability registry.
+- **AI Doctype Generator** — AI-assisted draft creation for DocType YAML.
+- **Config-Driven Admin** — forms, lists, filters, workflows, and page manifests are rendered from configuration, but the runtime remains DocType-centric rather than fully generic-resource-based.
+- **Multi-Site** — path-based (`/s/:site/workspace`) by default, with host-based routing only for configured domains. Sites created from the console are persisted in the database.
+- **Multi-Database** — MySQL, MariaDB, or remote LibSQL are implemented. PostgreSQL/MySQL parity work is intentionally excluded from this audit.
 - **Console UI** — `/console` for system admin: create/edit sites, view health, manage all sites.
-- **Self-Service Onboarding** — public site creation at `/onboard`. Users create their own sites with admin accounts. Rate-limited (3/hr/IP).
-- **Shared AI Keys** — superadmins can set global AI provider keys so new sites get AI chat immediately. Toggle with `KORA_SHARED_AI_ENABLED`.
+- **Self-Service Onboarding** — public site creation at `/onboard` when `KORA_CONSOLE_ONBOARDING_ENABLED=true`. Users create their own sites with admin accounts. Rate-limited (3/hr/IP).
+- **Shared AI Keys** — superadmins can set global AI provider keys so new sites can use AI chat immediately. Toggle with `KORA_SHARED_AI_ENABLED`.
 - **Swagger/OpenAPI** — auto-generated API docs at `/api/swagger-ui`.
-- **Mobile Responsive** — tables become stacked cards. No horizontal scroll anywhere.
-- **Extensibility** — JS runtime, event hooks, webhook extensions, custom API methods, workflow actions, scheduled scripts, computed fields
-- **MCP Server** — Model Context Protocol server for Claude Desktop, Cursor, and other AI tool integration
-- **Go SDK + TypeScript SDK** — official SDKs for building custom extensions, integrations, and plugins
-- **API Versioning** — stable `/api/v1/` routes with backward compatibility guarantees
-- **Analytics** — automatic per-doctype metrics with daily/monthly rollups, time-series, funnel, and duration queries
+- **Mobile Responsive** — tables become stacked cards in the current React UI.
+- **Extensibility** — JS runtime, event hooks, webhook extensions, custom API methods, workflow actions, scheduled scripts, computed fields. This surface is constrained and permission-gated, not a free-form plugin system.
+- **MCP Server** — Model Context Protocol server for Claude Desktop and similar tooling. Capability is experimental, and tenant tool execution is still projection-based rather than a full standalone agent runtime.
+- **Go SDK + TypeScript SDK** — SDKs for integrations and extensions.
+- **API Versioning** — `/api/v1/` routes exist for the supported surface.
+- **Analytics** — automatic per-doctype metrics with rollups and time-series queries.
+- **Cloud Boundary** — Cloud is a control plane for deployment, package rollout, worker placement, NATS validation, backups, observability, billing, and deletion workflows. Tenant business truth remains in the engine/site databases.
+- **Cloud Ownership** — the proprietary Cloud implementation lives in the sibling `kora-cloud` repo; this repo only keeps the engine-facing seam, local site lifecycle, and shared contracts.
 
 ## Capability Status
 
@@ -91,9 +93,18 @@ experimental, and what is still planned.
 | `workflow.actor` | supported |
 | `offline.sync` | supported |
 
+## Current Architecture Truth
+
+- The current engine is DocType-centric, not a fully generic resource engine.
+- The current frontend is a React SPA with an embedded page-manifest runtime, not an ES-module/Franken UI runtime.
+- The current kernel, contract surface, workflow runtime, AI/MCP surfaces, and cloud primitives are real, but they only partially cover the original RFC.
+- Cloud implementation lives in the sibling `kora-cloud` repository. It owns deployment orchestration and runtime management, but not tenant business truth or site schema source of truth.
+- The RFC in this repository should be treated as the target architecture and gap reference.
+- PostgreSQL/MySQL parity work is excluded from the current implementation backlog and audit notes.
+
 ## Configuration
 
-All config via environment variables. No YAML config files needed.
+Runtime config comes from environment variables plus site metadata in the database. Application configuration still uses YAML/config packs for DocType-driven runtime state.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -122,6 +133,7 @@ All config via environment variables. No YAML config files needed.
 | `KORA_CSRF_SECURE` | `true` | Set secure flag on CSRF cookies |
 | `KORA_RATE_LIMIT` | `100` | Max requests per minute per IP |
 | `KORA_RATE_BURST` | `200` | Rate limiter burst allowance |
+| `KORA_CONSOLE_ONBOARDING_ENABLED` | `false` | Enable public console onboarding at `/onboard` |
 
 ## SDK Quick Start
 

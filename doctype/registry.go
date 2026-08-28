@@ -10,7 +10,10 @@ import (
 type ComputedHookFunc func(doctypeName, fieldName string, doc *Document) (any, error)
 
 // Registry holds all DocType definitions, permissions, and workflows.
-// It is rebuilt from the active config version on startup and after config changes.
+// It is rebuilt from the active config version on startup and after config
+// changes. This is the current application model: DocType-centric with views
+// and page manifests projected on top. It is not yet the RFC's full generic
+// resource registry.
 type Registry struct {
 	mu            sync.RWMutex
 	doctypes      map[string]*DocType // keyed by doctype name

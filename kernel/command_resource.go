@@ -1,0 +1,197 @@
+package kernel
+
+import (
+	"fmt"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+// CommandResource is a config-defined business command (KERNEL-008, spec §19):
+// a named, versioned mutation with typed input, optional preconditions,
+// transaction steps over records, and emitted events. Definitions load from
+// application configuration exactly like doctypes — no code generation.
+//
+// Slice limitations (documented, not silent):
+//   - update steps resolve their target by name equality only;
+//   - preconditions are validated as declared rule references and enforced
+//     once the rule evaluator contract lands (PLUGIN-007); unknown rules
+//     fail definition registration.
+type CommandResource struct {
+	Name          string            `yaml:"name"                     json:"name"`
+	Namespace     string            `yaml:"namespace"                json:"namespace,omitempty"`
+	Version       int               `yaml:"version"                  json:"version"`
+	Permission    string            `yaml:"permission"               json:"permission"` // permission-matrix operation, default "create"
+	Input         CommandInput      `yaml:"input"                    json:"input"`
+	Preconditions []string          `yaml:"preconditions"            json:"preconditions,omitempty"`
+	Steps         []CommandStep     `yaml:"transaction"              json:"transaction"`
+	Emits         []string          `yaml:"emit"                     json:"emit,omitempty"`
+	Labels        map[string]string `yaml:"labels"                   json:"labels,omitempty"`
+}
+
+// CommandInput types the payload. The slice form binds one record kind;
+// collection-based inputs arrive with SPEC-003.
+type CommandInput struct {
+	Record string `yaml:"record" json:"record"`
+}
+
+// CommandStep is one transactional write. Values map target record fields to
+// literal values or "$input.field" references into the operation payload.
+type CommandStep struct {
+	Create *StepCreate `yaml:"create,omitempty" json:"create,omitempty"`
+	Update *StepUpdate `yaml:"update,omitempty" json:"update,omitempty"`
+}
+
+type StepCreate struct {
+	Record string            `yaml:"record" json:"record"`
+	Values map[string]string `yaml:"values" json:"values"`
+}
+
+type StepUpdate struct {
+	Record string            `yaml:"record" json:"record"`
+	Name   string            `yaml:"name"   json:"name"` // "$input.field" reference
+	Values map[string]string `yaml:"values" json:"values"`
+}
+
+// ParseCommandResource parses one command definition from YAML bytes with
+// strict unknown-key rejection (KnownFields) so unsupported configuration is
+// never silently discarded.
+func ParseCommandResource(raw []byte) (*CommandResource, error) {
+	dec := yaml.NewDecoder(strings.NewReader(string(raw)))
+	dec.KnownFields(true)
+	var def CommandResource
+	if err := dec.Decode(&def); err != nil {
+		return nil, fmt.Errorf("command definition: %w", err)
+	}
+	if err := def.validate(); err != nil {
+		return nil, err
+	}
+	return &def, nil
+}
+
+func (c *CommandResource) validate() error {
+	if c.Name == "" {
+		return fmt.Errorf("command definition: missing name")
+	}
+	if strings.Count(c.Name, ".") == 0 && c.Namespace == "" {
+		return fmt.Errorf("command %q: namespaced name or namespace required", c.Name)
+	}
+	if len(c.Steps) == 0 {
+		return fmt.Errorf("command %q: empty transaction", c.Name)
+	}
+	for i, s := range c.Steps {
+		switch {
+		case s.Create != nil:
+			if s.Create.Record == "" || len(s.Create.Values) == 0 {
+				return fmt.Errorf("command %q: step %d create requires record and values", c.Name, i)
+			}
+		case s.Update != nil:
+			if s.Update.Record == "" || s.Update.Name == "" || len(s.Update.Values) == 0 {
+				return fmt.Errorf("command %q: step %d update requires record, name ref, values", c.Name, i)
+			}
+		default:
+			return fmt.Errorf("command %q: step %d has neither create nor update", c.Name, i)
+		}
+	}
+	if c.Input.Record == "" {
+		return fmt.Errorf("command %q: input.record required in this slice", c.Name)
+	}
+	return nil
+}
+
+// TouchedRecords returns the distinct record kinds the command mutates, in
+// first-touch order. Authorization evaluates every one of them.
+func (c *CommandResource) TouchedRecords() []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(r string) {
+		if r != "" && !seen[r] {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	if c.Input.Record != "" {
+		add(c.Input.Record)
+	}
+	for _, s := range c.Steps {
+		if s.Create != nil {
+			add(s.Create.Record)
+		}
+		if s.Update != nil {
+			add(s.Update.Record)
+		}
+	}
+	return out
+}
+
+// PermOperation is the permission-matrix operation this command requires.
+func (c *CommandResource) PermOperation() string {
+	if c.Permission == "" {
+		return "create"
+	}
+	return c.Permission
+}
+
+// CommandRegistry holds generation-scoped command definitions. It is safe for
+// concurrent reads after loading; Register is intended during activation only.
+type CommandRegistry struct {
+	defs map[string]*CommandResource
+}
+
+// NewCommandRegistry returns an empty registry.
+func NewCommandRegistry() *CommandRegistry {
+	return &CommandRegistry{defs: map[string]*CommandResource{}}
+}
+
+// Register adds a definition; duplicate full names are rejected with a typed
+// error so two packs cannot silently shadow each other.
+func (r *CommandRegistry) Register(def *CommandResource) error {
+	if def == nil {
+		return fmt.Errorf("command registry: nil definition")
+	}
+	key := def.FullName()
+	if _, exists := r.defs[key]; exists {
+		return fmt.Errorf("command registry: duplicate command %q", key)
+	}
+	if r.defs == nil {
+		r.defs = map[string]*CommandResource{}
+	}
+	r.defs[key] = def
+	return nil
+}
+
+// Lookup resolves a command by full name.
+func (r *CommandRegistry) Lookup(name string) (*CommandResource, bool) {
+	if r == nil {
+		return nil, false
+	}
+	d, ok := r.defs[name]
+	return d, ok
+}
+
+// List returns all registered definitions sorted by name for stable
+// introspection output.
+func (r *CommandRegistry) List() []*CommandResource {
+	if r == nil {
+		return nil
+	}
+	out := make([]*CommandResource, 0, len(r.defs))
+	for _, d := range r.defs {
+		out = append(out, d)
+	}
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j].FullName() < out[j-1].FullName(); j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out
+}
+
+// FullName is the canonical registry key: the namespace prefixes the name
+// unless the name already carries it ("livestock.animal.register").
+func (c *CommandResource) FullName() string {
+	if c.Namespace != "" && !strings.HasPrefix(c.Name, c.Namespace+".") {
+		return c.Namespace + "." + c.Name
+	}
+	return c.Name
+}

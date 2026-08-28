@@ -27,7 +27,7 @@ func (h *Handler) HandleSystemPageManifests(c *gin.Context) {
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "page manifest store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "page manifest store not available", nil)
 		return
 	}
 
@@ -63,13 +63,13 @@ func (h *Handler) HandleSystemPageManifest(c *gin.Context) {
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "page manifest store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "page manifest store not available", nil)
 		return
 	}
 
 	manifest, err := store.LoadPageManifest(name, site)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Page manifest not found: " + name}})
+		writeError(c, http.StatusNotFound, "page_manifest.not_found", "Page manifest not found", map[string]any{"name": name})
 		return
 	}
 
@@ -82,19 +82,19 @@ func (h *Handler) HandleSystemPageManifest(c *gin.Context) {
 func (h *Handler) HandleSystemPageManifestCreate(c *gin.Context) {
 	var manifest doctype.PageManifest
 	if err := c.ShouldBindJSON(&manifest); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid page manifest JSON: " + err.Error()}})
+		badRequestError(c, "validation.invalid_json", "Invalid page manifest JSON: "+err.Error(), nil)
 		return
 	}
 
 	if err := manifest.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		badRequestError(c, "validation.failed", err.Error(), nil)
 		return
 	}
 
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "page manifest store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "page manifest store not available", nil)
 		return
 	}
 
@@ -129,20 +129,20 @@ func (h *Handler) HandleSystemPageManifestUpdate(c *gin.Context) {
 	name := c.Param("name")
 	var manifest doctype.PageManifest
 	if err := c.ShouldBindJSON(&manifest); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid page manifest JSON: " + err.Error()}})
+		badRequestError(c, "validation.invalid_json", "Invalid page manifest JSON: "+err.Error(), nil)
 		return
 	}
 	manifest.Metadata.Name = name
 
 	if err := manifest.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		badRequestError(c, "validation.failed", err.Error(), nil)
 		return
 	}
 
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "page manifest store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "page manifest store not available", nil)
 		return
 	}
 
@@ -178,7 +178,7 @@ func (h *Handler) HandleSystemPageManifestDelete(c *gin.Context) {
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "page manifest store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "page manifest store not available", nil)
 		return
 	}
 
@@ -211,7 +211,7 @@ func (h *Handler) HandleSystemPageManifestDelete(c *gin.Context) {
 func (h *Handler) HandlePageManifestByRoute(c *gin.Context) {
 	route := c.Query("route")
 	if route == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "route query parameter is required"}})
+		badRequestError(c, "validation.required_field", "route query parameter is required", map[string]any{"field": "route"})
 		return
 	}
 	if !strings.HasPrefix(route, "/") {
@@ -220,7 +220,7 @@ func (h *Handler) HandlePageManifestByRoute(c *gin.Context) {
 
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "page manifest store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "page manifest store not available", nil)
 		return
 	}
 	manifests, err := store.LoadPageManifests(siteName(c))
@@ -234,7 +234,7 @@ func (h *Handler) HandlePageManifestByRoute(c *gin.Context) {
 			return
 		}
 	}
-	c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Page manifest not found for route: " + route}})
+	notFoundError(c, "page_manifest.not_found", "Page manifest not found for route: "+route, map[string]any{"route": route})
 }
 
 func pageManifestETag(value any) string {

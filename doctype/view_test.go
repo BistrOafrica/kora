@@ -138,6 +138,61 @@ func TestPageManifestEnsurePrimaryDataBindings_RepairsMissingFormBinding(t *test
 	}
 }
 
+func TestPageManifestFromViewRoundTripPreservesCurrentProjection(t *testing.T) {
+	view := &View{
+		Name:          "Sales Dashboard",
+		Route:         "/sales",
+		Type:          "dashboard",
+		Layout:        "two_panel",
+		Module:        "Sales",
+		SourceDocType: "Sales Invoice",
+		PublicAccess: &ViewPublicAccess{
+			Enabled:        true,
+			Components:     []string{"record_form"},
+			AllowMutations: true,
+		},
+		Components: []ViewComponent{
+			{
+				ID:            "main",
+				Type:          "record_form",
+				Region:        "main",
+				SourceDocType: "Sales Invoice",
+			},
+		},
+	}
+
+	manifest := PageManifestFromView(view)
+	if manifest == nil {
+		t.Fatal("expected manifest")
+	}
+	if manifest.APIVersion != "ui.kora.dev/v1" || manifest.Kind != "Page" {
+		t.Fatalf("unexpected manifest header: %+v", manifest)
+	}
+	if manifest.Metadata.Name != view.Name || manifest.Metadata.Package != "tenant.sales" {
+		t.Fatalf("unexpected metadata projection: %+v", manifest.Metadata)
+	}
+	if manifest.Spec.Resources[0].Params["doctype"] != "Sales Invoice" {
+		t.Fatalf("expected primary doctype projection, got %+v", manifest.Spec.Resources[0])
+	}
+
+	back := manifest.ToView()
+	if back.Name != view.Name || back.Route != view.Route {
+		t.Fatalf("round-trip name/route mismatch: got %+v want %+v", back, view)
+	}
+	if back.Type != "collection" {
+		t.Fatalf("expected page-manifest projection to map to collection view type, got %q", back.Type)
+	}
+	if back.Module != "tenant.sales" {
+		t.Fatalf("expected module normalization to survive projection, got %q", back.Module)
+	}
+	if back.PublicAccess == nil || !back.PublicAccess.Enabled || !back.PublicAccess.AllowMutations {
+		t.Fatalf("expected public access projection to survive round-trip: %+v", back.PublicAccess)
+	}
+	if len(back.Components) != 1 || back.Components[0].Type != "record_form" {
+		t.Fatalf("expected component projection to survive round-trip: %+v", back.Components)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ViewComponent Validation
 // ---------------------------------------------------------------------------

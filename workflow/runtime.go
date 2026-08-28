@@ -99,6 +99,7 @@ func (r *Runtime) Pause(ctx context.Context, state InstanceState, owner string) 
 	if r.LeaseStore == nil {
 		return fmt.Errorf("lease store not configured")
 	}
+	fromState := state.Status
 	state.Status = "paused"
 	state.LeaseOwner = ""
 	state.LeaseUntil = time.Time{}
@@ -112,7 +113,7 @@ func (r *Runtime) Pause(ctx context.Context, state InstanceState, owner string) 
 		InstanceID: state.InstanceID,
 		StepID:     state.TimerID,
 		Kind:       "pause",
-		FromState:  "",
+		FromState:  fromState,
 		ToState:    state.Status,
 	})
 	if r.TimerScheduler != nil {
@@ -126,6 +127,7 @@ func (r *Runtime) Retry(ctx context.Context, state InstanceState, after time.Dur
 	if r.TimerScheduler == nil || r.LeaseStore == nil {
 		return fmt.Errorf("timer scheduler not configured")
 	}
+	fromState := state.Status
 	state.Status = "retrying"
 	state.NextWakeAt = time.Now().UTC().Add(after)
 	state.UpdatedAt = time.Now().UTC()
@@ -138,7 +140,7 @@ func (r *Runtime) Retry(ctx context.Context, state InstanceState, after time.Dur
 		InstanceID: state.InstanceID,
 		StepID:     state.TimerID,
 		Kind:       "retry",
-		FromState:  "",
+		FromState:  fromState,
 		ToState:    state.Status,
 	})
 	timerID := state.TimerID
@@ -154,6 +156,7 @@ func (r *Runtime) DeadLetter(ctx context.Context, state InstanceState, cause str
 	if r.LeaseStore == nil {
 		return fmt.Errorf("lease store not configured")
 	}
+	fromState := state.Status
 	state.Status = "dead_letter"
 	if state.Payload == nil {
 		state.Payload = json.RawMessage(`{}`)
@@ -171,7 +174,7 @@ func (r *Runtime) DeadLetter(ctx context.Context, state InstanceState, cause str
 		InstanceID: state.InstanceID,
 		StepID:     state.TimerID,
 		Kind:       "dead_letter",
-		FromState:  "",
+		FromState:  fromState,
 		ToState:    state.Status,
 		Cause:      cause,
 	})

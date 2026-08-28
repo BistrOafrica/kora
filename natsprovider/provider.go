@@ -19,6 +19,18 @@ type Provider struct {
 	js  nats.JetStreamContext
 }
 
+// Diagnostics summarizes connection and stream health for operator visibility.
+type Diagnostics struct {
+	Connected     bool   `json:"connected"`
+	ServerURL     string `json:"server_url,omitempty"`
+	StreamName    string `json:"stream_name,omitempty"`
+	Retention     string `json:"retention,omitempty"`
+	StreamMsgs    uint64 `json:"stream_msgs,omitempty"`
+	StreamBytes   uint64 `json:"stream_bytes,omitempty"`
+	ConsumerCount int    `json:"consumer_count,omitempty"`
+	LastError     string `json:"last_error,omitempty"`
+}
+
 // Config returns a copy of the provider configuration.
 func (p *Provider) Config() Config {
 	if p == nil {
@@ -71,12 +83,35 @@ func (p *Provider) Bootstrap(ctx context.Context) error {
 		Retention: nats.LimitsPolicy,
 		Storage:   nats.MemoryStorage,
 		Discard:   nats.DiscardOld,
+		Duplicates: 2 * time.Minute,
 	}
 	_, err := p.js.AddStream(cfg, nats.Context(ctx))
 	if err != nil && !isAlreadyExists(err) {
 		return fmt.Errorf("natsprovider: bootstrap stream: %w", err)
 	}
 	return nil
+}
+
+// Diagnostics reads JetStream state for the configured stream. It never mutates
+// the provider and fails closed if stream metadata cannot be fetched.
+func (p *Provider) Diagnostics(ctx context.Context) (Diagnostics, error) {
+	if p == nil || p.nc == nil {
+		return Diagnostics{}, fmt.Errorf("natsprovider: provider is nil")
+	}
+	d := Diagnostics{
+		Connected: p.nc.IsConnected(),
+		ServerURL: p.nc.ConnectedUrl(),
+		StreamName: p.cfg.StreamName,
+	}
+	info, err := p.js.StreamInfo(p.cfg.StreamName, nats.Context(ctx))
+	if err != nil {
+		return d, fmt.Errorf("natsprovider: stream info: %w", err)
+	}
+	d.Retention = fmt.Sprintf("%v", info.Config.Retention)
+	d.StreamMsgs = info.State.Msgs
+	d.StreamBytes = info.State.Bytes
+	d.ConsumerCount = int(info.State.Consumers)
+	return d, nil
 }
 
 // Publish implements contract.EventPublisher.

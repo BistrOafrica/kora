@@ -16,6 +16,7 @@ package contract
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"time"
 )
 
@@ -225,4 +226,64 @@ type CommandBus interface {
 type Consumer interface {
 	Run(ctx context.Context, handler Handler) error
 	Drain(ctx context.Context) error
+}
+
+// SurfaceStatus summarizes how a contract area should be treated by callers.
+// The values mirror the repo-wide capability vocabulary so the inventory can be
+// used directly in docs and handoff notes.
+type SurfaceStatus string
+
+const (
+	SurfaceSupported    SurfaceStatus = "supported"
+	SurfaceExperimental SurfaceStatus = "experimental"
+	SurfacePlanned      SurfaceStatus = "planned"
+	SurfacePartial      SurfaceStatus = "partial"
+	SurfaceDiverged     SurfaceStatus = "diverged"
+)
+
+// Surface describes one public contract area in this package.
+type Surface struct {
+	Name        string        `json:"name"`
+	Status      SurfaceStatus `json:"status"`
+	Description string        `json:"description"`
+}
+
+// ContractInventory returns the current contract surface that is actually
+// implemented in this repository. The list is intentionally small and explicit:
+// callers should use it to distinguish the stable, experimental, partial, and
+// target-state surfaces when generating docs or acceptance plans.
+func ContractInventory() []Surface {
+	surfaces := []Surface{
+		{Name: "approval", Status: SurfaceSupported, Description: "durable confirmation and recent-auth records"},
+		{Name: "auth_provider", Status: SurfaceSupported, Description: "provider-neutral authentication contracts"},
+		{Name: "capability_handle", Status: SurfaceSupported, Description: "capability issuance and cleanup evidence"},
+		{Name: "status", Status: SurfaceSupported, Description: "operation result states"},
+		{Name: "error_codes", Status: SurfaceSupported, Description: "typed error codes"},
+		{Name: "actor_context", Status: SurfaceExperimental, Description: "identity and delegation context"},
+		{Name: "command_envelope", Status: SurfaceSupported, Description: "versioned command transport"},
+		{Name: "command_batch", Status: SurfaceSupported, Description: "offline causation ordering"},
+		{Name: "command_bus", Status: SurfaceSupported, Description: "synchronous and asynchronous dispatch"},
+		{Name: "command_version", Status: SurfaceSupported, Description: "contract schema versioning"},
+		{Name: "event_envelope", Status: SurfaceSupported, Description: "versioned event transport"},
+		{Name: "command_result", Status: SurfaceSupported, Description: "synchronous command result"},
+		{Name: "conflict_record", Status: SurfaceSupported, Description: "offline write conflict record"},
+		{Name: "delivery", Status: SurfaceSupported, Description: "durable message delivery"},
+		{Name: "generation_info", Status: SurfaceSupported, Description: "offline projection generation"},
+		{Name: "identity_assertion", Status: SurfaceSupported, Description: "normalized authentication result"},
+		{Name: "observation_report", Status: SurfaceSupported, Description: "runtime-reported observed state"},
+		{Name: "offline_sync", Status: SurfaceSupported, Description: "offline operation and conflict contracts"},
+		{Name: "projection", Status: SurfaceSupported, Description: "event payload projection vocabulary"},
+		{Name: "resource_descriptor", Status: SurfacePartial, Description: "resource identity and registry contracts"},
+		{Name: "site_aggregate_ordering", Status: SurfaceSupported, Description: "per-key durable delivery ordering"},
+		{Name: "tool_catalog", Status: SurfaceSupported, Description: "tool projections for AI/MCP/SDK consumers"},
+		{Name: "ui_manifest", Status: SurfaceSupported, Description: "page manifest validation"},
+		{Name: "usage_event", Status: SurfaceSupported, Description: "provider usage accounting"},
+		{Name: "task_receipt", Status: SurfaceSupported, Description: "asynchronous command receipt"},
+		{Name: "capability_registry", Status: SurfaceSupported, Description: "capability status registry"},
+		{Name: "component_manifest", Status: SurfaceSupported, Description: "component manifest validation"},
+		{Name: "authentication", Status: SurfaceSupported, Description: "provider-neutral auth contracts"},
+		{Name: "version_conflict", Status: SurfaceSupported, Description: "optimistic-concurrency conflict helpers"},
+	}
+	sort.Slice(surfaces, func(i, j int) bool { return surfaces[i].Name < surfaces[j].Name })
+	return surfaces
 }

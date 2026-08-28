@@ -12,6 +12,7 @@ public_access:
     - slug
     - title
     - description
+    - hero_image
     - body
     - category
     - published_at
@@ -47,6 +48,10 @@ fields:
   - fieldname: description
     fieldtype: Text
     label: Description
+
+  - fieldname: hero_image
+    fieldtype: Attach Image
+    label: Hero Image
 
   - fieldname: body
     fieldtype: Text

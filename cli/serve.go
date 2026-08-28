@@ -24,6 +24,7 @@ import (
 	kdb "github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/doctype"
 	"github.com/asenawritescode/kora/email"
+	"github.com/asenawritescode/kora/kernel"
 	"github.com/asenawritescode/kora/natsprovider"
 	knet "github.com/asenawritescode/kora/net"
 	"github.com/asenawritescode/kora/orm"
@@ -114,10 +115,7 @@ func runServe() error {
 			slog.Error("startup db check: ping failed", "type", sc.DBType, "error", err)
 			return fmt.Errorf("failed to ping %s: %w", sc.DBType, err)
 		}
-		if sc.DBType == "libsql" {
-			platformDB.SetMaxIdleConns(0)
-			platformDB.SetConnMaxLifetime(25 * time.Second)
-		}
+		tunePlatformDBPool(platformDB, sc.DBType)
 		slog.Info("database connected", "type", sc.DBType)
 	}
 
@@ -352,6 +350,19 @@ func runServe() error {
 	apiLegacyGroup.Use(knet.CompressMiddleware()) // Gzip API responses
 	txManager := &orm.TxManager{DB: firstDB, Registry: primaryRegistry, Dialect: kdb.Resolve(common.DBType)}
 
+	// Config-defined command resources (KERNEL-008). Loaded from
+	// KORA_COMMANDS_DIR when set; invalid definitions fail startup rather
+	// than being silently discarded.
+	var kernelCommands *kernel.CommandRegistry
+	if dir := os.Getenv("KORA_COMMANDS_DIR"); dir != "" {
+		reg, err := kernel.LoadCommandDir(dir)
+		if err != nil {
+			return fmt.Errorf("loading command definitions from %s: %w", dir, err)
+		}
+		kernelCommands = reg
+		slog.Info("command definitions loaded", "dir", dir, "count", len(reg.List()))
+	}
+
 	publicV1Group := router.Group("/api/v1")
 	publicV1Group.Use(knet.CompressMiddleware())
 	publicLegacyGroup := router.Group("/api")
@@ -452,6 +463,7 @@ func runServe() error {
 			// Choose the provider explicitly. Local remains the fallback unless the
 			// operator sets KORA_EVENT_PROVIDER=nats and provides NATS config.
 			var dest contract.EventPublisher
+			var natsSideEffects *natsprovider.Provider
 			if natsEnabled() {
 				natsCfg := natsprovider.FromEnv()
 				natsCfg.Name = s.Name + "-outbox"
@@ -464,6 +476,7 @@ func runServe() error {
 					return fmt.Errorf("bootstrapping NATS provider for outbox: %w", err)
 				}
 				dest = p
+				natsSideEffects = p
 			} else if s.AnalyticsEventBus != nil {
 				dest = analytics.NewLocalProvider(s.AnalyticsEventBus)
 			} else {
@@ -472,6 +485,13 @@ func runServe() error {
 			p := outbox.NewPublisher(s.DB, dest)
 			go runOutboxPublisher(p)
 			slog.Info("transactional outbox enabled", "site", s.Name)
+
+			// Side effects consume the broker stream and fan back into the site bus.
+			// This keeps the DB/outbox as the source of truth while making NATS the
+			// transport for analytics and downstream consumers.
+			if natsSideEffects != nil && s.AnalyticsEventBus != nil {
+				go runNATSOutboxSideEffects(context.Background(), s.Name, natsSideEffects, s.AnalyticsEventBus)
+			}
 		}
 	}
 
@@ -480,8 +500,8 @@ func runServe() error {
 	go runAsyncHookWorker(asyncHookQueue, scriptRunner, siteScriptStores, loadedSites, common.DBType, httpAllowlist)
 	slog.Info("async hook worker started", "queue_size", 1000)
 
-	api.RegisterRoutesOnGroupWithAnalytics(apiGroup, primaryRegistry, txManager, siteBuses, siteRealtimeProviders, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueueSink(asyncHookQueue), siteOutboxes, siteStorages)
-	api.RegisterRoutesOnGroupWithAnalytics(apiLegacyGroup, primaryRegistry, txManager, siteBuses, siteRealtimeProviders, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueueSink(asyncHookQueue), siteOutboxes, siteStorages)
+	api.RegisterRoutesOnGroupWithAnalytics(apiGroup, primaryRegistry, txManager, siteBuses, siteRealtimeProviders, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueueSink(asyncHookQueue), siteOutboxes, siteStorages, kernelCommands)
+	api.RegisterRoutesOnGroupWithAnalytics(apiLegacyGroup, primaryRegistry, txManager, siteBuses, siteRealtimeProviders, scriptRunner, siteScriptStores, siteSecretStores, httpAllowlist, siteWebhookWorkers, asyncHookQueueSink(asyncHookQueue), siteOutboxes, siteStorages, kernelCommands)
 	api.RegisterPublicRoutesOnGroup(publicV1Group, primaryRegistry, txManager)
 	api.RegisterPublicRoutesOnGroup(publicLegacyGroup, primaryRegistry, txManager)
 
@@ -507,7 +527,7 @@ func runServe() error {
 	if systemGuard != nil {
 		// Console API (React SPA-driven, Bearer token auth).
 		// The /console frontend is served by the SPA via NoRoute handler.
-		ch := api.NewConsoleHandler(systemGuard, siteRouter, common.DBType, common.DBHost, common.DBUser, common.DBPassword, 3306, platformDB)
+		ch := api.NewConsoleHandler(systemGuard, siteRouter, common.DBType, common.DBHost, common.DBUser, common.DBPassword, 3306, platformDB, sc.AllowConsoleOnboarding)
 		ch.Start()
 		router.POST("/api/console/login", ch.HandleLogin)
 		router.POST("/api/console/change-password", ch.HandleChangePassword)
@@ -628,6 +648,89 @@ func runRealtimeBridge(ctx context.Context, siteName string, bus analytics.Event
 			}
 			_ = provider.PublishSubject(ctx, subjectPrefix, payload, contract.NewEventID())
 		}
+	}
+}
+
+func tunePlatformDBPool(db *sql.DB, driver string) {
+	switch driver {
+	case "libsql":
+		db.SetMaxIdleConns(0)
+		db.SetConnMaxLifetime(25 * time.Second)
+		db.SetConnMaxIdleTime(20 * time.Second)
+	case "mysql":
+		db.SetMaxIdleConns(5)
+		db.SetConnMaxIdleTime(2 * time.Minute)
+		db.SetConnMaxLifetime(10 * time.Minute)
+	}
+}
+
+func runNATSOutboxSideEffects(ctx context.Context, siteName string, provider *natsprovider.Provider, bus analytics.EventBus) {
+	cfg := provider.Config()
+	cfg.ConsumerName = siteName + "-sideeffects"
+	cfg.MaxDeliver = 5
+	consumer, err := natsprovider.NewConsumer(provider, cfg)
+	if err != nil {
+		slog.Warn("nats side-effect bridge init failed", "site", siteName, "error", err)
+		return
+	}
+
+	handler := func(ctx context.Context, delivery contract.Delivery) error {
+		event, err := decodeOutboxDelivery(delivery)
+		if err != nil {
+			return err
+		}
+		if bus != nil {
+			return bus.Publish(event)
+		}
+		return nil
+	}
+
+	slog.Info("nats side-effect bridge started", "site", siteName, "consumer", cfg.ConsumerName)
+	if err := consumer.Run(ctx, handler); err != nil {
+		slog.Warn("nats side-effect bridge stopped", "site", siteName, "error", err)
+	}
+}
+
+func decodeOutboxDelivery(delivery contract.Delivery) (analytics.ChangeEvent, error) {
+	var envelope contract.EventEnvelope
+	if err := json.Unmarshal(delivery.Data, &envelope); err != nil {
+		return analytics.ChangeEvent{}, err
+	}
+
+	var payload struct {
+		Data    map[string]any `json:"data"`
+		OldData map[string]any `json:"old_data"`
+	}
+	if len(envelope.Data) > 0 {
+		if err := json.Unmarshal(envelope.Data, &payload); err != nil {
+			return analytics.ChangeEvent{}, err
+		}
+	}
+
+	return analytics.ChangeEvent{
+		Site:       envelope.Site,
+		Doctype:    envelope.AggregateType,
+		DocName:    envelope.AggregateID,
+		Operation:  outboxEventOperation(envelope.Type),
+		Timestamp:  envelope.OccurredAt,
+		ModifiedBy: envelope.Source,
+		Data:       payload.Data,
+		OldData:    payload.OldData,
+	}, nil
+}
+
+func outboxEventOperation(eventType string) analytics.EventOp {
+	switch {
+	case strings.HasSuffix(eventType, ".after_insert"):
+		return analytics.EventInsert
+	case strings.HasSuffix(eventType, ".after_delete"):
+		return analytics.EventDelete
+	case strings.HasSuffix(eventType, ".after_submit"):
+		return analytics.EventSubmit
+	case strings.HasSuffix(eventType, ".after_cancel"):
+		return analytics.EventCancel
+	default:
+		return analytics.EventUpdate
 	}
 }
 

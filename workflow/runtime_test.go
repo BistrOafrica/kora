@@ -30,7 +30,9 @@ func TestRuntimeResumeAndRetry(t *testing.T) {
 	mock.ExpectQuery("SELECT site, workflow, instance_id").WillReturnRows(sqlmock.NewRows([]string{"site", "workflow", "instance_id", "version", "lease_owner", "lease_until", "next_wake_at", "status", "payload", "updated_at"}).
 		AddRow("site-a", "approval", "inst-1", 1, "owner-1", now.Add(time.Minute), now.Add(2*time.Minute), "active", `{"doc":"x"}`, now))
 	mock.ExpectExec("INSERT INTO _kora_workflow_actor").WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec("INSERT INTO _kora_workflow_audit").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO _kora_workflow_audit").
+		WithArgs(sqlmock.AnyArg(), "site-a", "approval", "inst-1", "", "resume", "active", "waiting", "", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("INSERT INTO _kora_workflow_timer").WillReturnResult(sqlmock.NewResult(1, 1))
 
 	state, err := r.Resume(context.Background(), "site-a", "approval", "inst-1", "owner-1")
@@ -64,6 +66,9 @@ func TestRuntimeRetryReschedulesTimer(t *testing.T) {
 		Payload:    json.RawMessage(`{"doc":"x"}`),
 	}
 	mock.ExpectExec("INSERT INTO _kora_workflow_actor").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO _kora_workflow_audit").
+		WithArgs(sqlmock.AnyArg(), "site-a", "approval", "inst-1", "timer-1", "retry", "waiting", "retrying", "", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("INSERT INTO _kora_workflow_timer").WillReturnResult(sqlmock.NewResult(1, 1))
 
 	if err := r.Retry(context.Background(), state, 2*time.Minute); err != nil {
@@ -93,10 +98,46 @@ func TestRuntimeDeadLetterPersistsCauseAndClearsTimers(t *testing.T) {
 		Payload:    json.RawMessage(`{"doc":"x"}`),
 	}
 	mock.ExpectExec("INSERT INTO _kora_workflow_actor").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO _kora_workflow_audit").
+		WithArgs(sqlmock.AnyArg(), "site-a", "approval", "inst-1", "timer-1", "dead_letter", "retrying", "dead_letter", "fatal error", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("DELETE FROM _kora_workflow_timer").WillReturnResult(sqlmock.NewResult(1, 1))
 
 	if err := r.DeadLetter(context.Background(), state, "fatal error"); err != nil {
 		t.Fatalf("DeadLetter: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRuntimePauseRecordsPreviousStatusInAudit(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	r := NewRuntime(db, func(ctx context.Context, state InstanceState, doc *doctype.Document) (InstanceState, error) {
+		return state, nil
+	})
+	state := InstanceState{
+		Site:       "site-a",
+		Workflow:   "approval",
+		InstanceID: "inst-1",
+		TimerID:    "timer-1",
+		Status:     "waiting",
+		Payload:    json.RawMessage(`{"doc":"x"}`),
+	}
+	mock.ExpectExec("INSERT INTO _kora_workflow_actor").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO _kora_workflow_audit").
+		WithArgs(sqlmock.AnyArg(), "site-a", "approval", "inst-1", "timer-1", "pause", "waiting", "paused", "", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("DELETE FROM _kora_workflow_timer").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("UPDATE _kora_workflow_actor").WillReturnResult(sqlmock.NewResult(1, 1))
+
+	if err := r.Pause(context.Background(), state, "owner-1"); err != nil {
+		t.Fatalf("Pause: %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

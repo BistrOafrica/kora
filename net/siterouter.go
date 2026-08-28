@@ -194,6 +194,7 @@ func (sr *SiteRouter) Middleware() gin.HandlerFunc {
 					c.Set("site_name", s.Name)
 					c.Set("site_db", s.DB)
 					c.Set("site_registry", s.Registry)
+					c.Set("site_analytics_worker", s.AnalyticsWorker)
 					sr.mu.RUnlock()
 					c.Next()
 					return
@@ -226,6 +227,7 @@ func (sr *SiteRouter) Middleware() gin.HandlerFunc {
 		c.Set("site_name", site.Name)
 		c.Set("site_db", site.DB)
 		c.Set("site_registry", site.Registry)
+		c.Set("site_analytics_worker", site.AnalyticsWorker)
 
 		// Set kora_site cookie so the frontend can read the site name.
 		// Only set if not already present or value differs (avoid redundant Set-Cookie).
@@ -312,6 +314,7 @@ func RegisterPathSiteRoutes(router *gin.Engine, sr *SiteRouter, spaFS fs.FS) {
 		c.Set("site_name", site.Name)
 		c.Set("site_db", site.DB)
 		c.Set("site_registry", site.Registry)
+		c.Set("site_analytics_worker", site.AnalyticsWorker)
 
 		// Handle API and workspace paths.
 		if strings.HasPrefix(rest, "/api/") || rest == "/api" {

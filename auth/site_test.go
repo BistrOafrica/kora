@@ -22,11 +22,12 @@ func TestAuthenticateExtension_LoadsPermissions(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"name", "api_permissions"}).AddRow(
 		"test-bot", `[{"doctype":"Work Order","read":true,"create":true}]`,
 	)
-	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension").
-		WithArgs("valid-token").WillReturnRows(rows)
+	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension WHERE site = \\? AND access_token = \\? AND is_active = 1").
+		WithArgs("test.local", "valid-token").WillReturnRows(rows)
 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Set("site_db", db)
+	c.Set("site_name", "test.local")
 	c.Request = httptest.NewRequest("GET", "/api/v1/resource/Work%20Order", nil)
 	c.Request.Header.Set("Authorization", "Bearer valid-token")
 
@@ -75,11 +76,12 @@ func TestAuthenticateExtension_EmptyPermissions(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{"name", "api_permissions"}).AddRow("test-bot", "[]")
-	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension").
-		WithArgs("token").WillReturnRows(rows)
+	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension WHERE site = \\? AND access_token = \\? AND is_active = 1").
+		WithArgs("test.local", "token").WillReturnRows(rows)
 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Set("site_db", db)
+	c.Set("site_name", "test.local")
 	c.Request = httptest.NewRequest("GET", "/", nil)
 	c.Request.Header.Set("Authorization", "Bearer token")
 
@@ -106,11 +108,12 @@ func TestAuthenticateExtension_NullPermissions(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{"name", "api_permissions"}).AddRow("test-bot", nil)
-	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension").
-		WithArgs("token").WillReturnRows(rows)
+	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension WHERE site = \\? AND access_token = \\? AND is_active = 1").
+		WithArgs("test.local", "token").WillReturnRows(rows)
 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Set("site_db", db)
+	c.Set("site_name", "test.local")
 	c.Request = httptest.NewRequest("GET", "/", nil)
 	c.Request.Header.Set("Authorization", "Bearer token")
 
@@ -128,11 +131,12 @@ func TestAuthenticateExtension_InactiveExtension(t *testing.T) {
 	}
 	defer db.Close()
 
-	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension").
-		WithArgs("token").WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension WHERE site = \\? AND access_token = \\? AND is_active = 1").
+		WithArgs("test.local", "token").WillReturnError(sql.ErrNoRows)
 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Set("site_db", db)
+	c.Set("site_name", "test.local")
 	c.Request = httptest.NewRequest("GET", "/", nil)
 
 	guard := &SiteGuard{}
@@ -150,11 +154,12 @@ func TestAuthenticateExtension_MalformedJSON(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{"name", "api_permissions"}).AddRow("bad-bot", `{this is not json`)
-	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension").
-		WithArgs("token").WillReturnRows(rows)
+	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension WHERE site = \\? AND access_token = \\? AND is_active = 1").
+		WithArgs("test.local", "token").WillReturnRows(rows)
 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Set("site_db", db)
+	c.Set("site_name", "test.local")
 	c.Request = httptest.NewRequest("GET", "/", nil)
 	c.Request.Header.Set("Authorization", "Bearer token")
 
@@ -171,6 +176,31 @@ func TestAuthenticateExtension_MalformedJSON(t *testing.T) {
 	}
 	if len(p) != 0 {
 		t.Errorf("expected 0 permissions for malformed JSON, got %d", len(p))
+	}
+}
+
+func TestAuthenticateExtension_RejectsCrossSiteTokenReuse(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT name, api_permissions FROM _kora_extension WHERE site = \\? AND access_token = \\? AND is_active = 1").
+		WithArgs("site-b", "token").WillReturnError(sql.ErrNoRows)
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("site_db", db)
+	c.Set("site_name", "site-b")
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	c.Request.Header.Set("Authorization", "Bearer token")
+
+	guard := &SiteGuard{}
+	if ok := guard.authenticateExtension(c, "token"); ok {
+		t.Fatal("expected cross-site extension token reuse to be rejected")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
 	}
 }
 

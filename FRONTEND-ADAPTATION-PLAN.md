@@ -1,13 +1,17 @@
 # Frontend Adaptation Plan for the Kora Engine RFC
 
+## Current state
+
+The current frontend is a React SPA with route-driven rendering, DocType/admin screens, and an embedded page-manifest runtime. It is useful, but it is not yet the RFC's standalone manifest-first semantic renderer or Franken UI runtime.
+
 ## What the current frontend already does
 
 The UI already has several useful seams that align with the RFC:
 
-- A server-fed view runtime for dynamic pages in `ui/src/components/views/ViewRenderer.tsx`.
+- A server-fed manifest runtime in `ui/src/manifest/runtime/ManifestRenderer.tsx` and `ui/src/manifest/runtime/ManifestRouteRenderer.tsx`.
 - A component registry and capability gating in `ui/src/components/views/registry.tsx`.
 - A shared API client in `ui/src/lib/api/client.ts`.
-- Server-driven view metadata and validation helpers in `ui/src/lib/api/views.ts`, `ui/src/lib/view-manifest.ts`, and `ui/src/lib/page-manifests.ts`.
+- Server-driven view metadata and validation helpers in `ui/src/lib/page-manifests.ts` and `ui/src/manifest/schema/page.ts`.
 - An offline queue primitive in `ui/src/lib/offline-queue.ts` and a POS route that uses it.
 
 That means the UI does not need a rewrite. It needs a contract shift:
@@ -22,12 +26,13 @@ That means the UI does not need a rewrite. It needs a contract shift:
 
 The main gaps between the current frontend and the RFC are:
 
-1. The router still owns too much application shape. Dynamic view routes exist, but the app is not yet a true page-manifest runtime.
+1. The router still owns too much application shape. Dynamic view routes exist, but the app is not yet a true standalone page-manifest runtime.
 2. Data fetching is mostly list/document oriented. The RFC wants named queries, typed commands, pagination cursors, capability-aware tool catalogs, and operation envelopes.
 3. Realtime is not a first-class browser contract yet. The RFC expects authenticated SSE/WebSocket state, typed invalidations, reconnect, and resume.
 4. Offline support is mostly a queue. The RFC wants per-manifest offline policy, conflict handling, bounded persistence, and explicit sync status.
 5. The UI does not yet consume the backend capability snapshot as the source of truth for page availability, commands, tool actions, or component support.
 6. Current manifest validation is mostly structural. The RFC requires schema-validated manifests with component capability requirements, offline behavior, and version gates.
+7. The manifest runtime is embedded in the React SPA; it is not yet the RFC’s separate runtime shell.
 
 ## Adaptation strategy
 
@@ -39,7 +44,7 @@ Work items:
 
 - Add a page manifest loader that resolves route, package, version, and capability snapshot from the server.
 - Render pages from manifest data before deciding which concrete component tree to mount.
-- Convert `ViewRenderer` into a compatibility layer inside the new manifest runtime instead of the primary entry point.
+- Keep `ManifestRenderer` as the compatibility layer inside the current React app until the standalone runtime exists.
 - Add explicit unsupported states for missing manifest version, missing component capability, unsupported layout, and retired page status.
 
 Outcome:
@@ -183,8 +188,8 @@ Outcome:
 
 These are the most direct changes to make next:
 
-1. Add a `capabilities` and `offline` field to the frontend runtime config, then use it in route and component gating.
-2. Introduce a typed page manifest contract that supersedes the current local `PageManifest` shape.
+1. Keep the current manifest runtime aligned with the backend contract and document it as embedded, not standalone.
+2. Add a typed page manifest contract that supersedes the current local `PageManifest` shape when the standalone runtime is introduced.
 3. Replace `fetchList`-only view data loading with named query support and operation envelopes.
 4. Add a realtime client module and a small connection indicator in the shell.
 5. Extend the offline queue from a POS helper into a generic operation queue with conflict metadata.
@@ -198,6 +203,14 @@ These are the most direct changes to make next:
 - Do not add raw NATS assumptions to the browser; all transport should remain behind authenticated HTTP/SSE/WebSocket gateways.
 - Do not keep both old route-first and new manifest-first models without a single compatibility boundary, or the UI will drift.
 
+## What is current versus target
+
+- Current: React SPA, TanStack Router, route-based shell, admin views, DocType-driven forms and lists.
+- Current: embedded page-manifest runtime and validation helpers.
+- Target: manifest-first runtime, typed command/query operations, realtime invalidation, policy-driven offline slices, capability-driven gating.
+- Not current: Franken UI as the primary runtime contract.
+- Not current: standalone manifest runtime shell outside the React SPA.
+
 ## Bottom line
 
 The frontend should evolve from a route-driven CRUD shell into a contract-driven runtime shell:
@@ -208,4 +221,3 @@ The frontend should evolve from a route-driven CRUD shell into a contract-driven
 - realtime describes what changed,
 - offline describes what may be queued,
 - the server remains the authority for all business decisions.
-

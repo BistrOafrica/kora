@@ -467,20 +467,31 @@ func Connect(cfg *SiteConfig) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("pinging database: %w", err)
 	}
-	// Connection pool tuning.
-	if driver == "libsql" {
+	tuneConnectionPool(db, driver)
+	return db, nil
+}
+
+// tuneConnectionPool keeps driver-specific connection lifetimes shorter than the
+// backend's idle timeout so pooled sockets are retired before the server drops them.
+func tuneConnectionPool(db *sql.DB, driver string) {
+	switch driver {
+	case "libsql":
 		// LibSQL HTTP streams expire server-side after ~30s idle.
-		// Don't pool idle connections — open fresh each time.
-		// Set a max open limit to prevent unbounded concurrent connections
-		// from overwhelming the LibSQL server (e.g. during sweep thundering herds).
 		db.SetMaxOpenConns(25)
 		db.SetMaxIdleConns(0)
 		db.SetConnMaxLifetime(25 * time.Second)
-	} else {
+		db.SetConnMaxIdleTime(20 * time.Second)
+	case "mysql":
+		// MySQL can leave idle TCP sockets half-open from the application's point of view.
+		// Keep a small idle pool and retire sockets proactively to avoid broken-pipe churn.
+		db.SetMaxOpenConns(25)
+		db.SetMaxIdleConns(5)
+		db.SetConnMaxIdleTime(2 * time.Minute)
+		db.SetConnMaxLifetime(10 * time.Minute)
+	default:
 		db.SetMaxOpenConns(25)
 		db.SetMaxIdleConns(5)
 	}
-	return db, nil
 }
 
 // NewSite creates a new Site with a database connection.

@@ -16,7 +16,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/asenawritescode/kora/auth"
-	"github.com/asenawritescode/kora/cloud"
 	sqlDialect "github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/net"
 	"github.com/asenawritescode/kora/site"
@@ -33,7 +32,8 @@ var (
 type ConsoleHandler struct {
 	SystemGuard        *auth.SystemGuard
 	SiteRouter         *net.SiteRouter
-	ProvisioningStore  *cloud.ProvisioningStore
+	ProvisioningStore  *site.OnboardingStore
+	AllowOnboarding    bool
 	queuedJobsMu       sync.Mutex
 	queuedJobs         map[string]bool
 	PlatformDBType     string
@@ -45,11 +45,12 @@ type ConsoleHandler struct {
 }
 
 // NewConsoleHandler creates a console API handler.
-func NewConsoleHandler(guard *auth.SystemGuard, sr *net.SiteRouter, dbType, dbHost, dbUser, dbPassword string, dbPort int, platformDB *sql.DB) *ConsoleHandler {
+func NewConsoleHandler(guard *auth.SystemGuard, sr *net.SiteRouter, dbType, dbHost, dbUser, dbPassword string, dbPort int, platformDB *sql.DB, allowOnboarding bool) *ConsoleHandler {
 	return &ConsoleHandler{
 		SystemGuard:        guard,
 		SiteRouter:         sr,
-		ProvisioningStore:  cloud.NewProvisioningStore(platformDB),
+		ProvisioningStore:  site.NewOnboardingStore(platformDB),
+		AllowOnboarding:    allowOnboarding,
 		queuedJobs:         make(map[string]bool),
 		PlatformDBType:     dbType,
 		PlatformDBHost:     dbHost,
@@ -77,7 +78,7 @@ func (h *ConsoleHandler) Start() {
 	}
 }
 
-func (h *ConsoleHandler) scheduleOnboard(job cloud.ProvisioningJob, req onboardRequest) {
+func (h *ConsoleHandler) scheduleOnboard(job site.OnboardingJob, req onboardRequest) {
 	h.queuedJobsMu.Lock()
 	if h.queuedJobs[job.ID] {
 		h.queuedJobsMu.Unlock()
@@ -120,13 +121,16 @@ func (h *ConsoleHandler) HandleLogin(c *gin.Context) {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", nil)
 		return
 	}
 
 	valid, needsChange := h.SystemGuard.ValidateWithChangeCheck(req.Email, req.Password)
 	if !valid {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: map[string]string{"message": "Invalid credentials"}})
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: ErrorBody{
+			Code:    "auth.invalid_credentials",
+			Message: "Invalid credentials",
+		}})
 		return
 	}
 
@@ -145,7 +149,7 @@ func (h *ConsoleHandler) HandleChangePassword(c *gin.Context) {
 	token = strings.TrimPrefix(token, "Bearer ")
 
 	if !h.SystemGuard.ValidateSessionBool(token) {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: map[string]string{"message": "Invalid session"}})
+		writeError(c, http.StatusUnauthorized, "auth.session_invalid", "Invalid session", nil)
 		return
 	}
 
@@ -153,7 +157,7 @@ func (h *ConsoleHandler) HandleChangePassword(c *gin.Context) {
 		NewPassword string `json:"new_password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.NewPassword == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "New password required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "New password required", map[string]any{"field": "new_password"})
 		return
 	}
 
@@ -177,11 +181,17 @@ func (h *ConsoleHandler) RequireConsoleAuth(c *gin.Context) {
 		}
 	}
 	if token == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, ErrorResponse{Error: map[string]string{"message": "Authentication required"}})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, ErrorResponse{Error: ErrorBody{
+			Code:    "auth.authentication_required",
+			Message: "Authentication required",
+		}})
 		return
 	}
 	if !h.SystemGuard.ValidateSessionBool(token) {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, ErrorResponse{Error: map[string]string{"message": "Invalid or expired session"}})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, ErrorResponse{Error: ErrorBody{
+			Code:    "auth.session_invalid",
+			Message: "Invalid or expired session",
+		}})
 		return
 	}
 	c.Next()
@@ -259,11 +269,11 @@ func (h *ConsoleHandler) HandleCreateSite(c *gin.Context) {
 		AdminFullName string `json:"admin_full_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request: " + err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", map[string]any{"error": err.Error()})
 		return
 	}
 	if req.Hostname == "" || req.AdminEmail == "" || req.AdminPassword == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "hostname, admin_email, and admin_password are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "hostname, admin_email, and admin_password are required", map[string]any{"fields": []string{"hostname", "admin_email", "admin_password"}})
 		return
 	}
 
@@ -339,7 +349,7 @@ func (h *ConsoleHandler) HandleCreateSite(c *gin.Context) {
 		default:
 			errMsg = "Failed to create site: " + errMsg
 		}
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": errMsg}})
+		writeError(c, http.StatusInternalServerError, "site.create_failed", errMsg, nil)
 		return
 	}
 
@@ -372,17 +382,21 @@ func (h *ConsoleHandler) HandleCreateSite(c *gin.Context) {
 // POST /api/console/sites/onboard
 // Rate limited: 3 per hour per IP.
 func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
+	if !h.AllowOnboarding {
+		writeError(c, http.StatusNotFound, "feature.disabled", "Public onboarding is disabled", nil)
+		return
+	}
 	var req onboardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request: " + err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", map[string]any{"error": err.Error()})
 		return
 	}
 	if req.Hostname == "" || req.AdminEmail == "" || req.AdminPassword == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "hostname, admin_email, and admin_password are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "hostname, admin_email, and admin_password are required", map[string]any{"fields": []string{"hostname", "admin_email", "admin_password"}})
 		return
 	}
 	if len(req.AdminPassword) < 8 {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Password must be at least 8 characters"}})
+		writeError(c, http.StatusBadRequest, "validation.password_too_short", "Password must be at least 8 characters", nil)
 		return
 	}
 
@@ -392,7 +406,7 @@ func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
 	count := onboardLimiter[ip]
 	if count >= onboardLimitMax {
 		onboardLimiterMu.Unlock()
-		c.JSON(http.StatusTooManyRequests, ErrorResponse{Error: map[string]string{"message": "Too many requests. Please try again later."}})
+		writeError(c, http.StatusTooManyRequests, "rate_limit.exceeded", "Too many requests. Please try again later.", nil)
 		return
 	}
 	onboardLimiter[ip] = count + 1
@@ -404,7 +418,7 @@ func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
 		h.PlatformDB.QueryRow("SELECT COUNT(*) FROM _kora_config_version WHERE site = ?", req.Hostname).Scan(&existing)
 	}
 	if existing > 0 {
-		c.JSON(http.StatusConflict, ErrorResponse{Error: map[string]string{"message": "This site name is already taken. Try another."}})
+		writeError(c, http.StatusConflict, "site.already_exists", "This site name is already taken. Try another.", nil)
 		return
 	}
 
@@ -415,11 +429,11 @@ func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
 	if h.ProvisioningStore != nil {
 		if err := h.ProvisioningStore.Bootstrap(); err != nil {
 			slog.Error("provisioning store bootstrap failed", "error", err)
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to initialize provisioning store"}})
+			writeError(c, http.StatusInternalServerError, "server.store_unavailable", "Failed to initialize provisioning store", nil)
 			return
 		}
 		if existingJob, err := h.ProvisioningStore.LoadJob(req.Hostname, req.Hostname, opID, idempotencyKey, fingerprint); err == nil && existingJob != nil {
-			if existingJob.State == cloud.ProvisioningActive {
+			if existingJob.State == site.OnboardingActive {
 				c.JSON(http.StatusCreated, Response{Data: consoleSiteCreateResponse{
 					Hostname:     req.Hostname,
 					WorkspaceURL: "/s/" + req.Hostname + "/workspace",
@@ -431,11 +445,11 @@ func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
 		}
 	}
 
-	job := cloud.ProvisioningJob{
+	job := site.OnboardingJob{
 		ID:               "prov-" + req.Hostname,
 		Site:             req.Hostname,
 		Resource:         req.Hostname,
-		State:            cloud.ProvisioningRequested,
+		State:            site.OnboardingRequested,
 		OperationID:      opID,
 		IdempotencyKey:   idempotencyKey,
 		InputFingerprint: fingerprint,
@@ -444,7 +458,7 @@ func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
 	}
 	if h.ProvisioningStore != nil {
 		_ = h.ProvisioningStore.UpsertJob(job)
-		_ = h.ProvisioningStore.UpsertCheckpoint(cloud.ProvisioningCheckpoint{JobID: job.ID, Stage: "requested", Completed: true, RecordedAt: time.Now().UTC()})
+		_ = h.ProvisioningStore.UpsertCheckpoint(site.OnboardingCheckpoint{JobID: job.ID, Stage: "requested", Completed: true, RecordedAt: time.Now().UTC()})
 	}
 
 	h.scheduleOnboard(job, req)
@@ -462,21 +476,21 @@ func (h *ConsoleHandler) HandleOnboard(c *gin.Context) {
 func (h *ConsoleHandler) HandleOnboardStatus(c *gin.Context) {
 	jobID := c.Param("job_id")
 	if jobID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "job_id required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "job_id required", map[string]any{"field": "job_id"})
 		return
 	}
 	if h.ProvisioningStore == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Provisioning store unavailable"}})
+		writeError(c, http.StatusNotFound, "server.store_unavailable", "Provisioning store unavailable", nil)
 		return
 	}
 	job, err := h.ProvisioningStore.LoadJobByID(jobID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Provisioning job not found"}})
+			writeError(c, http.StatusNotFound, "provisioning.job_not_found", "Provisioning job not found", nil)
 			return
 		}
 		slog.Error("loading provisioning job failed", "job_id", jobID, "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to load provisioning job"}})
+		writeError(c, http.StatusInternalServerError, "provisioning.load_failed", "Failed to load provisioning job", nil)
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: consoleProvisioningStatusResponse{
@@ -505,7 +519,7 @@ func (h *ConsoleHandler) HandleOnboardJobs(c *gin.Context) {
 	jobs, err := h.ProvisioningStore.ListJobs()
 	if err != nil {
 		slog.Error("listing provisioning jobs failed", "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to list provisioning jobs"}})
+		writeError(c, http.StatusInternalServerError, "provisioning.list_failed", "Failed to list provisioning jobs", nil)
 		return
 	}
 	out := make([]consoleProvisioningStatusResponse, 0, len(jobs))
@@ -528,7 +542,7 @@ func (h *ConsoleHandler) HandleOnboardJobs(c *gin.Context) {
 	c.JSON(http.StatusOK, Response{Data: consoleProvisioningListResponse{Jobs: out}})
 }
 
-func (h *ConsoleHandler) processOnboardJob(job cloud.ProvisioningJob, req onboardRequest) {
+func (h *ConsoleHandler) processOnboardJob(job site.OnboardingJob, req onboardRequest) {
 	adminFullName := req.AdminFullName
 	if adminFullName == "" {
 		adminFullName = strings.Split(req.AdminEmail, "@")[0]
@@ -572,12 +586,12 @@ func (h *ConsoleHandler) processOnboardJob(job cloud.ProvisioningJob, req onboar
 		platformPass = os.Getenv("KORA_DB_PASSWORD")
 	}
 
-	job.State = cloud.ProvisioningValidating
+	job.State = site.OnboardingValidating
 	job.Attempt++
 	job.UpdatedAt = time.Now().UTC()
 	if h.ProvisioningStore != nil {
 		_ = h.ProvisioningStore.UpsertJob(job)
-		_ = h.ProvisioningStore.UpsertCheckpoint(cloud.ProvisioningCheckpoint{JobID: job.ID, Stage: "validated", Completed: true, RecordedAt: time.Now().UTC()})
+		_ = h.ProvisioningStore.UpsertCheckpoint(site.OnboardingCheckpoint{JobID: job.ID, Stage: "validated", Completed: true, RecordedAt: time.Now().UTC()})
 	}
 
 	result, err := site.CreateSite(site.CreateSiteInput{
@@ -594,7 +608,7 @@ func (h *ConsoleHandler) processOnboardJob(job cloud.ProvisioningJob, req onboar
 		PlatformDB:         h.PlatformDB,
 	})
 	if err != nil {
-		job.State = cloud.ProvisioningFailed
+		job.State = site.OnboardingFailed
 		job.LastError = err.Error()
 		job.UpdatedAt = time.Now().UTC()
 		if h.ProvisioningStore != nil {
@@ -604,12 +618,12 @@ func (h *ConsoleHandler) processOnboardJob(job cloud.ProvisioningJob, req onboar
 		return
 	}
 
-	job.State = cloud.ProvisioningProvisioning
+	job.State = site.OnboardingProvisioning
 	job.OutputID = result.Config.DBName
 	job.UpdatedAt = time.Now().UTC()
 	if h.ProvisioningStore != nil {
 		_ = h.ProvisioningStore.UpsertJob(job)
-		_ = h.ProvisioningStore.UpsertCheckpoint(cloud.ProvisioningCheckpoint{JobID: job.ID, Stage: "provisioned", Completed: true, RecordedAt: time.Now().UTC()})
+		_ = h.ProvisioningStore.UpsertCheckpoint(site.OnboardingCheckpoint{JobID: job.ID, Stage: "provisioned", Completed: true, RecordedAt: time.Now().UTC()})
 	}
 
 	domains := []string{req.Hostname}
@@ -624,11 +638,11 @@ func (h *ConsoleHandler) processOnboardJob(job cloud.ProvisioningJob, req onboar
 	}
 	h.SiteRouter.AddSite(loaded)
 
-	job.State = cloud.ProvisioningActive
+	job.State = site.OnboardingActive
 	job.UpdatedAt = time.Now().UTC()
 	if h.ProvisioningStore != nil {
 		_ = h.ProvisioningStore.UpsertJob(job)
-		_ = h.ProvisioningStore.UpsertCheckpoint(cloud.ProvisioningCheckpoint{JobID: job.ID, Stage: "active", Completed: true, RecordedAt: time.Now().UTC()})
+		_ = h.ProvisioningStore.UpsertCheckpoint(site.OnboardingCheckpoint{JobID: job.ID, Stage: "active", Completed: true, RecordedAt: time.Now().UTC()})
 	}
 	slog.Info("site created via self-service onboarding", "hostname", req.Hostname)
 }
@@ -638,7 +652,7 @@ func (h *ConsoleHandler) processOnboardJob(job cloud.ProvisioningJob, req onboar
 func (h *ConsoleHandler) HandleUpdateSite(c *gin.Context) {
 	siteName := c.Param("name")
 	if siteName == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "site name required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "site name required", map[string]any{"field": "name"})
 		return
 	}
 
@@ -646,13 +660,13 @@ func (h *ConsoleHandler) HandleUpdateSite(c *gin.Context) {
 		Domains []string `json:"domains"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", nil)
 		return
 	}
 
 	site := h.SiteRouter.SiteByName(siteName)
 	if site == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Site not found: " + siteName}})
+		writeError(c, http.StatusNotFound, "site.not_found", "Site not found", map[string]any{"name": siteName})
 		return
 	}
 
@@ -684,7 +698,7 @@ func (h *ConsoleHandler) HandleUpdateSite(c *gin.Context) {
 func (h *ConsoleHandler) HandleDeleteSite(c *gin.Context) {
 	siteName := c.Param("name")
 	if siteName == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "site name required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "site name required", map[string]any{"field": "name"})
 		return
 	}
 
@@ -692,17 +706,17 @@ func (h *ConsoleHandler) HandleDeleteSite(c *gin.Context) {
 		Confirm string `json:"confirm"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", nil)
 		return
 	}
 	if req.Confirm != siteName {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Type the site hostname to confirm deletion."}})
+		writeError(c, http.StatusBadRequest, "validation.required_confirmation", "Type the site hostname to confirm deletion.", nil)
 		return
 	}
 
 	loaded := h.SiteRouter.SiteByName(siteName)
 	if loaded == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Site not found: " + siteName}})
+		writeError(c, http.StatusNotFound, "site.not_found", "Site not found", map[string]any{"name": siteName})
 		return
 	}
 
@@ -725,7 +739,7 @@ func (h *ConsoleHandler) HandleDeleteSite(c *gin.Context) {
 		DBPassword:     h.PlatformDBPassword,
 	}); err != nil {
 		slog.Error("deleting site failed", "hostname", siteName, "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to delete site: " + err.Error()}})
+		writeError(c, http.StatusInternalServerError, "site.delete_failed", "Failed to delete site", map[string]any{"error": err.Error()})
 		return
 	}
 
@@ -744,7 +758,7 @@ func (h *ConsoleHandler) HandleDeleteSite(c *gin.Context) {
 func (h *ConsoleHandler) HandleResetSitePassword(c *gin.Context) {
 	siteName := c.Param("name")
 	if siteName == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "site name required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "site name required", map[string]any{"field": "name"})
 		return
 	}
 
@@ -753,17 +767,17 @@ func (h *ConsoleHandler) HandleResetSitePassword(c *gin.Context) {
 		NewPassword string `json:"new_password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", nil)
 		return
 	}
 	if req.Email == "" || req.NewPassword == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "email and new_password are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "email and new_password are required", map[string]any{"fields": []string{"email", "new_password"}})
 		return
 	}
 
 	loaded := h.SiteRouter.SiteByName(siteName)
 	if loaded == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Site not found: " + siteName}})
+		writeError(c, http.StatusNotFound, "site.not_found", "Site not found", map[string]any{"name": siteName})
 		return
 	}
 
@@ -771,7 +785,7 @@ func (h *ConsoleHandler) HandleResetSitePassword(c *gin.Context) {
 	passwordHash, err := auth.HashPassword(req.NewPassword)
 	if err != nil {
 		slog.Error("hashing password failed", "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to hash password."}})
+		writeError(c, http.StatusInternalServerError, "auth.password_hash_failed", "Failed to hash password.", nil)
 		return
 	}
 
@@ -782,13 +796,13 @@ func (h *ConsoleHandler) HandleResetSitePassword(c *gin.Context) {
 	)
 	if err != nil {
 		slog.Error("resetting site password failed", "site", siteName, "email", req.Email, "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to update password: " + err.Error()}})
+		writeError(c, http.StatusInternalServerError, "site.password_update_failed", "Failed to update password", map[string]any{"error": err.Error()})
 		return
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "No user found with email: " + req.Email}})
+		writeError(c, http.StatusNotFound, "user.not_found", "No user found with email", map[string]any{"email": req.Email})
 		return
 	}
 

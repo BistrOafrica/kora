@@ -1,0 +1,77 @@
+package kernel_test
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/asenawritescode/kora/kernel"
+)
+
+func TestLoadCommandDir(t *testing.T) {
+	dir := t.TempDir()
+	valid := `
+name: animal.register
+namespace: livestock
+version: 1
+input:
+  record: Task
+transaction:
+  - create:
+      record: Task
+      values:
+        title: $input.title
+`
+	if err := os.WriteFile(filepath.Join(dir, "a-register.yaml"), []byte(valid), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Non-YAML file must be ignored.
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignore me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg, err := kernel.LoadCommandDir(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if _, ok := reg.Lookup("livestock.animal.register"); !ok {
+		t.Fatalf("definition not registered under namespaced key")
+	}
+	if len(reg.List()) != 1 {
+		t.Fatalf("expected exactly 1 definition, got %d", len(reg.List()))
+	}
+}
+
+func TestLoadCommandDirMissingIsClean(t *testing.T) {
+	reg, err := kernel.LoadCommandDir(filepath.Join(t.TempDir(), "does-not-exist"))
+	if err != nil || reg == nil {
+		t.Fatalf("missing dir must yield empty registry, got %v/%v", reg, err)
+	}
+}
+
+func TestLoadCommandDirFailsClosedOnInvalid(t *testing.T) {
+	dir := t.TempDir()
+	bad := "name: broken\nversion: 1\n" // no input, no steps
+	if err := os.WriteFile(filepath.Join(dir, "b.yaml"), []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := kernel.LoadCommandDir(dir)
+	if err == nil || !strings.Contains(err.Error(), "b.yaml") {
+		t.Fatalf("invalid definition must fail the load with file context, got %v", err)
+	}
+}
+
+func TestCommandRegistryDuplicateRejected(t *testing.T) {
+	r := kernel.NewCommandRegistry()
+	def, err := kernel.ParseCommandResource([]byte("name: x.create\nnamespace: n\nversion: 1\ninput:\n  record: T\ntransaction:\n  - create:\n      record: T\n      values:\n        a: b\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Register(def); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Register(def); err == nil {
+		t.Fatalf("duplicate registration must be rejected")
+	}
+}

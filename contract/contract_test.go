@@ -212,3 +212,34 @@ func TestNewIDIsULID(t *testing.T) {
 		t.Errorf("NewID() returned duplicate IDs")
 	}
 }
+
+// TestContractInventoryCoversCurrentSurface verifies the package exposes a
+// stable inventory for documentation and handoff use.
+func TestContractInventoryCoversCurrentSurface(t *testing.T) {
+	inv := ContractInventory()
+	if len(inv) < 10 {
+		t.Fatalf("inventory too small: %d", len(inv))
+	}
+
+	want := map[string]SurfaceStatus{
+		"status":            SurfaceSupported,
+		"error_codes":       SurfaceSupported,
+		"actor_context":     SurfaceExperimental,
+		"command_envelope":  SurfaceSupported,
+		"event_envelope":    SurfaceSupported,
+		"resource_descriptor": SurfacePartial,
+		"ui_manifest":       SurfaceSupported,
+		"offline_sync":      SurfaceSupported,
+		"authentication":    SurfaceSupported,
+	}
+
+	got := map[string]SurfaceStatus{}
+	for _, s := range inv {
+		got[s.Name] = s.Status
+	}
+	for name, status := range want {
+		if got[name] != status {
+			t.Fatalf("surface %q status = %q, want %q", name, got[name], status)
+		}
+	}
+}

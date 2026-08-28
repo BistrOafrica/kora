@@ -20,9 +20,9 @@ import (
 // ProviderProfile is the normalized provider/model selection used by the chat
 // pipeline before any network I/O occurs.
 type ProviderProfile struct {
-	ProviderKey   string
-	BaseURL       string
-	Model         string
+	ProviderKey    string
+	BaseURL        string
+	Model          string
 	HTTPTimeoutSec int
 }
 
@@ -74,17 +74,17 @@ type AIConfig struct {
 // DefaultAIConfig returns sane defaults that work for most models.
 func DefaultAIConfig() AIConfig {
 	return AIConfig{
-		MaxRounds:          10,
-		TokenBudget:        80000,
+		MaxRounds:           10,
+		TokenBudget:         80000,
 		CompactionThreshold: 0.80,
-		MaxToolResultChars: 4000,
-		StallThreshold:     3,
-		MaxToolErrors:      5,
-		MaxTokensPerCall:   4096,
-		HTTPTimeoutSec:     60,
-		MaxRetries:         2,
-		RetryBackoffMs:     500,
-		HistoryLimit:       20,
+		MaxToolResultChars:  4000,
+		StallThreshold:      3,
+		MaxToolErrors:       5,
+		MaxTokensPerCall:    4096,
+		HTTPTimeoutSec:      60,
+		MaxRetries:          2,
+		RetryBackoffMs:      500,
+		HistoryLimit:        20,
 	}
 }
 

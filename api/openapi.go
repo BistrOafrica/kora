@@ -222,8 +222,8 @@ func addDoctypePaths(spec *openapi3.T, dt *doctype.DocType) {
 				},
 				Responses: openapi3.NewResponses(openapi3.WithStatus(200, resp("Transition applied"))),
 			},
-	})
-}
+		})
+	}
 }
 
 func doctypeToSchemaRef(dt *doctype.DocType, reg *doctype.Registry) *openapi3.SchemaRef {

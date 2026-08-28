@@ -20,6 +20,7 @@ import (
 	"github.com/asenawritescode/kora/analytics"
 	"github.com/asenawritescode/kora/auth"
 	"github.com/asenawritescode/kora/doctype"
+	"github.com/asenawritescode/kora/kernel"
 	"github.com/asenawritescode/kora/natsprovider"
 	"github.com/asenawritescode/kora/orm"
 	"github.com/asenawritescode/kora/outbox"
@@ -79,6 +80,11 @@ type Handler struct {
 	// fallback used when no site-specific backend is configured.
 	SiteStorages map[string]storage.Backend
 	Storage      storage.Backend
+
+	// KernelCommands carries config-defined command resources (KERNEL-008)
+	// loaded at startup from application configuration. Nil = built-ins only;
+	// GET /api/v1/kernel/_registry then reports an empty list.
+	KernelCommands *kernel.CommandRegistry
 }
 
 // NewHandler creates a new API handler.
@@ -228,9 +234,7 @@ func SetAPILimits(def, max int) {
 // This prevents sensitive DB/internal details from leaking to API clients.
 func internalError(c *gin.Context, msg string, err error) {
 	slog.Error(msg, "error", err)
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: map[string]string{"message": "An internal error occurred"},
-	})
+	writeError(c, http.StatusInternalServerError, "server.internal_error", "An internal error occurred", nil)
 }
 
 // Meta holds response metadata.
@@ -250,6 +254,35 @@ type Response struct {
 type ErrorResponse struct {
 	Error any   `json:"error"`
 	Meta  *Meta `json:"meta,omitempty"`
+}
+
+// ErrorBody is the machine-readable error envelope returned to the frontend.
+type ErrorBody struct {
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
+func writeError(c *gin.Context, status int, code, message string, details map[string]any) {
+	c.JSON(status, ErrorResponse{
+		Error: ErrorBody{
+			Code:    code,
+			Message: message,
+			Details: details,
+		},
+	})
+}
+
+func badRequestError(c *gin.Context, code, message string, details map[string]any) {
+	writeError(c, http.StatusBadRequest, code, message, details)
+}
+
+func notFoundError(c *gin.Context, code, message string, details map[string]any) {
+	writeError(c, http.StatusNotFound, code, message, details)
+}
+
+func conflictError(c *gin.Context, code, message string, details map[string]any) {
+	writeError(c, http.StatusConflict, code, message, details)
 }
 
 // --- List Handler ---
@@ -299,9 +332,7 @@ func (h *Handler) HandleList(c *gin.Context) {
 	doctypeName := c.Param("doctype")
 	dt := h.siteRegistry(c).Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": fmt.Sprintf("DocType %q not found", doctypeName)},
-		})
+		notFoundError(c, "resource.doctype_not_found", fmt.Sprintf("DocType %q not found", doctypeName), map[string]any{"doctype": doctypeName})
 		return
 	}
 
@@ -430,9 +461,7 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 	var rawData map[string]any
 	if err := c.ShouldBindJSON(&rawData); err != nil {
 		slog.Warn("invalid JSON in create", "error", err)
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Invalid request format"},
-		})
+		badRequestError(c, "validation.invalid_json", "Invalid request format", nil)
 		return
 	}
 
@@ -444,9 +473,7 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 			// Parse child table rows.
 			children, err := parseChildRows(val, field, h.siteRegistry(c))
 			if err != nil {
-				c.JSON(http.StatusBadRequest, ErrorResponse{
-					Error: map[string]string{"message": fmt.Sprintf("Field %s: %s", key, err.Error())},
-				})
+				badRequestError(c, "validation.invalid_child_table", fmt.Sprintf("Field %s: %s", key, err.Error()), map[string]any{"field": key})
 				return
 			}
 			doc.Set(key, children)
@@ -476,9 +503,7 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 	// Validate.
 	validationErrs := doctype.ValidateDocument(dt, doc, h.Registry, nil)
 	if validationErrs.HasErrors() {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: formatValidationErrors(validationErrs),
-		})
+		writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"fields": validationErrorDetails(validationErrs)})
 		return
 	}
 
@@ -492,13 +517,15 @@ func (h *Handler) HandleCreate(c *gin.Context) {
 	if err := h.siteTx(c).Insert(dt, doc, owner, owner); err != nil {
 		var valErr *doctype.ValidationError
 		if errors.As(err, &valErr) {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: formatValidationErrors(doctype.ValidationErrors{valErr}),
-			})
+			writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"fields": validationErrorDetails(doctype.ValidationErrors{valErr})})
 			return
 		}
 		internalError(c, "insert failed", err)
 		return
+	}
+	h.invalidateAnalyticsForDoctype(c, doctypeName)
+	if w := h.siteAnalyticsWorker(c); w != nil {
+		w.Flush()
 	}
 
 	c.JSON(http.StatusCreated, Response{
@@ -516,9 +543,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 
 	dt := h.siteRegistry(c).Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": fmt.Sprintf("DocType %q not found", doctypeName)},
-		})
+		notFoundError(c, "resource.doctype_not_found", fmt.Sprintf("DocType %q not found", doctypeName), map[string]any{"doctype": doctypeName})
 		return
 	}
 
@@ -536,9 +561,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	oldDoc, err := h.siteTx(c).GetDoc(dt, name, owner)
 	if err != nil {
 		slog.Warn("document get failed for update", "doctype", doctypeName, "name", name, "error", err)
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "Document not found"},
-		})
+		notFoundError(c, "resource.document_not_found", "Document not found", map[string]any{"doctype": doctypeName, "name": name})
 		return
 	}
 
@@ -546,9 +569,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	var rawData map[string]any
 	if err := c.ShouldBindJSON(&rawData); err != nil {
 		slog.Warn("invalid JSON in update", "error", err)
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: map[string]string{"message": "Invalid request format"},
-		})
+		badRequestError(c, "validation.invalid_json", "Invalid request format", nil)
 		return
 	}
 
@@ -571,9 +592,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 		if field != nil && field.Fieldtype == "Table" {
 			children, err := parseChildRows(val, field, h.siteRegistry(c))
 			if err != nil {
-				c.JSON(http.StatusBadRequest, ErrorResponse{
-					Error: map[string]string{"message": fmt.Sprintf("Field %s: %s", key, err.Error())},
-				})
+				badRequestError(c, "validation.invalid_child_table", fmt.Sprintf("Field %s: %s", key, err.Error()), map[string]any{"field": key})
 				return
 			}
 			doc.Set(key, children)
@@ -608,9 +627,7 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	// Validate.
 	validationErrs := doctype.ValidateDocument(dt, doc, h.Registry, oldDoc)
 	if validationErrs.HasErrors() {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: formatValidationErrors(validationErrs),
-		})
+		writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"fields": validationErrorDetails(validationErrs)})
 		return
 	}
 
@@ -624,13 +641,15 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	if err := h.siteTx(c).Save(dt, doc, modifiedBy, owner, oldDoc); err != nil {
 		var valErr *doctype.ValidationError
 		if errors.As(err, &valErr) {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: formatValidationErrors(doctype.ValidationErrors{valErr}),
-			})
+			writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"fields": validationErrorDetails(doctype.ValidationErrors{valErr})})
 			return
 		}
 		internalError(c, "save failed", err)
 		return
+	}
+	h.invalidateAnalyticsForDoctype(c, doctypeName)
+	if w := h.siteAnalyticsWorker(c); w != nil {
+		w.Flush()
 	}
 
 	c.JSON(http.StatusOK, Response{
@@ -768,9 +787,7 @@ func (h *Handler) HandleDelete(c *gin.Context) {
 
 	dt := h.siteRegistry(c).Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": fmt.Sprintf("DocType %q not found", doctypeName)},
-		})
+		notFoundError(c, "resource.doctype_not_found", fmt.Sprintf("DocType %q not found", doctypeName), map[string]any{"doctype": doctypeName})
 		return
 	}
 
@@ -786,10 +803,12 @@ func (h *Handler) HandleDelete(c *gin.Context) {
 
 	if err := h.siteTx(c).Delete(dt, name, owner); err != nil {
 		slog.Warn("document delete failed", "doctype", doctypeName, "name", name, "error", err)
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: map[string]string{"message": "Document not found"},
-		})
+		notFoundError(c, "resource.document_not_found", "Document not found", map[string]any{"doctype": doctypeName, "name": name})
 		return
+	}
+	h.invalidateAnalyticsForDoctype(c, doctypeName)
+	if w := h.siteAnalyticsWorker(c); w != nil {
+		w.Flush()
 	}
 
 	c.JSON(http.StatusOK, Response{
@@ -887,10 +906,10 @@ func parseChildRows(val any, field *doctype.Field, registry *doctype.Registry) (
 	return children, nil
 }
 
-func formatValidationErrors(errors doctype.ValidationErrors) any {
+func validationErrorDetails(errors doctype.ValidationErrors) any {
 	if len(errors) == 1 {
 		return map[string]any{
-			"type":    errors[0].Type,
+			"code":    errors[0].Type,
 			"message": errors[0].Message,
 			"field":   errors[0].Field,
 			"doctype": errors[0].DocType,
@@ -900,15 +919,13 @@ func formatValidationErrors(errors doctype.ValidationErrors) any {
 	var messages []map[string]any
 	for _, e := range errors {
 		messages = append(messages, map[string]any{
-			"type":    e.Type,
+			"code":    e.Type,
 			"message": e.Message,
 			"field":   e.Field,
 			"doctype": e.DocType,
 		})
 	}
-	return map[string]any{
-		"errors": messages,
-	}
+	return messages
 }
 
 // RegisterRoutes registers all CRUD routes for all DocTypes in the registry on a full Engine.
@@ -922,23 +939,7 @@ func RegisterRoutes(router *gin.Engine, registry *doctype.Registry, txManager *o
 		c.JSON(200, gin.H{"message": "pong"})
 	})
 	router.GET("/health", func(c *gin.Context) {
-		db, _ := c.Get("site_db")
-		status := "ok"
-		dbStatus := "connected"
-		if sqlDB, ok := db.(*sql.DB); ok {
-			if err := sqlDB.Ping(); err != nil {
-				dbStatus = "disconnected"
-				status = "degraded"
-			}
-		} else {
-			dbStatus = "unknown"
-		}
-		c.JSON(200, gin.H{
-			"status": status,
-			"db":     dbStatus,
-			// Async hook overflow count (RFC Phase 1: no silent drops).
-			"async_hook_enqueue_failed": orm.HookEnqueueFailedCount(),
-		})
+		c.JSON(200, healthPayload(c))
 	})
 
 	// File upload endpoint.
@@ -947,10 +948,30 @@ func RegisterRoutes(router *gin.Engine, registry *doctype.Registry, txManager *o
 	_ = handler
 }
 
+func healthPayload(c *gin.Context) gin.H {
+	db, _ := c.Get("site_db")
+	status := "ok"
+	dbStatus := "connected"
+	if sqlDB, ok := db.(*sql.DB); ok {
+		if err := sqlDB.Ping(); err != nil {
+			dbStatus = "disconnected"
+			status = "degraded"
+		}
+	} else {
+		dbStatus = "unknown"
+	}
+	return gin.H{
+		"status": status,
+		"db":     dbStatus,
+		// Async hook overflow count (RFC Phase 1: no silent drops).
+		"async_hook_enqueue_failed": orm.HookEnqueueFailedCount(),
+	}
+}
+
 // RegisterRoutesOnGroup registers all CRUD routes on an existing RouterGroup.
 // This allows the caller to apply middleware (e.g., auth) before the group.
 func RegisterRoutesOnGroup(apiGroup *gin.RouterGroup, registry *doctype.Registry, txManager *orm.TxManager) {
-	RegisterRoutesOnGroupWithAnalytics(apiGroup, registry, txManager, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	RegisterRoutesOnGroupWithAnalytics(apiGroup, registry, txManager, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 // RegisterPublicRoutesOnGroup registers unauthenticated, read-only public
@@ -975,7 +996,7 @@ func RegisterPublicRoutesOnGroup(apiGroup *gin.RouterGroup, registry *doctype.Re
 // RegisterRoutesOnGroupWithAnalytics registers all CRUD routes with optional
 // analytics event propagation. siteBuses maps site name → EventBus; if nil or
 // empty, analytics event emission is a no-op.
-func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doctype.Registry, txManager *orm.TxManager, siteBuses map[string]analytics.EventBus, realtimeProviders map[string]*natsprovider.Provider, scriptRunner script.Runner, siteScriptStores map[string]*script.Store, siteSecretStores map[string]*secret.Store, httpAllowlist []string, siteWebhookWorkers map[string]*webhook.Worker, asyncHookSink orm.AsyncHookSink, siteOutboxes map[string]outbox.Writer, siteStorages map[string]storage.Backend) {
+func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doctype.Registry, txManager *orm.TxManager, siteBuses map[string]analytics.EventBus, realtimeProviders map[string]*natsprovider.Provider, scriptRunner script.Runner, siteScriptStores map[string]*script.Store, siteSecretStores map[string]*secret.Store, httpAllowlist []string, siteWebhookWorkers map[string]*webhook.Worker, asyncHookSink orm.AsyncHookSink, siteOutboxes map[string]outbox.Writer, siteStorages map[string]storage.Backend, kernelCommands *kernel.CommandRegistry) {
 	handler := NewHandler(registry, txManager)
 	handler.SiteEventBuses = siteBuses
 	handler.SiteRealtimeProviders = realtimeProviders
@@ -987,6 +1008,7 @@ func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doc
 	handler.AsyncHookSink = asyncHookSink
 	handler.SiteOutboxes = siteOutboxes
 	handler.SiteStorages = siteStorages
+	handler.KernelCommands = kernelCommands
 
 	// File attachments: upload + authenticated serving (Range-aware for audio/video).
 	apiGroup.POST("/upload", handler.HandleUpload)
@@ -1002,6 +1024,12 @@ func RegisterRoutesOnGroupWithAnalytics(apiGroup *gin.RouterGroup, registry *doc
 		resource.DELETE("/:doctype/:name", handler.HandleDelete)
 		resource.POST("/:doctype/:name/workflow_action", handler.HandleWorkflowAction)
 	}
+
+	// Operation kernel: canonical command path shared by every adapter
+	// (first vertical slice — record.create, record.update) plus the
+	// config-defined command registry (KERNEL-008).
+	apiGroup.POST("/kernel/:command", handler.HandleKernelOperation)
+	apiGroup.GET("/kernel/_registry", handler.HandleKernelRegistry)
 
 	// OpenAPI docs.
 	apiGroup.GET("/openapi.json", handler.HandleOpenAPI)
@@ -1440,7 +1468,7 @@ func (h *Handler) HandleConfigVersion(c *gin.Context) {
 		"SELECT version, label, config, changelog FROM _kora_config_version WHERE id = ?", id,
 	).Scan(&version, &label, &configJSON, &changelog)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Version not found"}})
+		writeError(c, http.StatusNotFound, "version.not_found", "Version not found", nil)
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: map[string]any{
@@ -1454,7 +1482,7 @@ func (h *Handler) HandleConfigDiff(c *gin.Context) {
 	fromID := c.Query("from")
 	toID := c.Query("to")
 	if fromID == "" || toID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "from and to required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "from and to required", map[string]any{"fields": []string{"from", "to"}})
 		return
 	}
 	// First check if the "to" version has a stored change_list.
@@ -1472,7 +1500,7 @@ func (h *Handler) HandleConfigDiff(c *gin.Context) {
 	h.siteTx(c).DB.QueryRow("SELECT config FROM _kora_config_version WHERE id = ?", fromID).Scan(&fromConfig)
 	h.siteTx(c).DB.QueryRow("SELECT config FROM _kora_config_version WHERE id = ?", toID).Scan(&toConfig)
 	if fromConfig == "" || toConfig == "" {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Version not found"}})
+		writeError(c, http.StatusNotFound, "version.not_found", "Version not found", nil)
 		return
 	}
 	fromSnapshot, fromErr := doctype.ParseConfig(fromConfig)

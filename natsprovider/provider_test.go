@@ -157,3 +157,112 @@ func TestConsumerDeadLettersAfterMaxDeliver(t *testing.T) {
 	_ = c.Drain(context.Background())
 	cancel()
 }
+
+func TestDiagnosticsReportsStreamHealth(t *testing.T) {
+	s, url := runEmbeddedServer(t)
+	defer s.Shutdown()
+
+	p, err := New(context.Background(), Config{
+		Name:          "kora-test",
+		ServerURLs:    []string{url},
+		StreamName:    "KORA_EVENTS",
+		SubjectPrefix: "kora",
+		MaxDeliver:    5,
+	})
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
+	defer p.Close()
+	if err := p.Bootstrap(context.Background()); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	diag, err := p.Diagnostics(context.Background())
+	if err != nil {
+		t.Fatalf("diagnostics: %v", err)
+	}
+	if !diag.Connected {
+		t.Fatal("expected provider to report connected")
+	}
+	if diag.StreamName != "KORA_EVENTS" {
+		t.Fatalf("stream name = %q, want KORA_EVENTS", diag.StreamName)
+	}
+	if diag.ConsumerCount < 0 {
+		t.Fatalf("consumer count = %d, want non-negative", diag.ConsumerCount)
+	}
+}
+
+func TestPublishDeduplicatesByMessageID(t *testing.T) {
+	s, url := runEmbeddedServer(t)
+	defer s.Shutdown()
+
+	p, err := New(context.Background(), Config{
+		Name:          "kora-test",
+		ServerURLs:    []string{url},
+		StreamName:    "KORA_EVENTS",
+		SubjectPrefix: "kora",
+		MaxDeliver:    5,
+	})
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
+	defer p.Close()
+	if err := p.Bootstrap(context.Background()); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	event := contract.EventEnvelope{
+		ID:   "evt-dedupe-1",
+		Type: "events.document.created",
+		Site: "site-a",
+		Data: json.RawMessage(`{"data":{"name":"Test"}}`),
+	}
+	if err := p.Publish(context.Background(), event); err != nil {
+		t.Fatalf("first publish: %v", err)
+	}
+	if err := p.Publish(context.Background(), event); err != nil {
+		t.Fatalf("duplicate publish: %v", err)
+	}
+
+	info, err := p.js.StreamInfo(p.cfg.StreamName)
+	if err != nil {
+		t.Fatalf("stream info: %v", err)
+	}
+	if info.State.Msgs != 1 {
+		t.Fatalf("stream msgs = %d, want 1", info.State.Msgs)
+	}
+}
+
+func TestSubscribeDrainClosesChannel(t *testing.T) {
+	s, url := runEmbeddedServer(t)
+	defer s.Shutdown()
+
+	p, err := New(context.Background(), Config{
+		Name:          "kora-test",
+		ServerURLs:    []string{url},
+		StreamName:    "KORA_EVENTS",
+		SubjectPrefix: "kora",
+		MaxDeliver:    5,
+	})
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
+	defer p.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ch, drain, err := p.Subscribe(ctx, "kora.events.test")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	drain()
+	cancel()
+
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("expected drained channel to be closed")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for drained channel to close")
+	}
+}

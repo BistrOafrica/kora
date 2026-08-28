@@ -72,7 +72,10 @@ func executeAnalyticsInsights(tx *orm.TxManager, reg *doctype.Registry, doctypeN
 	}
 	defer rows.Close()
 
-	type entry struct{ M, D string; V float64 }
+	type entry struct {
+		M, D string
+		V    float64
+	}
 	var entries []entry
 	for rows.Next() {
 		var e entry

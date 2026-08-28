@@ -188,3 +188,66 @@ func OperationCanTransition(from, to OfflineOperationStatus) bool {
 		return false
 	}
 }
+
+// GenerationInfo identifies the projection generation a client holds
+// (OFFLINE-001). ConfigVersion bumps on every activated config change;
+// ProjectionHash identifies the derived local schema.
+type GenerationInfo struct {
+	Site           string `json:"site"`
+	ConfigVersion  int64  `json:"config_version"`
+	ProjectionHash string `json:"projection_hash"`
+}
+
+// StaleProjectionError is a typed rejection when a client's projection is stale
+// or missing a required capability. It is never a bare string error.
+type StaleProjectionError struct {
+	Kind              string `json:"kind"` // "stale_generation" | "capability_missing"
+	ClientGeneration  int64  `json:"client_generation"`
+	ServerGeneration  int64  `json:"server_generation"`
+	MissingCapability string `json:"missing_capability,omitempty"`
+}
+
+func (e *StaleProjectionError) Error() string {
+	switch e.Kind {
+	case "capability_missing":
+		return "offline projection missing capability " + e.MissingCapability
+	default:
+		return "offline projection stale generation"
+	}
+}
+
+// CheckProjectionGate compares a client's generation and capability set against
+// the server and returns a typed *StaleProjectionError on any mismatch. A nil
+// return means the projection is accepted.
+func CheckProjectionGate(client, server GenerationInfo, requiredCaps, clientCaps []string) *StaleProjectionError {
+	if client.ConfigVersion < server.ConfigVersion {
+		return &StaleProjectionError{
+			Kind:             "stale_generation",
+			ClientGeneration: client.ConfigVersion,
+			ServerGeneration: server.ConfigVersion,
+		}
+	}
+	if client.ProjectionHash != "" && server.ProjectionHash != "" && client.ProjectionHash != server.ProjectionHash {
+		return &StaleProjectionError{
+			Kind:             "stale_generation",
+			ClientGeneration: client.ConfigVersion,
+			ServerGeneration: server.ConfigVersion,
+		}
+	}
+
+	clientSet := make(map[string]bool, len(clientCaps))
+	for _, c := range clientCaps {
+		clientSet[c] = true
+	}
+	for _, req := range requiredCaps {
+		if !clientSet[req] {
+			return &StaleProjectionError{
+				Kind:              "capability_missing",
+				ClientGeneration:  client.ConfigVersion,
+				ServerGeneration:  server.ConfigVersion,
+				MissingCapability: req,
+			}
+		}
+	}
+	return nil
+}

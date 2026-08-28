@@ -35,28 +35,28 @@ type channelToolRequest struct {
 
 func (h *Handler) HandleChannelSessionIssue(c *gin.Context) {
 	if c.GetString("auth_type") != "extension" || c.GetString("extension_name") != "kora-cloud-channel" {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: map[string]string{"message": "extension authentication required"}})
+		writeError(c, http.StatusForbidden, "auth.extension_required", "extension authentication required", nil)
 		return
 	}
 	var req channelSessionIssueRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "invalid request body"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "invalid request body", nil)
 		return
 	}
 	if req.ConversationKey == "" || req.Provider == "" || req.SenderAddress == "" || req.TrustedUntil == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "conversation_key, provider, sender_address, and trusted_until are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "conversation_key, provider, sender_address, and trusted_until are required", nil)
 		return
 	}
 	trustedUntil, err := time.Parse(time.RFC3339, req.TrustedUntil)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "trusted_until must be RFC3339"}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_datetime", "trusted_until must be RFC3339", nil)
 		return
 	}
 	var sensitiveUntil *time.Time
 	if strings.TrimSpace(req.SensitiveUntil) != "" {
 		parsed, err := time.Parse(time.RFC3339, req.SensitiveUntil)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "sensitive_until must be RFC3339"}})
+			writeError(c, http.StatusBadRequest, "validation.invalid_datetime", "sensitive_until must be RFC3339", nil)
 			return
 		}
 		sensitiveUntil = &parsed
@@ -92,12 +92,12 @@ func (h *Handler) HandleChannelSessionIssue(c *gin.Context) {
 
 func (h *Handler) HandleChannelSessionRevoke(c *gin.Context) {
 	if c.GetString("auth_type") != "extension" || c.GetString("extension_name") != "kora-cloud-channel" {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: map[string]string{"message": "extension authentication required"}})
+		writeError(c, http.StatusForbidden, "auth.extension_required", "extension authentication required", nil)
 		return
 	}
 	var req channelSessionRevokeRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.SessionID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "session_id is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "session_id is required", map[string]any{"field": "session_id"})
 		return
 	}
 	reason := req.Reason
@@ -113,7 +113,7 @@ func (h *Handler) HandleChannelSessionRevoke(c *gin.Context) {
 
 func (h *Handler) HandleChannelTools(c *gin.Context) {
 	if c.GetString("auth_type") != "extension" || c.GetString("extension_name") != "kora-cloud-channel" {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: map[string]string{"message": "extension authentication required"}})
+		writeError(c, http.StatusForbidden, "auth.extension_required", "extension authentication required", nil)
 		return
 	}
 	channel := strings.TrimSpace(c.DefaultQuery("channel", "web"))
@@ -146,12 +146,12 @@ func (h *Handler) HandleChannelMutate(c *gin.Context) {
 
 func (h *Handler) handleChannelTool(c *gin.Context, readOnly bool) {
 	if c.GetString("auth_type") != "channel_session" {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: map[string]string{"message": "channel session authentication required"}})
+		writeError(c, http.StatusForbidden, "auth.authentication_required", "channel session authentication required", nil)
 		return
 	}
 	var req channelToolRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.ToolName == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "tool_name is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "tool_name is required", map[string]any{"field": "tool_name"})
 		return
 	}
 	safety := ai.BuildToolCatalog(h.siteRegistry(c))
@@ -163,7 +163,7 @@ func (h *Handler) handleChannelTool(c *gin.Context, readOnly bool) {
 		}
 	}
 	if descriptor == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "tool not found"}})
+		writeError(c, http.StatusNotFound, "tool.not_found", "tool not found", nil)
 		return
 	}
 	if docType, operation, ok := permissionTargetForTool(h.siteRegistry(c), req.ToolName); ok {
@@ -172,16 +172,16 @@ func (h *Handler) handleChannelTool(c *gin.Context, readOnly bool) {
 		}
 	}
 	if !channelAllowed(descriptor.ChannelAllowlist, "whatsapp") {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: map[string]string{"message": "tool is not allowed on this channel"}})
+		writeError(c, http.StatusForbidden, "permission.denied", "tool is not allowed on this channel", nil)
 		return
 	}
 	if readOnly && descriptor.SafetyLevel != "safe" {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: map[string]string{"message": "tool is not allowed on query endpoint"}})
+		writeError(c, http.StatusForbidden, "permission.denied", "tool is not allowed on query endpoint", nil)
 		return
 	}
 	if !readOnly && descriptor.RequiresConfirmation {
 		if strings.TrimSpace(c.GetHeader("X-Kora-Confirm")) != "confirmed" {
-			c.JSON(http.StatusConflict, ErrorResponse{Error: map[string]string{"message": "confirmation required"}})
+			writeError(c, http.StatusConflict, "validation.required_confirmation", "confirmation required", nil)
 			return
 		}
 	}
@@ -200,7 +200,7 @@ func (h *Handler) handleChannelTool(c *gin.Context, readOnly bool) {
 		return
 	}
 	if status == "error" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": result}})
+		writeError(c, http.StatusBadRequest, "tool.execution_failed", result, nil)
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: channelToolResponse{Result: result}})

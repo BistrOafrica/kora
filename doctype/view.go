@@ -5,7 +5,10 @@
 // with field bindings, filters, actions, and visibility rules.
 //
 // Views are versioned alongside doctypes in _kora_config_version snapshots.
-// All view changes are TierSafe — they never affect the database schema.
+// They are the current application-definition primitive in this repo. Page
+// manifests are a projection of these views into the newer manifest contract,
+// but the engine still executes through DocType/View/config-store plumbing
+// rather than a fully generic RFC resource runtime.
 package doctype
 
 import (

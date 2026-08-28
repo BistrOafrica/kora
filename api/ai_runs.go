@@ -45,7 +45,7 @@ func (h *Handler) HandleAICancel(c *gin.Context) {
 	var req aiCancelRequest
 	_ = c.ShouldBindJSON(&req)
 	if err := ai.CancelRun(c.Request.Context(), tx.DB, runID, req.Reason); err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusNotFound, "ai_run.not_found", err.Error(), nil)
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: aiCancelResponse{RunID: runID, Status: "cancelled"}})
@@ -59,7 +59,7 @@ func (h *Handler) HandleAIResume(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 	rec, err := ai.ResumeRun(c.Request.Context(), tx.DB, runID, req.ResumeToken)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusNotFound, "ai_run.not_found", err.Error(), nil)
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: aiResumeResponse{
@@ -84,12 +84,12 @@ func (h *Handler) HandleAIGrantApproval(c *gin.Context) {
 	}
 	rec, err := ai.GrantApproval(c.Request.Context(), tx.DB, approvalID, req.GrantedBy)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusNotFound, "ai_run.not_found", err.Error(), nil)
 		return
 	}
 	run, err := ai.MarkRunPlanning(c.Request.Context(), tx.DB, rec.OperationID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusInternalServerError, "ai_run.failed", err.Error(), nil)
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: aiGrantApprovalResponse{
@@ -114,7 +114,7 @@ FROM _kora_ai_approval
 WHERE site = ? AND state = ?
 ORDER BY requested_at DESC`, c.GetString("site_name"), state)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusInternalServerError, "ai_run.failed", err.Error(), nil)
 		return
 	}
 	defer rows.Close()
@@ -123,7 +123,7 @@ ORDER BY requested_at DESC`, c.GetString("site_name"), state)
 		var item aiApprovalListItem
 		var expiresAt, grantedAt sql.NullTime
 		if err := rows.Scan(&item.ID, &item.OperationID, &item.ActorPrincipalID, &item.ActorPrincipalType, &item.ToolName, &item.State, &item.TargetFingerprint, &item.ArgumentHash, &item.RecordVersion, &item.RequestedAt, &expiresAt, &grantedAt, &item.GrantedBy, &item.AuthSessionID); err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+			writeError(c, http.StatusInternalServerError, "ai_run.failed", err.Error(), nil)
 			return
 		}
 		if expiresAt.Valid {
@@ -135,7 +135,7 @@ ORDER BY requested_at DESC`, c.GetString("site_name"), state)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusInternalServerError, "ai_run.failed", err.Error(), nil)
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: items})
@@ -146,7 +146,7 @@ func (h *Handler) HandleAIRetentionCleanup(c *gin.Context) {
 	tx := h.siteTx(c)
 	removed, err := ai.CleanupExpired(c.Request.Context(), tx.DB, time.Now().UTC())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusInternalServerError, "ai_run.failed", err.Error(), nil)
 		return
 	}
 	c.JSON(http.StatusOK, Response{Data: aiRetentionCleanupResponse{Removed: removed}})

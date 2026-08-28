@@ -73,19 +73,19 @@ func (h *Handler) HandleExtensionCreate(c *gin.Context) {
 		APIPermissions string `json:"api_permissions"` // JSON array
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" || req.EndpointURL == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "name and endpoint_url are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "name and endpoint_url are required", map[string]any{"fields": []string{"name", "endpoint_url"}})
 		return
 	}
 
 	// Generate signing secret and access token.
 	secret, err := webhook.GenerateSecret()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to generate secret"}})
+		writeError(c, http.StatusInternalServerError, "extension.secret_generation_failed", "Failed to generate secret", nil)
 		return
 	}
 	accessToken, err := generateAccessToken()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to generate access token"}})
+		writeError(c, http.StatusInternalServerError, "extension.token_generation_failed", "Failed to generate access token", nil)
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *Handler) HandleExtensionCreate(c *gin.Context) {
 
 	db := h.queryDB(c)
 	if db == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Database not available"}})
+		writeError(c, http.StatusInternalServerError, "server.database_unavailable", "Database not available", nil)
 		return
 	}
 
@@ -108,7 +108,7 @@ func (h *Handler) HandleExtensionCreate(c *gin.Context) {
 		req.Subscriptions, apiPerms)
 	if err != nil {
 		slog.Error("creating extension", "error", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to create extension"}})
+		writeError(c, http.StatusInternalServerError, "extension.create_failed", "Failed to create extension", nil)
 		return
 	}
 
@@ -135,7 +135,7 @@ func (h *Handler) HandleExtensionDelete(c *gin.Context) {
 
 	db := h.queryDB(c)
 	if db == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Not found"}})
+		writeError(c, http.StatusNotFound, "extension.not_found", "Not found", nil)
 		return
 	}
 	db.Exec(`DELETE FROM _kora_extension WHERE site = ? AND name = ?`, siteNameStr, name)
@@ -192,12 +192,12 @@ func (h *Handler) HandleExtensionRotateSecret(c *gin.Context) {
 	name := c.Param("name")
 	secret, err := webhook.GenerateSecret()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to generate secret"}})
+		writeError(c, http.StatusInternalServerError, "extension.secret_generation_failed", "Failed to generate secret", nil)
 		return
 	}
 	db := h.queryDB(c)
 	if db == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Database not available"}})
+		writeError(c, http.StatusInternalServerError, "server.database_unavailable", "Database not available", nil)
 		return
 	}
 

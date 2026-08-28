@@ -1,3 +1,9 @@
+// Package doctype provides the current page-manifest projection over the
+// DocType/view system.
+//
+// PageManifest is a real contract used by the admin UI and config store, but it
+// is still a projection layered over the existing DocType-centric runtime. It
+// is not yet the full generic application-definition runtime from the RFC.
 package doctype
 
 import (

@@ -140,6 +140,41 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 	}
 	defer dbTx.Rollback()
 
+	if err := tx.InsertInTx(dbTx, dt, doc, owner, modifiedBy); err != nil {
+		return err
+	}
+
+	if err := dbTx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	doc.IsNew = false
+
+	if tx.EventBus != nil {
+		tx.EventBus.Publish(analytics.ChangeEvent{
+			Site:       tx.SiteName,
+			Doctype:    dt.Name,
+			DocName:    doc.Name,
+			Operation:  analytics.EventInsert,
+			Timestamp:  time.Now(),
+			ModifiedBy: modifiedBy,
+			Data:       copyFieldsWithStatus(doc.Fields, doc.DocStatus),
+		})
+	}
+
+	// Run after_insert + after_save hooks — best-effort, errors logged not returned.
+	_ = tx.runHooks(dt, script.EventAfterInsert, doc, nil)
+	_ = tx.runHooks(dt, script.EventAfterSave, doc, nil)
+
+	return nil
+}
+
+// InsertInTx performs the transactional portion of Insert using an existing
+// SQL transaction without committing it. Callers that must commit additional
+// rows atomically with the business write (operation kernel idempotency
+// receipts, audit rows, extra outbox events) use this variant and own the
+// surrounding transaction's Commit/Rollback.
+func (tx *TxManager) InsertInTx(dbTx *sql.Tx, dt *doctype.DocType, doc *doctype.Document, owner, modifiedBy string) error {
 	nextNum := 1
 	if doc.Name == "" {
 		prefix := derivePrefix(dt.Name)
@@ -187,8 +222,7 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 		strings.Join(placeholders, ", "),
 	)
 
-	_, err = dbTx.Exec(query, values...)
-	if err != nil {
+	if _, err := dbTx.Exec(query, values...); err != nil {
 		if valErr := tx.Dialect.ParseError(err, dt); valErr != nil {
 			if valErr.Type == "UniqueConstraint" {
 				return fmt.Errorf("%w: %w", ErrDuplicate, valErr)
@@ -250,28 +284,6 @@ func (tx *TxManager) Insert(dt *doctype.DocType, doc *doctype.Document, owner, m
 		return fmt.Errorf("recording insert to outbox: %w", err)
 	}
 
-	if err := dbTx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
-
-	doc.IsNew = false
-
-	if tx.EventBus != nil {
-		tx.EventBus.Publish(analytics.ChangeEvent{
-			Site:       tx.SiteName,
-			Doctype:    dt.Name,
-			DocName:    doc.Name,
-			Operation:  analytics.EventInsert,
-			Timestamp:  time.Now(),
-			ModifiedBy: modifiedBy,
-			Data:       copyFieldsWithStatus(doc.Fields, doc.DocStatus),
-		})
-	}
-
-	// Run after_insert + after_save hooks — best-effort, errors logged not returned.
-	_ = tx.runHooks(dt, script.EventAfterInsert, doc, nil)
-	_ = tx.runHooks(dt, script.EventAfterSave, doc, nil)
-
 	return nil
 }
 
@@ -332,6 +344,43 @@ func (tx *TxManager) Save(dt *doctype.DocType, doc *doctype.Document, modifiedBy
 	}
 	defer dbTx.Rollback() // no-op after Commit
 
+	if err := tx.SaveInTx(dbTx, dt, doc, modifiedBy, owner, oldDoc); err != nil {
+		return err
+	}
+
+	if err := dbTx.Commit(); err != nil {
+		return fmt.Errorf("committing transaction: %w", err)
+	}
+
+	if tx.EventBus != nil {
+		var oldData map[string]any
+		if oldDoc != nil {
+
+			oldData = copyFieldsWithStatus(oldDoc.Fields, oldDoc.DocStatus)
+		}
+		tx.EventBus.Publish(analytics.ChangeEvent{
+			Site:       tx.SiteName,
+			Doctype:    dt.Name,
+			DocName:    doc.Name,
+			Operation:  analytics.EventUpdate,
+			Timestamp:  time.Now(),
+			ModifiedBy: modifiedBy,
+			Data:       copyFieldsWithStatus(doc.Fields, doc.DocStatus),
+			OldData:    oldData,
+		})
+	}
+
+	// Run after_save hooks — best-effort.
+	_ = tx.runHooks(dt, script.EventAfterSave, doc, oldDoc)
+
+	return nil
+}
+
+// SaveInTx performs the transactional portion of Save using an existing SQL
+// transaction without committing it. Operation-kernel callers use this variant
+// to commit idempotency receipts and audit rows atomically with the mutation.
+// Returns orm.ErrNotFound wrapped error when the row vanished or is owner-hidden.
+func (tx *TxManager) SaveInTx(dbTx *sql.Tx, dt *doctype.DocType, doc *doctype.Document, modifiedBy string, owner string, oldDoc *doctype.Document) error {
 	now := time.Now()
 	dataFields := dt.NonTableDataFields()
 
@@ -467,31 +516,6 @@ func (tx *TxManager) Save(dt *doctype.DocType, doc *doctype.Document, modifiedBy
 	if err := tx.writeOutbox(dbTx, analytics.EventUpdate, dt, doc.Name, modifiedBy, copyFieldsWithStatus(doc.Fields, doc.DocStatus), oldOutboxData); err != nil {
 		return fmt.Errorf("recording save to outbox: %w", err)
 	}
-
-	if err := dbTx.Commit(); err != nil {
-		return fmt.Errorf("committing transaction: %w", err)
-	}
-
-	if tx.EventBus != nil {
-		var oldData map[string]any
-		if oldDoc != nil {
-
-			oldData = copyFieldsWithStatus(oldDoc.Fields, oldDoc.DocStatus)
-		}
-		tx.EventBus.Publish(analytics.ChangeEvent{
-			Site:       tx.SiteName,
-			Doctype:    dt.Name,
-			DocName:    doc.Name,
-			Operation:  analytics.EventUpdate,
-			Timestamp:  time.Now(),
-			ModifiedBy: modifiedBy,
-			Data:       copyFieldsWithStatus(doc.Fields, doc.DocStatus),
-			OldData:    oldData,
-		})
-	}
-
-	// Run after_save hooks — best-effort.
-	_ = tx.runHooks(dt, script.EventAfterSave, doc, oldDoc)
 
 	return nil
 }

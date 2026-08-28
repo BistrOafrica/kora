@@ -349,6 +349,7 @@ func TestExecuteSingleToolUpdateDoctypeDraftExecutesAfterApproval(t *testing.T) 
 		WithArgs("site-a").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "config"}).
 			AddRow("cv-base-1", `{"doctypes":[]}`))
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT COALESCE\(MAX\(version\), 0\) FROM _kora_config_version WHERE site = \?`).
 		WithArgs("site-a").
 		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(0))
@@ -362,6 +363,7 @@ func TestExecuteSingleToolUpdateDoctypeDraftExecutesAfterApproval(t *testing.T) 
 			"cv-base-1", "",
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 	mock.ExpectQuery(`SELECT id[\s\S]*FROM _kora_ai_approval[\s\S]*state = 'pending_approval'[\s\S]*target_fingerprint = \?[\s\S]*LIMIT 1`).
 		WithArgs("site-a", "run-1", "update_doctype_draft", sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))

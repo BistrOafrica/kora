@@ -146,6 +146,7 @@ func (p *Publisher) PublishDue(ctx context.Context, limit int) (int, error) {
 	}
 
 	// Claim each due row. Rows that another worker claimed in between are skipped.
+	published := 0
 	for _, id := range ids {
 		res, err := p.DB.ExecContext(ctx,
 			`UPDATE _kora_outbox
@@ -176,9 +177,10 @@ func (p *Publisher) PublishDue(ctx context.Context, limit int) (int, error) {
 			continue
 		}
 		_ = p.markPublished(ctx, id)
+		published++
 	}
 
-	return len(ids), nil
+	return published, nil
 }
 
 func (p *Publisher) publishOne(ctx context.Context, id string) error {

@@ -82,6 +82,23 @@ func BootstrapSystemTables(database *sql.DB, dialect db.Dialect) error {
 		}
 	}
 
+	// Operation kernel tables: idempotency receipts + operation audit
+	// (KERNEL-006, KERNEL-007). PostgreSQL is the reference dialect.
+	var kernelDDL []string
+	switch dialect.(type) {
+	case *db.LibSQLDialect:
+		kernelDDL = db.KernelTablesLibSQL()
+	case *db.PostgresDialect:
+		kernelDDL = db.KernelTablesPostgres()
+	default:
+		kernelDDL = db.KernelTablesMySQL()
+	}
+	for _, ddl := range kernelDDL {
+		if err := execDDL(ddl, "creating kernel table"); err != nil {
+			return err
+		}
+	}
+
 	database.Exec(dialect.InsertOrIgnorePrefix() + ` INTO _kora_role (name, description) VALUES ('Administrator', 'Full access to all doctypes')`)
 
 	return nil

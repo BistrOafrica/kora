@@ -179,6 +179,12 @@ func (w *Worker) InvalidateAllMetrics() {
 	w.metrics = make(map[string][]*Metric)
 }
 
+// Flush forces any buffered analytics deltas to persist immediately.
+// It is safe to call even if no events are pending.
+func (w *Worker) Flush() {
+	w.flush()
+}
+
 // Stop signals the worker to flush and exit.
 func (w *Worker) Stop() {
 	w.mu.Lock()

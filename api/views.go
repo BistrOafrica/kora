@@ -2,8 +2,8 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -28,7 +28,7 @@ func (h *Handler) HandleSystemViews(c *gin.Context) {
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "view store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "view store not available", nil)
 		return
 	}
 
@@ -49,13 +49,13 @@ func (h *Handler) HandleSystemView(c *gin.Context) {
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "view store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "view store not available", nil)
 		return
 	}
 
 	view, err := store.LoadView(name, site)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "View not found: " + name}})
+		writeError(c, http.StatusNotFound, "view.not_found", "View not found", map[string]any{"name": name})
 		return
 	}
 
@@ -63,7 +63,7 @@ func (h *Handler) HandleSystemView(c *gin.Context) {
 	if c.Query("format") == "yaml" {
 		yamlBytes, err := yaml.Marshal(view)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "Failed to serialize YAML"}})
+			writeError(c, http.StatusInternalServerError, "view.serialize_failed", "Failed to serialize YAML", nil)
 			return
 		}
 		c.Data(http.StatusOK, "text/yaml; charset=utf-8", yamlBytes)
@@ -79,19 +79,19 @@ func (h *Handler) HandleSystemView(c *gin.Context) {
 func (h *Handler) HandleSystemViewCreate(c *gin.Context) {
 	var view doctype.View
 	if err := c.ShouldBindJSON(&view); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid view JSON: " + err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid view JSON", map[string]any{"error": err.Error()})
 		return
 	}
 
 	if err := view.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"message": err.Error()})
 		return
 	}
 
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "view store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "view store not available", nil)
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h *Handler) HandleSystemViewUpdate(c *gin.Context) {
 	name := c.Param("name")
 	var view doctype.View
 	if err := c.ShouldBindJSON(&view); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid view JSON: " + err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid view JSON", map[string]any{"error": err.Error()})
 		return
 	}
 
@@ -136,14 +136,14 @@ func (h *Handler) HandleSystemViewUpdate(c *gin.Context) {
 	view.Name = name
 
 	if err := view.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"message": err.Error()})
 		return
 	}
 
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "view store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "view store not available", nil)
 		return
 	}
 
@@ -181,7 +181,7 @@ func (h *Handler) HandleSystemViewDelete(c *gin.Context) {
 	site := siteName(c)
 	store := h.viewStore(c)
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: map[string]string{"message": "view store not available"}})
+		writeError(c, http.StatusInternalServerError, "server.store_unavailable", "view store not available", nil)
 		return
 	}
 
@@ -216,7 +216,7 @@ func (h *Handler) HandleSystemViewDelete(c *gin.Context) {
 func (h *Handler) HandleViewValidate(c *gin.Context) {
 	var view doctype.View
 	if err := c.ShouldBindJSON(&view); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid view JSON: " + err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid view JSON", map[string]any{"error": err.Error()})
 		return
 	}
 
@@ -321,7 +321,7 @@ func isPublicSystemField(name string) bool {
 func (h *Handler) HandleViewByRoute(c *gin.Context) {
 	route := c.Query("route")
 	if route == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "route query parameter is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "route query parameter is required", map[string]any{"field": "route"})
 		return
 	}
 
@@ -356,14 +356,14 @@ func (h *Handler) HandleViewByRoute(c *gin.Context) {
 				}
 			}
 		}
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "No draft version found for route: " + route}})
+		writeError(c, http.StatusNotFound, "version.not_found", "No draft version found for route", map[string]any{"route": route})
 		return
 	}
 
 	reg := h.siteRegistry(c)
 	view := reg.Views.GetByRoute(route)
 	if view == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "View not found for route: " + route}})
+		writeError(c, http.StatusNotFound, "view.not_found", "View not found for route", map[string]any{"route": route})
 		return
 	}
 
@@ -384,7 +384,7 @@ func (h *Handler) HandleViewByRoute(c *gin.Context) {
 func (h *Handler) HandlePublicView(c *gin.Context) {
 	route := c.Query("route")
 	if route == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "route query parameter is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "route query parameter is required", map[string]any{"field": "route"})
 		return
 	}
 
@@ -396,13 +396,13 @@ func (h *Handler) HandlePublicView(c *gin.Context) {
 	reg := h.siteRegistry(c)
 	view := reg.Views.GetByRoute(route)
 	if view == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "View not found"}})
+		writeError(c, http.StatusNotFound, "view.not_found", "View not found", nil)
 		return
 	}
 
 	// Layer 1: View allows public access.
 	if view.PublicAccess == nil || !view.PublicAccess.Enabled {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "View not found"}})
+		writeError(c, http.StatusNotFound, "view.not_found", "View not found", nil)
 		return
 	}
 
@@ -475,19 +475,19 @@ func (h *Handler) HandleViewAction(c *gin.Context) {
 		Context   map[string]any `json:"context"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid request: " + err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", map[string]any{"error": err.Error()})
 		return
 	}
 
 	if req.View == "" || req.Component == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "view and component are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "view and component are required", map[string]any{"fields": []string{"view", "component"}})
 		return
 	}
 
 	reg := h.siteRegistry(c)
 	view := reg.Views.GetByName(req.View)
 	if view == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "View not found: " + req.View}})
+		writeError(c, http.StatusNotFound, "view.not_found", "View not found", map[string]any{"name": req.View})
 		return
 	}
 
@@ -506,9 +506,11 @@ func (h *Handler) HandleViewAction(c *gin.Context) {
 	}
 
 	if targetAction == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{
-			"message": fmt.Sprintf("Action %q not found on component %q in view %q", actionID, req.Component, req.View),
-		}})
+		writeError(c, http.StatusNotFound, "action.not_found", "Action not found on component", map[string]any{
+			"action_id": actionID,
+			"component": req.Component,
+			"view":      req.View,
+		})
 		return
 	}
 
@@ -539,13 +541,13 @@ func (h *Handler) executeCreateRecord(c *gin.Context, action *doctype.ViewAction
 		doctypeName = getString(ctx, "_doctype")
 	}
 	if doctypeName == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "target_doctype is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "target_doctype is required", map[string]any{"field": "target_doctype"})
 		return
 	}
 
 	dt := h.siteRegistry(c).Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Doctype not found: " + doctypeName}})
+		writeError(c, http.StatusBadRequest, "resource.doctype_not_found", "Doctype not found", map[string]any{"name": doctypeName})
 		return
 	}
 
@@ -572,20 +574,20 @@ func (h *Handler) executeUpdateRecord(c *gin.Context, action *doctype.ViewAction
 	}
 	name := getString(ctx, "name")
 	if doctypeName == "" || name == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "target_doctype and name are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "target_doctype and name are required", map[string]any{"fields": []string{"target_doctype", "name"}})
 		return
 	}
 
 	dt := h.siteRegistry(c).Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Doctype not found: " + doctypeName}})
+		writeError(c, http.StatusBadRequest, "resource.doctype_not_found", "Doctype not found", map[string]any{"name": doctypeName})
 		return
 	}
 
 	tm := h.siteTx(c)
 	existing, err := tm.GetDoc(dt, name, "")
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Document not found: " + name}})
+		writeError(c, http.StatusNotFound, "resource.document_not_found", "Document not found", map[string]any{"name": name})
 		return
 	}
 
@@ -610,27 +612,27 @@ func (h *Handler) executeWorkflowTransition(c *gin.Context, action *doctype.View
 	name := getString(ctx, "name")
 
 	if doctypeName == "" || name == "" || transition == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "doctype, name, and transition are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "doctype, name, and transition are required", map[string]any{"fields": []string{"doctype", "name", "transition"}})
 		return
 	}
 
 	reg := h.siteRegistry(c)
 	wf := reg.Workflows.Get(doctypeName)
 	if wf == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "No workflow for doctype: " + doctypeName}})
+		writeError(c, http.StatusBadRequest, "workflow.not_found", "No workflow for doctype", map[string]any{"doctype": doctypeName})
 		return
 	}
 
 	dt := reg.Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Doctype not found: " + doctypeName}})
+		writeError(c, http.StatusBadRequest, "resource.doctype_not_found", "Doctype not found", map[string]any{"name": doctypeName})
 		return
 	}
 
 	tm := h.siteTx(c)
 	doc, err := tm.GetDoc(dt, name, "")
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Document not found: " + name}})
+		writeError(c, http.StatusNotFound, "resource.document_not_found", "Document not found", map[string]any{"name": name})
 		return
 	}
 
@@ -645,7 +647,7 @@ func (h *Handler) executeWorkflowTransition(c *gin.Context, action *doctype.View
 
 	newState, newDocStatus, err := reg.Workflows.ApplyTransition(doctypeName, currentState, transition, userRole, doc)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusBadRequest, "workflow.transition_failed", err.Error(), nil)
 		return
 	}
 
@@ -663,14 +665,14 @@ func (h *Handler) executeWorkflowTransition(c *gin.Context, action *doctype.View
 func (h *Handler) executeCreateTransaction(c *gin.Context, action *doctype.ViewAction, ctx map[string]any) {
 	targetDoctype := getString(action.Config, "target_doctype")
 	if targetDoctype == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "target_doctype is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "target_doctype is required", map[string]any{"field": "target_doctype"})
 		return
 	}
 
 	reg := h.siteRegistry(c)
 	dt := reg.Get(targetDoctype)
 	if dt == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Doctype not found: " + targetDoctype}})
+		writeError(c, http.StatusBadRequest, "resource.doctype_not_found", "Doctype not found", map[string]any{"name": targetDoctype})
 		return
 	}
 
@@ -687,7 +689,7 @@ func (h *Handler) executeCreateTransaction(c *gin.Context, action *doctype.ViewA
 
 	parentField, childDT, err := resolveTransactionChildTable(reg, dt, action)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.failed", err.Error(), nil)
 		return
 	}
 
@@ -698,11 +700,11 @@ func (h *Handler) executeCreateTransaction(c *gin.Context, action *doctype.ViewA
 		}
 		children, err := buildTransactionChildren(rawItems, childDT)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+			writeError(c, http.StatusBadRequest, "validation.failed", err.Error(), nil)
 			return
 		}
 		if len(children) == 0 {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "transaction requires at least one item"}})
+			writeError(c, http.StatusBadRequest, "validation.required_field", "transaction requires at least one item", map[string]any{"field": "items"})
 			return
 		}
 		doc.SetTable(parentField, children)
@@ -711,17 +713,17 @@ func (h *Handler) executeCreateTransaction(c *gin.Context, action *doctype.ViewA
 	if requiredStatus := getString(action.Config, "requires_operation_status"); requiredStatus != "" {
 		operationName := getString(ctx, "external_operation")
 		if operationName == "" {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "external_operation is required before completing this transaction"}})
+			writeError(c, http.StatusBadRequest, "validation.required_field", "external_operation is required before completing this transaction", map[string]any{"field": "external_operation"})
 			return
 		}
 		operationDT := reg.Get("External Operation")
 		if operationDT == nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "External Operation doctype is not available"}})
+			writeError(c, http.StatusBadRequest, "resource.doctype_not_found", "External Operation doctype is not available", nil)
 			return
 		}
 		operation, err := tm.GetDoc(operationDT, operationName, "")
 		if err != nil || operation.GetString("status") != requiredStatus {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "payment has not been confirmed"}})
+			writeError(c, http.StatusBadRequest, "validation.failed", "payment has not been confirmed", nil)
 			return
 		}
 	}
@@ -729,7 +731,7 @@ func (h *Handler) executeCreateTransaction(c *gin.Context, action *doctype.ViewA
 	// Validate the assembled transaction before calling an external provider;
 	// an invalid cart must never trigger a charge or payment prompt.
 	if validationErrs := doctype.ValidateDocument(dt, doc, reg, nil); validationErrs.HasErrors() {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: formatValidationErrors(validationErrs)})
+		writeError(c, http.StatusBadRequest, "validation.failed", "Validation failed", map[string]any{"fields": validationErrorDetails(validationErrs)})
 		return
 	}
 
@@ -737,7 +739,7 @@ func (h *Handler) executeCreateTransaction(c *gin.Context, action *doctype.ViewA
 	// comes from stored view configuration, never from client input.
 	if scriptName := getString(action.Config, "payment_script"); scriptName != "" {
 		if err := h.executeTransactionPaymentScript(c, scriptName, dt, doc); err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+			writeError(c, http.StatusBadRequest, "payment.failed", err.Error(), nil)
 			return
 		}
 	}
@@ -754,7 +756,7 @@ func (h *Handler) executeInitiateExternalOperation(c *gin.Context, action *docty
 	reg := h.siteRegistry(c)
 	dt := reg.Get("External Operation")
 	if dt == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "External Operation doctype is not available"}})
+		writeError(c, http.StatusBadRequest, "resource.doctype_not_found", "External Operation doctype is not available", nil)
 		return
 	}
 	doc := doctype.NewDocument("")
@@ -814,7 +816,7 @@ func (h *Handler) executeInitiateExternalOperation(c *gin.Context, action *docty
 			doc.Set("status", "Failed")
 			doc.Set("error_message", err.Error())
 			_ = tm.Save(dt, doc, currentUser(c), "", nil)
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": err.Error()}})
+			writeError(c, http.StatusBadRequest, "operation.failed", err.Error(), nil)
 			return
 		}
 		applyOperationScriptResult(doc, result)
@@ -833,7 +835,7 @@ func (h *Handler) executeValidateExternalOperation(c *gin.Context, action *docty
 	reg := h.siteRegistry(c)
 	dt := reg.Get("External Operation")
 	if dt == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "External Operation doctype is not available"}})
+		writeError(c, http.StatusBadRequest, "resource.doctype_not_found", "External Operation doctype is not available", nil)
 		return
 	}
 	name := getString(ctx, "operation_id")
@@ -841,13 +843,13 @@ func (h *Handler) executeValidateExternalOperation(c *gin.Context, action *docty
 		name = getString(ctx, "external_operation")
 	}
 	if name == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "operation_id is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "operation_id is required", map[string]any{"field": "operation_id"})
 		return
 	}
 	tm := h.siteTx(c)
 	doc, err := tm.GetDoc(dt, name, "")
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "External Operation not found"}})
+		writeError(c, http.StatusNotFound, "resource.document_not_found", "External Operation not found", nil)
 		return
 	}
 	if scriptName := getString(action.Config, "script"); scriptName != "" {
@@ -867,7 +869,7 @@ func (h *Handler) executeValidateExternalOperation(c *gin.Context, action *docty
 		}
 		h.recordExternalOperationEvent(c, doc, "Outbound", "Status Check", previousStatus, doc.GetString("status"), ctx, doc.Get("response_payload"), "Processed", "")
 		if scriptErr != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": scriptErr.Error()}})
+			writeError(c, http.StatusBadRequest, "operation.failed", scriptErr.Error(), nil)
 			return
 		}
 	}
@@ -1136,14 +1138,14 @@ func (h *Handler) HandleViewData(c *gin.Context) {
 	componentID := c.Query("component")
 
 	if viewName == "" || componentID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "view and component are required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "view and component are required", map[string]any{"fields": []string{"view", "component"}})
 		return
 	}
 
 	reg := h.siteRegistry(c)
 	view := reg.Views.GetByName(viewName)
 	if view == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "View not found: " + viewName}})
+		writeError(c, http.StatusNotFound, "view.not_found", "View not found", map[string]any{"name": viewName})
 		return
 	}
 
@@ -1151,20 +1153,20 @@ func (h *Handler) HandleViewData(c *gin.Context) {
 	// inside containers such as dashboard_grid, tabs, or split_view.
 	comp := findViewComponentByID(view.Components, componentID)
 	if comp == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "Component not found: " + componentID}})
+		writeError(c, http.StatusNotFound, "component.not_found", "Component not found", map[string]any{"id": componentID})
 		return
 	}
 
 	// For metric_card components, return count/aggregate.
 	doctypeName := comp.SourceDocType
 	if doctypeName == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Component has no source_doctype"}})
+		writeError(c, http.StatusBadRequest, "validation.failed", "Component has no source_doctype", nil)
 		return
 	}
 
 	dt := reg.Get(doctypeName)
 	if dt == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Doctype not found: " + doctypeName}})
+		writeError(c, http.StatusBadRequest, "resource.doctype_not_found", "Doctype not found", map[string]any{"name": doctypeName})
 		return
 	}
 
@@ -1196,32 +1198,32 @@ func (h *Handler) HandleViewData(c *gin.Context) {
 func (h *Handler) HandlePublicCreate(c *gin.Context) {
 	route := c.Query("route")
 	if route == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "route query parameter is required"}})
+		writeError(c, http.StatusBadRequest, "validation.required_field", "route query parameter is required", map[string]any{"field": "route"})
 		return
 	}
 
 	reg := h.siteRegistry(c)
 	view := reg.Views.GetByRoute(route)
 	if view == nil || view.PublicAccess == nil || !view.PublicAccess.Enabled || !view.PublicAccess.AllowMutations {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: map[string]string{"message": "View not found or public mutations not allowed"}})
+		writeError(c, http.StatusNotFound, "view.not_found", "View not found or public mutations not allowed", nil)
 		return
 	}
 
 	var body map[string]any
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Invalid JSON: " + err.Error()}})
+		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid JSON", map[string]any{"error": err.Error()})
 		return
 	}
 
 	// Use the view's source doctype.
 	if view.SourceDocType == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "View has no source doctype"}})
+		writeError(c, http.StatusBadRequest, "validation.failed", "View has no source doctype", nil)
 		return
 	}
 
 	dt := reg.Get(view.SourceDocType)
 	if dt == nil || dt.PublicAccess == nil || !dt.PublicAccess.Enabled {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: map[string]string{"message": "Doctype not public"}})
+		writeError(c, http.StatusBadRequest, "permission.denied", "Doctype not public", nil)
 		return
 	}
 
