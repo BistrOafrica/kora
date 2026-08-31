@@ -1,3 +1,12 @@
+## v0.9.5 — 2026-08-31
+
+### Features
+- feat(storage): provision per-site buckets
+
+### Fixes
+- fix(storage): bootstrap s3 buckets on startup
+
+
 ## v0.9.4-alpha — 2026-07-28
 ### Fixes
 - fix: generate template pack hashes on save
