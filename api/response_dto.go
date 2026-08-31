@@ -211,8 +211,10 @@ type consoleProvisioningListResponse struct {
 }
 
 type consoleSiteUpdateResponse struct {
-	Hostname string   `json:"hostname"`
-	Domains  []string `json:"domains"`
+	Hostname      string   `json:"hostname"`
+	Domains       []string `json:"domains"`
+	FileStorage   string   `json:"file_storage"`
+	StorageBucket string   `json:"storage_bucket,omitempty"`
 }
 
 type consoleSiteDeleteResponse struct {

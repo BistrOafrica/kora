@@ -2,9 +2,7 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -218,7 +216,12 @@ func (h *ConsoleHandler) HandleListSites(c *gin.Context) {
 			for _, info := range dbSites {
 				sites = append(sites, &net.LoadedSite{
 					Name:   info.Name,
-					Config: net.SiteRouterConfig{Hostname: info.Name, Domains: info.Domains},
+					Config: net.SiteRouterConfig{
+						Hostname:      info.Name,
+						Domains:       info.Domains,
+						FileStorage:   info.FileStorage,
+						StorageBucket: info.StorageBucket,
+					},
 					DB:     h.PlatformDB,
 				})
 			}
@@ -226,10 +229,12 @@ func (h *ConsoleHandler) HandleListSites(c *gin.Context) {
 	}
 
 	type SiteEntry struct {
-		Name     string   `json:"name"`
-		Domains  []string `json:"domains"`
-		DocTypes int      `json:"doctypes"`
-		Status   string   `json:"status"`
+		Name          string   `json:"name"`
+		Domains       []string `json:"domains"`
+		FileStorage   string   `json:"file_storage"`
+		StorageBucket string   `json:"storage_bucket,omitempty"`
+		DocTypes      int      `json:"doctypes"`
+		Status        string   `json:"status"`
 	}
 	var result []SiteEntry
 	for _, s := range sites {
@@ -242,10 +247,12 @@ func (h *ConsoleHandler) HandleListSites(c *gin.Context) {
 			status = "unknown"
 		}
 		result = append(result, SiteEntry{
-			Name:     s.Name,
-			Domains:  s.Config.Domains,
-			DocTypes: len(s.Registry.All()),
-			Status:   status,
+			Name:          s.Name,
+			Domains:       s.Config.Domains,
+			FileStorage:   s.Config.FileStorage,
+			StorageBucket: s.Config.StorageBucket,
+			DocTypes:      len(s.Registry.All()),
+			Status:        status,
 		})
 	}
 	if result == nil {
@@ -365,8 +372,10 @@ func (h *ConsoleHandler) HandleCreateSite(c *gin.Context) {
 	loaded := &net.LoadedSite{
 		Name: req.Hostname,
 		Config: net.SiteRouterConfig{
-			Hostname: req.Hostname,
-			Domains:  domains,
+			Hostname:      req.Hostname,
+			Domains:       domains,
+			FileStorage:   result.Config.FileStorage,
+			StorageBucket: result.Config.StorageBucket,
 		},
 		DB:       result.DB,
 		Registry: result.Registry,
@@ -645,8 +654,10 @@ func (h *ConsoleHandler) processOnboardJob(job site.OnboardingJob, req onboardRe
 	loaded := &net.LoadedSite{
 		Name: req.Hostname,
 		Config: net.SiteRouterConfig{
-			Hostname: req.Hostname,
-			Domains:  domains,
+			Hostname:      req.Hostname,
+			Domains:       domains,
+			FileStorage:   result.Config.FileStorage,
+			StorageBucket: result.Config.StorageBucket,
 		},
 		DB:       result.DB,
 		Registry: result.Registry,
@@ -678,7 +689,7 @@ func (h *ConsoleHandler) processOnboardJob(job site.OnboardingJob, req onboardRe
 	slog.Info("site created via self-service onboarding", "hostname", req.Hostname)
 }
 
-// HandleUpdateSite updates site metadata (domains).
+// HandleUpdateSite updates site metadata and file storage settings.
 // PUT /api/console/sites/:name
 func (h *ConsoleHandler) HandleUpdateSite(c *gin.Context) {
 	siteName := c.Param("name")
@@ -688,38 +699,90 @@ func (h *ConsoleHandler) HandleUpdateSite(c *gin.Context) {
 	}
 
 	var req struct {
-		Domains []string `json:"domains"`
+		Domains       *[]string `json:"domains"`
+		FileStorage   *string   `json:"file_storage"`
+		StorageBucket *string   `json:"storage_bucket"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		writeError(c, http.StatusBadRequest, "validation.invalid_json", "Invalid request", nil)
 		return
 	}
 
-	site := h.SiteRouter.SiteByName(siteName)
-	if site == nil {
+	loadedSite := h.SiteRouter.SiteByName(siteName)
+	if loadedSite == nil {
 		writeError(c, http.StatusNotFound, "site.not_found", "Site not found", map[string]any{"name": siteName})
 		return
 	}
 
-	// Update domains in the in-memory router.
-	site.Config.Domains = req.Domains
-	if len(site.Config.Domains) == 0 {
-		site.Config.Domains = []string{site.Config.Hostname}
+	newCfg := loadedSite.Config
+	if req.Domains != nil {
+		newCfg.Domains = *req.Domains
+	}
+	if req.FileStorage != nil {
+		newCfg.FileStorage = strings.TrimSpace(*req.FileStorage)
+	}
+	if req.StorageBucket != nil {
+		newCfg.StorageBucket = strings.TrimSpace(*req.StorageBucket)
+	}
+	newCfg.Hostname = siteName
+	if newCfg.FileStorage == "" {
+		newCfg.FileStorage = "local"
+	}
+	if strings.ToLower(newCfg.FileStorage) != "s3" {
+		newCfg.StorageBucket = ""
+	} else if newCfg.StorageBucket == "" {
+		newCfg.StorageBucket = site.BucketNameForSite(siteName)
+	}
+
+	var resolvedStorage storage.Backend
+	if h.ResolveStorage != nil {
+		var err error
+		resolvedStorage, err = h.ResolveStorage(&site.SiteConfig{
+			Hostname:      siteName,
+			DomainsList:   newCfg.Domains,
+			FileStorage:   newCfg.FileStorage,
+			StorageBucket: newCfg.StorageBucket,
+		})
+		if err != nil {
+			slog.Error("resolving updated storage failed", "hostname", siteName, "error", err)
+			writeError(c, http.StatusBadRequest, "storage.provision_failed", "Invalid storage configuration", map[string]any{"error": err.Error()})
+			return
+		}
 	}
 
 	// Persist to DB if platform DB is available.
 	if h.PlatformDB != nil {
-		domainsJSON, _ := json.Marshal(req.Domains)
-		h.PlatformDB.Exec(
-			"UPDATE _kora_config_version SET config = ? WHERE site = ? AND status = 'Active'",
-			fmt.Sprintf(`{"domains": %s}`, string(domainsJSON)), siteName,
-		)
+		if err := site.UpdatePlatformSiteRegistration(h.PlatformDB, h.PlatformDBType, siteName, newCfg.Domains, newCfg.FileStorage, newCfg.StorageBucket); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeError(c, http.StatusNotFound, "site.not_found", "Site not found", map[string]any{"name": siteName})
+				return
+			}
+			slog.Error("updating site registry failed", "hostname", siteName, "error", err)
+			writeError(c, http.StatusInternalServerError, "site.update_failed", "Failed to update site", map[string]any{"error": err.Error()})
+			return
+		}
 	}
 
-	slog.Info("site updated via console", "hostname", siteName, "domains", req.Domains)
+	updated := h.SiteRouter.UpdateSiteConfig(siteName, net.SiteRouterConfig{
+		Hostname:      siteName,
+		Domains:       newCfg.Domains,
+		FileStorage:   newCfg.FileStorage,
+		StorageBucket: newCfg.StorageBucket,
+	})
+	if updated == nil {
+		writeError(c, http.StatusNotFound, "site.not_found", "Site not found", map[string]any{"name": siteName})
+		return
+	}
+	if resolvedStorage != nil && h.SiteStorages != nil {
+		h.SiteStorages[siteName] = resolvedStorage
+	}
+
+	slog.Info("site updated via console", "hostname", siteName, "domains", newCfg.Domains, "file_storage", newCfg.FileStorage, "storage_bucket", newCfg.StorageBucket)
 	c.JSON(http.StatusOK, Response{Data: consoleSiteUpdateResponse{
-		Hostname: siteName,
-		Domains:  site.Config.Domains,
+		Hostname:      siteName,
+		Domains:       updated.Config.Domains,
+		FileStorage:   updated.Config.FileStorage,
+		StorageBucket: updated.Config.StorageBucket,
 	}})
 }
 

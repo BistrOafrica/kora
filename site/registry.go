@@ -130,6 +130,67 @@ func ensurePlatformSiteRegistration(platformDB *sql.DB, platformDBType string, c
 	return nil
 }
 
+// UpdatePlatformSiteRegistration updates the persisted registry metadata for an existing site.
+func UpdatePlatformSiteRegistration(platformDB *sql.DB, platformDBType string, hostname string, domains []string, fileStorage, storageBucket string) error {
+	if platformDB == nil || hostname == "" {
+		return nil
+	}
+
+	domainsJSON, err := json.Marshal(domains)
+	if err != nil {
+		return fmt.Errorf("marshal site domains: %w", err)
+	}
+	if fileStorage == "" {
+		fileStorage = "local"
+	}
+	if fileStorage == "s3" && storageBucket == "" {
+		storageBucket = BucketNameForSite(hostname)
+	}
+
+	now := time.Now().UTC()
+	switch strings.ToLower(platformDBType) {
+	case "postgres":
+		res, err := platformDB.Exec(
+			`UPDATE _kora_site_registry
+				SET file_storage = $1,
+					storage_bucket = $2,
+					domains_json = $3::jsonb,
+					status = 'active',
+					updated_at = $4
+				WHERE site = $5`,
+			fileStorage, storageBucket, string(domainsJSON), now, hostname,
+		)
+		if err != nil {
+			return fmt.Errorf("update platform site registry: %w", err)
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("read site registry rows affected: %w", err)
+		}
+		if rows == 0 {
+			return sql.ErrNoRows
+		}
+	default:
+		res, err := platformDB.Exec(
+			`UPDATE _kora_site_registry
+			 SET file_storage = ?, storage_bucket = ?, domains_json = ?, status = 'active', updated_at = ?
+			 WHERE site = ?`,
+			fileStorage, storageBucket, string(domainsJSON), now, hostname,
+		)
+		if err != nil {
+			return fmt.Errorf("update platform site registry: %w", err)
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("read site registry rows affected: %w", err)
+		}
+		if rows == 0 {
+			return sql.ErrNoRows
+		}
+	}
+	return nil
+}
+
 func removePlatformSiteRegistration(platformDB *sql.DB, platformDBType, hostname string) error {
 	if platformDB == nil || hostname == "" {
 		return nil

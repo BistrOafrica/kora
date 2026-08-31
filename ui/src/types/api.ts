@@ -146,6 +146,8 @@ export interface CapabilitySnapshot {
 export interface ConsoleSite {
   name: string
   domains: string[]
+  file_storage?: string
+  storage_bucket?: string
   doctypes: number
   status: string
 }

@@ -79,6 +79,22 @@ export async function updateSite(name: string, domains: string[]): Promise<void>
   }
 }
 
+export async function updateSiteStorage(
+  name: string,
+  data: { domains?: string[]; file_storage?: string; storage_bucket?: string },
+): Promise<void> {
+  const resp = await fetch(BASE + '/sites/' + encodeURIComponent(name), {
+    method: 'PUT',
+    headers: headers(),
+    body: JSON.stringify(data),
+    credentials: 'same-origin',
+  })
+  if (!resp.ok) {
+    const json = await resp.json()
+    throw new Error(json.error?.message || 'Failed to update site')
+  }
+}
+
 export async function deleteSite(name: string): Promise<void> {
   const resp = await fetch(BASE + '/sites/' + encodeURIComponent(name), {
     method: 'DELETE',

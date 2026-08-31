@@ -4,7 +4,7 @@ import { useConsoleAuthStore } from '@/lib/console-auth-store'
 import {
   listSites,
   createSite,
-  updateSite,
+  updateSiteStorage,
   deleteSite,
   resetSitePassword,
 } from '@/lib/api/console'
@@ -287,6 +287,8 @@ function SiteEditSheet({
   const isMobile = useIsMobile()
   const [domains, setDomains] = useState<string[]>([])
   const [newDomain, setNewDomain] = useState('')
+  const [fileStorage, setFileStorage] = useState('local')
+  const [storageBucket, setStorageBucket] = useState('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
@@ -305,6 +307,8 @@ function SiteEditSheet({
     if (site) {
       setDomains(site.domains || [])
       setNewDomain('')
+      setFileStorage(site.file_storage || 'local')
+      setStorageBucket(site.storage_bucket || '')
       setMsg(null)
       setResetEmail('')
       setResetPassword('')
@@ -331,8 +335,14 @@ function SiteEditSheet({
     setSaving(true)
     setMsg(null)
     try {
-      await updateSite(site.name, domains)
-      setMsg({ text: 'Domains updated.', ok: true })
+      const normalizedStorage = fileStorage.trim() || 'local'
+      const normalizedBucket = normalizedStorage.toLowerCase() === 's3' ? storageBucket.trim() : ''
+      await updateSiteStorage(site.name, {
+        domains,
+        file_storage: normalizedStorage,
+        storage_bucket: normalizedBucket,
+      })
+      setMsg({ text: 'Site settings updated.', ok: true })
       onUpdated()
     } catch (err: any) {
       setMsg({ text: err.message, ok: false })
@@ -419,8 +429,41 @@ function SiteEditSheet({
             )}
             <Button size="sm" onClick={handleSaveDomains} disabled={saving} className="w-full">
               {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null}
-              Save Domains
+              Save Site Settings
             </Button>
+          </div>
+
+          {/* Storage */}
+          <div className="space-y-3 border-t pt-6">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Storage</Label>
+            <div className="space-y-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Backend</Label>
+                <Select value={fileStorage} onValueChange={(value) => setFileStorage(value || 'local')}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select backend" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="local">local</SelectItem>
+                    <SelectItem value="s3">s3</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {fileStorage === 's3' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Bucket</Label>
+                  <Input
+                    placeholder={`kora-${site?.name || 'site'}`}
+                    value={storageBucket}
+                    onChange={e => setStorageBucket(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Leave empty to use the default bucket derived from the site name.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Workspace Login */}

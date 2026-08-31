@@ -177,6 +177,27 @@ func TestBucketNameForSite(t *testing.T) {
 	}
 }
 
+func TestUpdatePlatformSiteRegistrationUpdatesStorageSettings(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE _kora_site_registry
+			 SET file_storage = ?, storage_bucket = ?, domains_json = ?, status = 'active', updated_at = ?
+			 WHERE site = ?`)).
+		WithArgs("s3", "kora-cms", `["kora-cms","app.kora.dev"]`, sqlmock.AnyArg(), "kora-cms").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	if err := UpdatePlatformSiteRegistration(db, "mysql", "kora-cms", []string{"kora-cms", "app.kora.dev"}, "s3", ""); err != nil {
+		t.Fatalf("UpdatePlatformSiteRegistration: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet: %v", err)
+	}
+}
+
 type assertRegistryMissingError struct{}
 
 func (assertRegistryMissingError) Error() string {

@@ -266,7 +266,12 @@ func runServe() error {
 
 		domains := siteCfg.Domains()
 		loadedSites = append(loadedSites, &knet.LoadedSite{
-			Name: info.Name, Config: knet.SiteRouterConfig{Hostname: info.Name, Domains: domains},
+			Name: info.Name, Config: knet.SiteRouterConfig{
+				Hostname:      info.Name,
+				Domains:       domains,
+				FileStorage:   siteCfg.FileStorage,
+				StorageBucket: siteCfg.StorageBucket,
+			},
 			DB: db, Registry: registry, AnalyticsEventBus: siteEventBus, AnalyticsWorker: siteWorker,
 		})
 		allDomains = append(allDomains, domains...)
@@ -803,8 +808,10 @@ func loadRuntimeSite(info site.DBSiteInfo, common *site.CommonConfig) (*knet.Loa
 	return &knet.LoadedSite{
 		Name: info.Name,
 		Config: knet.SiteRouterConfig{
-			Hostname: info.Name,
-			Domains:  siteCfg.Domains(),
+			Hostname:      info.Name,
+			Domains:       siteCfg.Domains(),
+			FileStorage:   siteCfg.FileStorage,
+			StorageBucket: siteCfg.StorageBucket,
 		},
 		DB:       db,
 		Registry: registry,

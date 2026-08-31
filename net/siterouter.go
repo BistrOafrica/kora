@@ -62,6 +62,40 @@ func (sr *SiteRouter) AddSite(s *LoadedSite) {
 	}
 }
 
+// UpdateSiteConfig updates the routing metadata for an already loaded site.
+// It preserves the existing LoadedSite pointer so DB/registry handles remain valid.
+func (sr *SiteRouter) UpdateSiteConfig(name string, cfg SiteRouterConfig) *LoadedSite {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+
+	site := sr.siteByNameLocked(name)
+	if site == nil {
+		return nil
+	}
+
+	for key, loaded := range sr.sites {
+		if loaded == site {
+			delete(sr.sites, key)
+		}
+	}
+
+	site.Config = cfg
+	domains := cfg.Domains
+	if len(domains) == 0 {
+		domains = []string{cfg.Hostname}
+	}
+	for _, d := range domains {
+		sr.sites[strings.ToLower(d)] = site
+	}
+	if cfg.Hostname != "" {
+		sr.sites[strings.ToLower(cfg.Hostname)] = site
+	}
+	if sr.defaultSite == nil {
+		sr.defaultSite = site
+	}
+	return site
+}
+
 // RemoveSite removes a site from the router by name. Returns the removed site
 // or nil if not found. Updates the default site if the removed site was the default.
 func (sr *SiteRouter) RemoveSite(name string) *LoadedSite {
@@ -133,8 +167,10 @@ func (sr *SiteRouter) siteByNameLocked(name string) *LoadedSite {
 
 // SiteRouterConfig is the minimal config needed for routing.
 type SiteRouterConfig struct {
-	Hostname string
-	Domains  []string
+	Hostname      string
+	Domains       []string
+	FileStorage   string
+	StorageBucket string
 }
 
 // SiteRouter maps Host headers to loaded sites.
