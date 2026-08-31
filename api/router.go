@@ -987,6 +987,7 @@ func RegisterPublicRoutesOnGroup(apiGroup *gin.RouterGroup, registry *doctype.Re
 	// Public view routes (unauthenticated, three-layer security check).
 	apiGroup.GET("/v", handler.HandlePublicView)
 	apiGroup.POST("/v", handler.HandlePublicCreate)
+	apiGroup.GET("/files/*path", handler.HandlePublicFileServe)
 
 	// DigiTax cannot use a Kora session/CSRF token. The handler authenticates
 	// this callback with the site's digitax_webhook_secret instead.
@@ -1629,6 +1630,16 @@ func (h *Handler) HandleUpload(c *gin.Context) {
 // can seek within audio/video. Access is enforced by the SiteGuard middleware.
 // GET /files/*path
 func (h *Handler) HandleFileServe(c *gin.Context) {
+	h.serveStoredFile(c)
+}
+
+// HandlePublicFileServe serves a site attachment without auth for public assets.
+// GET /public/files/*path
+func (h *Handler) HandlePublicFileServe(c *gin.Context) {
+	h.serveStoredFile(c)
+}
+
+func (h *Handler) serveStoredFile(c *gin.Context) {
 	key, err := fileKeyForSite(c)
 	if err != nil {
 		c.JSON(http.StatusForbidden, ErrorResponse{
