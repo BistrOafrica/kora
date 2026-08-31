@@ -987,7 +987,7 @@ func RegisterPublicRoutesOnGroup(apiGroup *gin.RouterGroup, registry *doctype.Re
 	// Public view routes (unauthenticated, three-layer security check).
 	apiGroup.GET("/v", handler.HandlePublicView)
 	apiGroup.POST("/v", handler.HandlePublicCreate)
-	apiGroup.GET("/files/*path", handler.HandlePublicFileServe)
+	apiGroup.GET("/public/files/*path", handler.HandlePublicFileServe)
 
 	// DigiTax cannot use a Kora session/CSRF token. The handler authenticates
 	// this callback with the site's digitax_webhook_secret instead.
