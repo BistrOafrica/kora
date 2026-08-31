@@ -21,9 +21,9 @@ public_access:
     - og_image
     - author_name
   filters:
-    - field: status
+    - field: is_public
       op: equals
-      value: published
+      value: true
   sort_field: published_at
   sort_order: DESC
   max_limit: 50
@@ -83,6 +83,12 @@ fields:
   - fieldname: author_name
     fieldtype: Data
     label: Author Name
+
+  - fieldname: is_public
+    fieldtype: Check
+    label: Public
+    in_list_view: true
+    in_standard_filter: true
 
   - fieldname: status
     fieldtype: Select

@@ -71,6 +71,13 @@ const EMPTY_PUBLIC_ACCESS = {
   cache_max_age: 60,
 }
 
+const PUBLIC_VISIBILITY_FIELDNAME = 'is_public'
+const PUBLIC_VISIBILITY_FILTER: PublicFilter = {
+  field: PUBLIC_VISIBILITY_FIELDNAME,
+  op: 'equals',
+  value: true,
+}
+
 const EMPTY_DOC_CONSTRAINT = {
   type: 'Predicate',
   description: '',
@@ -220,7 +227,7 @@ export default function AdminDoctypeEditorPage() {
     setError(null)
     try {
       if (activate) {
-        const preview = await dryRunDoctype(form)
+        const preview = await dryRunDoctype(normalizeDoctypeForSave(form))
         setPreflight({ status: 'ready', result: preview })
         if (preview.blocked.length > 0) {
           setError(formatPreviewBlockers(preview.blocked))
@@ -228,10 +235,11 @@ export default function AdminDoctypeEditorPage() {
         }
       }
 
+      const normalized = normalizeDoctypeForSave(form)
       if (isEdit) {
-        await updateDoctype(doctypeName!, form, activate)
+        await updateDoctype(doctypeName!, normalized, activate)
       } else {
-        await createDoctype(form, activate)
+        await createDoctype(normalized, activate)
       }
       // Invalidate caches so the new/updated doctype appears immediately
       // in the admin list, sidebar navigation, and dashboard.
@@ -357,7 +365,7 @@ export default function AdminDoctypeEditorPage() {
       {/* Split pane: Form (left) + YAML (right) */}
       <div className="flex-1 flex overflow-hidden">
         {/* Form panel */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
         {/* Doctype Properties */}
         <section>
           <h2 className="text-lg font-semibold mb-4">Basic details</h2>
@@ -438,6 +446,10 @@ export default function AdminDoctypeEditorPage() {
             </label>
           </div>
         </section>
+
+        <Separator />
+
+        <PublicAccessEditor form={form} setForm={setForm} />
 
         <Separator />
 
@@ -1390,6 +1402,12 @@ function PublicAccessEditor({
       },
     }))
   }
+  const updatePublicRecords = (enabled: boolean) => {
+    setForm((previous) => {
+      const next = ensurePublicVisibilityConvention(previous, enabled)
+      return next
+    })
+  }
   const updateFilter = (index: number, updates: Partial<PublicFilter>) => {
     setForm((previous) => {
       const current = previous.public_access || { ...EMPTY_PUBLIC_ACCESS }
@@ -1409,15 +1427,28 @@ function PublicAccessEditor({
     <Card className="shadow-none">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center justify-between gap-3">
-          <span>Public access</span>
+          <span>Public records</span>
           <label className="flex items-center gap-2 text-sm font-normal">
-            <Switch checked={pa.enabled} onCheckedChange={(value) => updateAccess({ enabled: value })} />
-            Enable
+            <Switch checked={pa.enabled} onCheckedChange={updatePublicRecords} />
+            Enable convention
           </label>
         </CardTitle>
-        <CardDescription>Expose the full public_access YAML surface here.</CardDescription>
+        <CardDescription>Expose public records through `is_public` and keep the full `public_access` YAML surface available.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="font-medium">Public/private visibility convention</p>
+              <p className="text-muted-foreground">
+                Add an `is_public` checkbox to the doctype and use it to gate public API access.
+              </p>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Public rows are filtered with `is_public = true`. New records stay private until checked.
+          </p>
+        </div>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="flex items-center gap-2 rounded-lg border bg-muted/20 p-3 text-sm">
             <Switch checked={pa.list} onCheckedChange={(value) => updateAccess({ list: value })} />
@@ -1464,10 +1495,24 @@ function PublicAccessEditor({
               Add filter
             </Button>
           </div>
+          {pa.enabled && pa.filters.length === 1 && pa.filters[0].field === PUBLIC_VISIBILITY_FIELDNAME && (
+            <p className="text-xs text-muted-foreground">
+              The visibility filter is locked to `is_public = true` while public records are enabled.
+            </p>
+          )}
           {(pa.filters || []).map((filter, index) => (
             <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
-              <Input value={filter.field} onChange={(event) => updateFilter(index, { field: event.target.value })} placeholder="status" />
-              <Select value={filter.op || ''} onValueChange={(value) => updateFilter(index, { op: value || 'equals' })}>
+              <Input
+                value={filter.field}
+                onChange={(event) => updateFilter(index, { field: event.target.value })}
+                placeholder="status"
+                disabled={pa.enabled && filter.field === PUBLIC_VISIBILITY_FIELDNAME}
+              />
+              <Select
+                value={filter.op || ''}
+                onValueChange={(value) => updateFilter(index, { op: value || 'equals' })}
+                disabled={pa.enabled && filter.field === PUBLIC_VISIBILITY_FIELDNAME}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="equals">equals</SelectItem>
@@ -1477,8 +1522,19 @@ function PublicAccessEditor({
                   <SelectItem value="is_not_set">is_not_set</SelectItem>
                 </SelectContent>
               </Select>
-              <Input value={String(filter.value ?? '')} onChange={(event) => updateFilter(index, { value: event.target.value })} placeholder="published" />
-              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => updateAccess({ filters: pa.filters.filter((_, i) => i !== index) })}>
+              <Input
+                value={String(filter.value ?? '')}
+                onChange={(event) => updateFilter(index, { value: event.target.value })}
+                placeholder="published"
+                disabled={pa.enabled && filter.field === PUBLIC_VISIBILITY_FIELDNAME}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-destructive"
+                onClick={() => updateAccess({ filters: pa.filters.filter((_, i) => i !== index) })}
+                disabled={pa.enabled && filter.field === PUBLIC_VISIBILITY_FIELDNAME}
+              >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
@@ -1746,7 +1802,12 @@ function inferModule(prompt: string): string {
 }
 
 function normalizeWizardDoctype(form: DocType): DocType {
-  const fields = form.fields
+  return normalizeDoctypeForSave(form)
+}
+
+function normalizeDoctypeForSave(form: DocType): DocType {
+  const prepared = ensurePublicVisibilityConvention(form, Boolean(form.public_access?.enabled))
+  const fields = prepared.fields
     .map((field, index) => ({
       ...field,
       fieldname: slugField(field.fieldname || field.label || `field_${index + 1}`),
@@ -1755,19 +1816,130 @@ function normalizeWizardDoctype(form: DocType): DocType {
     }))
     .filter((field) => field.fieldname)
 
+  const publicAccess = prepared.public_access ? {
+    ...prepared.public_access,
+    enabled: Boolean(prepared.public_access.enabled),
+    list: Boolean(prepared.public_access.enabled ? prepared.public_access.list ?? true : prepared.public_access.list),
+    read: Boolean(prepared.public_access.enabled ? prepared.public_access.read ?? true : prepared.public_access.read),
+    fields: prepared.public_access.enabled ? normalizePublicFields(prepared.public_access) : prepared.public_access.fields,
+    filters: prepared.public_access.enabled ? normalizePublicFilters(prepared.public_access.filters || [], true) : prepared.public_access.filters,
+  } : undefined
+
   return {
-    ...form,
-    resource_name: form.resource_name?.trim() || slugField(form.name),
-    name: titleCase(form.name.trim()),
-    module: titleCase(form.module.trim()),
-    title_field: form.title_field.trim() || fields[0]?.fieldname || 'title',
-    search_fields: form.search_fields.trim() || fields.slice(0, 4).map((field) => field.fieldname).join(','),
-    sort_field: form.sort_field.trim() || 'modified',
-    sort_order: form.sort_order || 'DESC',
-    doc_constraints: form.doc_constraints?.filter((constraint) => constraint.type?.trim()) || [],
-    public_access: form.public_access,
+    ...prepared,
+    resource_name: prepared.resource_name?.trim() || slugField(prepared.name),
+    name: titleCase(prepared.name.trim()),
+    module: titleCase(prepared.module.trim()),
+    title_field: prepared.title_field.trim() || fields[0]?.fieldname || 'title',
+    search_fields: prepared.search_fields.trim() || fields.slice(0, 4).map((field) => field.fieldname).join(','),
+    sort_field: prepared.sort_field.trim() || 'modified',
+    sort_order: prepared.sort_order || 'DESC',
+    doc_constraints: prepared.doc_constraints?.filter((constraint) => constraint.type?.trim()) || [],
+    public_access: publicAccess,
     fields,
   }
+}
+
+function ensurePublicVisibilityConvention(form: DocType, enabled: boolean): DocType {
+  if (!enabled && !form.public_access) {
+    return form
+  }
+
+  const next = {
+    ...form,
+    public_access: {
+      ...(form.public_access || { ...EMPTY_PUBLIC_ACCESS }),
+      enabled,
+      list: enabled ? true : form.public_access?.list ?? false,
+      read: enabled ? true : form.public_access?.read ?? false,
+    },
+  }
+
+  if (!enabled) {
+    return next
+  }
+
+  const hasField = next.fields.some((field) => field.fieldname === PUBLIC_VISIBILITY_FIELDNAME)
+  const fields = hasField ? [...next.fields] : insertPublicVisibilityField(next.fields)
+  const filters = normalizePublicFilters(
+    next.public_access?.filters || [],
+    true,
+  )
+
+  return {
+    ...next,
+    fields,
+    public_access: {
+      ...(next.public_access || { ...EMPTY_PUBLIC_ACCESS }),
+      enabled: true,
+      list: true,
+      read: true,
+      fields: normalizePublicFields(next.public_access),
+      filters,
+    },
+  }
+}
+
+function insertPublicVisibilityField(fields: Field[]): Field[] {
+  const publicField = createPublicVisibilityField()
+  const next = [...fields]
+  const statusIndex = next.findIndex((field) => field.fieldname === 'status')
+  if (statusIndex >= 0) {
+    next.splice(statusIndex + 1, 0, publicField)
+    return next
+  }
+  if (next.length > 0) {
+    next.splice(Math.min(1, next.length), 0, publicField)
+    return next
+  }
+  return [publicField]
+}
+
+function createPublicVisibilityField(): Field {
+  return {
+    ...EMPTY_FIELD,
+    fieldname: PUBLIC_VISIBILITY_FIELDNAME,
+    fieldtype: 'Check',
+    label: 'Public',
+    default: '0',
+    in_list_view: true,
+    in_standard_filter: true,
+    description: 'Marks records that should be visible through public access routes.',
+  }
+}
+
+function normalizePublicFields(publicAccess?: PublicAccess): string[] {
+  const seen = new Set<string>()
+  const fields: string[] = []
+
+  for (const fieldname of publicAccess?.fields || []) {
+    const normalized = fieldname.trim()
+    if (!normalized || normalized === PUBLIC_VISIBILITY_FIELDNAME) continue
+    if (seen.has(normalized)) continue
+    seen.add(normalized)
+    fields.push(normalized)
+  }
+
+  if (fields.length === 0) {
+    fields.push('name')
+  }
+
+  return fields
+}
+
+function normalizePublicFilters(filters: PublicFilter[], enabled: boolean): PublicFilter[] {
+  if (!enabled) {
+    return filters
+  }
+
+  const next = filters.filter((filter) => {
+    const field = filter.field?.trim()
+    if (!field) return false
+    if (field === PUBLIC_VISIBILITY_FIELDNAME) return false
+    return true
+  })
+  next.unshift(PUBLIC_VISIBILITY_FILTER)
+  return next
 }
 
 function applyStarterTemplate(form: DocType, fields: Array<[string, Field['fieldtype']]>): DocType {
