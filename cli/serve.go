@@ -78,6 +78,14 @@ func resolveStorage(siteCfg *site.SiteConfig) (storage.Backend, error) {
 	if siteCfg != nil && siteCfg.FileStorage != "" {
 		cfg.Backend = siteCfg.FileStorage
 	}
+	if siteCfg != nil && cfg.Backend == "s3" {
+		if cfg.S3Bucket == "" {
+			cfg.S3Bucket = siteCfg.StorageBucket
+		}
+		if cfg.S3Bucket == "" {
+			cfg.S3Bucket = site.BucketNameForSite(siteCfg.Hostname)
+		}
+	}
 	if cfg.Backend == "" && (cfg.S3Endpoint != "" || cfg.S3Bucket != "" || cfg.S3AccessKey != "" || cfg.S3SecretKey != "") {
 		cfg.Backend = "s3"
 	}
@@ -164,10 +172,6 @@ func runServe() error {
 	// Discover sites from the database (single source of truth).
 	var dbSites []site.DBSiteInfo
 	var err error
-	defaultStorage, err := resolveStorage(nil)
-	if err != nil {
-		return fmt.Errorf("configuring default storage: %w", err)
-	}
 	if serveSiteFlag == "" && platformDB != nil {
 		dbSites, err = site.DiscoverSitesFromDB(platformDB)
 		if err != nil {
@@ -562,7 +566,7 @@ func runServe() error {
 		// The /console frontend is served by the SPA via NoRoute handler.
 		ch := api.NewConsoleHandler(systemGuard, siteRouter, common.DBType, common.DBHost, common.DBUser, common.DBPassword, 3306, platformDB, sc.AllowConsoleOnboarding)
 		ch.SiteStorages = siteStorages
-		ch.DefaultStorage = defaultStorage
+		ch.ResolveStorage = resolveStorage
 		ch.Start()
 		router.POST("/api/console/login", ch.HandleLogin)
 		router.POST("/api/console/change-password", ch.HandleChangePassword)

@@ -31,8 +31,9 @@ type SiteConfig struct {
 	RedisURL string `yaml:"redis_url"`
 
 	// File storage configuration.
-	FileStorage string `yaml:"file_storage"` // "local" or "s3"
-	FilesPath   string `yaml:"files_path"`
+	FileStorage   string `yaml:"file_storage"`   // "local" or "s3"
+	StorageBucket string `yaml:"storage_bucket"` // site-specific bucket when FileStorage == "s3"
+	FilesPath     string `yaml:"files_path"`
 
 	// Apps loaded for this site.
 	Apps []string `yaml:"apps"`
@@ -436,6 +437,11 @@ func ReconstructSiteConfigFromDBInfo(info DBSiteInfo, common *CommonConfig) *Sit
 	}
 	if info.FileStorage != "" {
 		cfg.FileStorage = info.FileStorage
+	}
+	if info.StorageBucket != "" {
+		cfg.StorageBucket = info.StorageBucket
+	} else if cfg.FileStorage == "s3" {
+		cfg.StorageBucket = BucketNameForSite(cfg.Hostname)
 	}
 	return cfg
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 )
 
-const registrySelect = `SELECT site, db_type, db_host, db_port, db_name, db_user, COALESCE(db_password, ''), db_password_encrypted, COALESCE(domains_json, '[]'), COALESCE(file_storage, 'local') FROM _kora_site_registry WHERE status = 'active' ORDER BY site`
+const registrySelect = `SELECT site, db_type, db_host, db_port, db_name, db_user, COALESCE(db_password, ''), db_password_encrypted, COALESCE(domains_json, '[]'), COALESCE(file_storage, 'local'), COALESCE(storage_bucket, '') FROM _kora_site_registry WHERE status = 'active' ORDER BY site`
 
 func TestDiscoverSitesFromDBUsesRegistryWhenAvailable(t *testing.T) {
 	db, mock, err := sqlmock.New()
@@ -17,9 +17,9 @@ func TestDiscoverSitesFromDBUsesRegistryWhenAvailable(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{
-		"site", "db_type", "db_host", "db_port", "db_name", "db_user", "db_password", "db_password_encrypted", "domains_json", "file_storage",
+		"site", "db_type", "db_host", "db_port", "db_name", "db_user", "db_password", "db_password_encrypted", "domains_json", "file_storage", "storage_bucket",
 	}).AddRow(
-		"acme.kora.dev", "mysql", "db.internal", 3306, "acme_kora_dev", "tenant_user", "", 0, `["acme.kora.dev","app.acme.dev"]`, "local",
+		"acme.kora.dev", "mysql", "db.internal", 3306, "acme_kora_dev", "tenant_user", "", 0, `["acme.kora.dev","app.acme.dev"]`, "local", "",
 	)
 	mock.ExpectQuery(regexp.QuoteMeta(registrySelect)).
 		WillReturnRows(rows)
@@ -47,6 +47,9 @@ func TestDiscoverSitesFromDBUsesRegistryWhenAvailable(t *testing.T) {
 	}
 	if sites[0].FileStorage != "local" {
 		t.Fatalf("FileStorage = %q", sites[0].FileStorage)
+	}
+	if sites[0].StorageBucket != "" {
+		t.Fatalf("StorageBucket = %q", sites[0].StorageBucket)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("ExpectationsWereMet: %v", err)
@@ -94,9 +97,9 @@ func TestDiscoverSitesFromDBUsesRegistryWhenLegacyConfigTableMissing(t *testing.
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{
-		"site", "db_type", "db_host", "db_port", "db_name", "db_user", "db_password", "db_password_encrypted", "domains_json", "file_storage",
+		"site", "db_type", "db_host", "db_port", "db_name", "db_user", "db_password", "db_password_encrypted", "domains_json", "file_storage", "storage_bucket",
 	}).AddRow(
-		"partner", "mysql", "kora-mysql-lh5l6r", 3306, "partner", "root", "", 0, `["partner"]`, "local",
+		"partner", "mysql", "kora-mysql-lh5l6r", 3306, "partner", "root", "", 0, `["partner"]`, "local", "",
 	)
 	mock.ExpectQuery(regexp.QuoteMeta(registrySelect)).
 		WillReturnRows(rows)
@@ -159,6 +162,18 @@ func TestReconstructSiteConfigFromDBInfoPrefersRegistryValues(t *testing.T) {
 	}
 	if cfg.FileStorage != "s3" {
 		t.Fatalf("FileStorage = %q", cfg.FileStorage)
+	}
+	if cfg.StorageBucket != BucketNameForSite("acme.kora.dev") {
+		t.Fatalf("StorageBucket = %q", cfg.StorageBucket)
+	}
+}
+
+func TestBucketNameForSite(t *testing.T) {
+	if got := BucketNameForSite("Acme.Kora.Dev"); got != "acme.kora.dev" {
+		t.Fatalf("BucketNameForSite = %q", got)
+	}
+	if got := BucketNameForSite("site with spaces"); got != "site-with-spaces" {
+		t.Fatalf("BucketNameForSite = %q", got)
 	}
 }
 

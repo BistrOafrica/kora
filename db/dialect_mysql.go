@@ -462,7 +462,7 @@ func (d *MySQLDialect) SystemTableSQL() []string {
 		"UPDATE _kora_config_version SET status = 'Active' WHERE is_active = 1 AND status = 'Superseded'",
 
 		// _kora_site_registry
-		"CREATE TABLE IF NOT EXISTS _kora_site_registry (\n\t\t\tsite VARCHAR(140) PRIMARY KEY,\n\t\t\tdb_type VARCHAR(20) NOT NULL DEFAULT 'mysql',\n\t\t\tdb_host VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_port INT NOT NULL DEFAULT 0,\n\t\t\tdb_name VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_user VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_password TEXT,\n\t\t\tdb_password_encrypted TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\tfile_storage VARCHAR(20) NOT NULL DEFAULT 'local',\n\t\t\tdomains_json JSON,\n\t\t\tstatus VARCHAR(20) NOT NULL DEFAULT 'active',\n\t\t\tcreated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),\n\t\t\tupdated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),\n\t\t\tINDEX idx_site_registry_status (status)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+		"CREATE TABLE IF NOT EXISTS _kora_site_registry (\n\t\t\tsite VARCHAR(140) PRIMARY KEY,\n\t\t\tdb_type VARCHAR(20) NOT NULL DEFAULT 'mysql',\n\t\t\tdb_host VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_port INT NOT NULL DEFAULT 0,\n\t\t\tdb_name VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_user VARCHAR(255) NOT NULL DEFAULT '',\n\t\t\tdb_password TEXT,\n\t\t\tdb_password_encrypted TINYINT(1) NOT NULL DEFAULT 0,\n\t\t\tfile_storage VARCHAR(20) NOT NULL DEFAULT 'local',\n\t\t\tstorage_bucket VARCHAR(63) NOT NULL DEFAULT '',\n\t\t\tdomains_json JSON,\n\t\t\tstatus VARCHAR(20) NOT NULL DEFAULT 'active',\n\t\t\tcreated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),\n\t\t\tupdated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),\n\t\t\tINDEX idx_site_registry_status (status)\n\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 		"ALTER TABLE _kora_site_registry ADD COLUMN db_password TEXT",
 		"ALTER TABLE _kora_site_registry ADD COLUMN db_password_encrypted TINYINT(1) NOT NULL DEFAULT 0",
 		"ALTER TABLE _kora_site_registry ADD COLUMN domains_json JSON",
@@ -470,6 +470,7 @@ func (d *MySQLDialect) SystemTableSQL() []string {
 		"ALTER TABLE _kora_site_registry ADD COLUMN created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)",
 		"ALTER TABLE _kora_site_registry ADD COLUMN updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)",
 		"ALTER TABLE _kora_site_registry ADD COLUMN file_storage VARCHAR(20) NOT NULL DEFAULT 'local'",
+		"ALTER TABLE _kora_site_registry ADD COLUMN storage_bucket VARCHAR(63) NOT NULL DEFAULT ''",
 		"CREATE INDEX idx_site_registry_status ON _kora_site_registry (status)",
 
 		// _kora_user

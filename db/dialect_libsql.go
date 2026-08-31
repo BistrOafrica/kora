@@ -573,6 +573,7 @@ func (d *LibSQLDialect) SystemTableSQL() []string {
 			"db_password" TEXT,
 			"db_password_encrypted" INTEGER NOT NULL DEFAULT 0,
 			"file_storage" TEXT NOT NULL DEFAULT 'local',
+			"storage_bucket" TEXT NOT NULL DEFAULT '',
 			"domains_json" TEXT,
 			"status" TEXT NOT NULL DEFAULT 'active',
 			"created_at" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
@@ -585,6 +586,7 @@ func (d *LibSQLDialect) SystemTableSQL() []string {
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "created_at" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))`,
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "updated_at" TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))`,
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "file_storage" TEXT NOT NULL DEFAULT 'local'`,
+		`ALTER TABLE "_kora_site_registry" ADD COLUMN "storage_bucket" TEXT NOT NULL DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS "idx_site_registry_status" ON "_kora_site_registry" ("status")`,
 
 		// _kora_user

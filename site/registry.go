@@ -19,6 +19,7 @@ type DBSiteInfo struct {
 	DBPassword          string
 	DBPasswordEncrypted bool
 	FileStorage         string
+	StorageBucket       string
 }
 
 func ensurePlatformSiteRegistration(platformDB *sql.DB, platformDBType string, cfg *SiteConfig) error {
@@ -44,15 +45,19 @@ func ensurePlatformSiteRegistration(platformDB *sql.DB, platformDBType string, c
 	if fileStorage == "" {
 		fileStorage = "local"
 	}
+	storageBucket := cfg.StorageBucket
+	if fileStorage == "s3" && storageBucket == "" {
+		storageBucket = BucketNameForSite(cfg.Hostname)
+	}
 
 	now := time.Now().UTC()
 	switch strings.ToLower(platformDBType) {
 	case "postgres":
 		if _, err := platformDB.Exec(
 			`INSERT INTO _kora_site_registry
-				(site, db_type, db_host, db_port, db_name, db_user, db_password, db_password_encrypted, file_storage, domains_json, status, created_at, updated_at)
+				(site, db_type, db_host, db_port, db_name, db_user, db_password, db_password_encrypted, file_storage, storage_bucket, domains_json, status, created_at, updated_at)
 			 VALUES
-				($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, 'active', $11, $12)
+				($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, 'active', $12, $13)
 			 ON CONFLICT (site) DO UPDATE SET
 				db_type = EXCLUDED.db_type,
 				db_host = EXCLUDED.db_host,
@@ -62,19 +67,20 @@ func ensurePlatformSiteRegistration(platformDB *sql.DB, platformDBType string, c
 				db_password = EXCLUDED.db_password,
 				db_password_encrypted = EXCLUDED.db_password_encrypted,
 				file_storage = EXCLUDED.file_storage,
+				storage_bucket = EXCLUDED.storage_bucket,
 				domains_json = EXCLUDED.domains_json,
 				status = 'active',
 				updated_at = EXCLUDED.updated_at`,
-			cfg.Hostname, cfg.DBType, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, dbPassword, boolToInt(encrypted), fileStorage, string(domainsJSON), now, now,
+			cfg.Hostname, cfg.DBType, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, dbPassword, boolToInt(encrypted), fileStorage, storageBucket, string(domainsJSON), now, now,
 		); err != nil {
 			return fmt.Errorf("upsert platform site registry: %w", err)
 		}
 	default:
 		if _, err := platformDB.Exec(
 			`INSERT INTO _kora_site_registry
-				(site, db_type, db_host, db_port, db_name, db_user, db_password, db_password_encrypted, file_storage, domains_json, status, created_at, updated_at)
+				(site, db_type, db_host, db_port, db_name, db_user, db_password, db_password_encrypted, file_storage, storage_bucket, domains_json, status, created_at, updated_at)
 			 VALUES
-				(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+				(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
 			 ON DUPLICATE KEY UPDATE
 				db_type = VALUES(db_type),
 				db_host = VALUES(db_host),
@@ -84,10 +90,11 @@ func ensurePlatformSiteRegistration(platformDB *sql.DB, platformDBType string, c
 				db_password = VALUES(db_password),
 				db_password_encrypted = VALUES(db_password_encrypted),
 				file_storage = VALUES(file_storage),
+				storage_bucket = VALUES(storage_bucket),
 				domains_json = VALUES(domains_json),
 				status = 'active',
 				updated_at = VALUES(updated_at)`,
-			cfg.Hostname, cfg.DBType, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, dbPassword, boolToInt(encrypted), fileStorage, string(domainsJSON), now, now,
+			cfg.Hostname, cfg.DBType, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, dbPassword, boolToInt(encrypted), fileStorage, storageBucket, string(domainsJSON), now, now,
 		); err == nil {
 			return nil
 		} else if !isDuplicateUpsertUnsupported(err) {
@@ -96,9 +103,9 @@ func ensurePlatformSiteRegistration(platformDB *sql.DB, platformDBType string, c
 
 		res, err := platformDB.Exec(
 			`UPDATE _kora_site_registry
-			 SET db_type = ?, db_host = ?, db_port = ?, db_name = ?, db_user = ?, db_password = ?, db_password_encrypted = ?, file_storage = ?, domains_json = ?, status = 'active', updated_at = ?
+			 SET db_type = ?, db_host = ?, db_port = ?, db_name = ?, db_user = ?, db_password = ?, db_password_encrypted = ?, file_storage = ?, storage_bucket = ?, domains_json = ?, status = 'active', updated_at = ?
 			 WHERE site = ?`,
-			cfg.DBType, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, dbPassword, boolToInt(encrypted), fileStorage, string(domainsJSON), now, cfg.Hostname,
+			cfg.DBType, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, dbPassword, boolToInt(encrypted), fileStorage, storageBucket, string(domainsJSON), now, cfg.Hostname,
 		)
 		if err != nil {
 			return fmt.Errorf("update platform site registry: %w", err)
@@ -112,10 +119,10 @@ func ensurePlatformSiteRegistration(platformDB *sql.DB, platformDBType string, c
 		}
 		if _, err := platformDB.Exec(
 			`INSERT INTO _kora_site_registry
-				(site, db_type, db_host, db_port, db_name, db_user, db_password, db_password_encrypted, file_storage, domains_json, status, created_at, updated_at)
+				(site, db_type, db_host, db_port, db_name, db_user, db_password, db_password_encrypted, file_storage, storage_bucket, domains_json, status, created_at, updated_at)
 			 VALUES
-				(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
-			cfg.Hostname, cfg.DBType, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, dbPassword, boolToInt(encrypted), fileStorage, string(domainsJSON), now, now,
+				(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+			cfg.Hostname, cfg.DBType, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, dbPassword, boolToInt(encrypted), fileStorage, storageBucket, string(domainsJSON), now, now,
 		); err != nil {
 			return fmt.Errorf("insert platform site registry: %w", err)
 		}
@@ -138,7 +145,7 @@ func removePlatformSiteRegistration(platformDB *sql.DB, platformDBType, hostname
 }
 
 func discoverSitesFromRegistry(db *sql.DB) ([]DBSiteInfo, error) {
-	rows, err := db.Query(`SELECT site, db_type, db_host, db_port, db_name, db_user, COALESCE(db_password, ''), db_password_encrypted, COALESCE(domains_json, '[]'), COALESCE(file_storage, 'local') FROM _kora_site_registry WHERE status = 'active' ORDER BY site`)
+	rows, err := db.Query(`SELECT site, db_type, db_host, db_port, db_name, db_user, COALESCE(db_password, ''), db_password_encrypted, COALESCE(domains_json, '[]'), COALESCE(file_storage, 'local'), COALESCE(storage_bucket, '') FROM _kora_site_registry WHERE status = 'active' ORDER BY site`)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +158,11 @@ func discoverSitesFromRegistry(db *sql.DB) ([]DBSiteInfo, error) {
 			domainsJSON      string
 			encryptedNumeric int
 		)
-		if err := rows.Scan(&info.Name, &info.DBType, &info.DBHost, &info.DBPort, &info.DBName, &info.DBUser, &info.DBPassword, &encryptedNumeric, &domainsJSON, &info.FileStorage); err != nil {
+		if err := rows.Scan(&info.Name, &info.DBType, &info.DBHost, &info.DBPort, &info.DBName, &info.DBUser, &info.DBPassword, &encryptedNumeric, &domainsJSON, &info.FileStorage, &info.StorageBucket); err != nil {
 			return nil, err
+		}
+		if info.FileStorage == "s3" && info.StorageBucket == "" {
+			info.StorageBucket = BucketNameForSite(info.Name)
 		}
 		info.DBPasswordEncrypted = encryptedNumeric == 1
 		if info.DBPasswordEncrypted && info.DBPassword != "" {

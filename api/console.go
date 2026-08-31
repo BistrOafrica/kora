@@ -36,6 +36,7 @@ type ConsoleHandler struct {
 	ProvisioningStore  *site.OnboardingStore
 	AllowOnboarding    bool
 	SiteStorages       map[string]storage.Backend
+	ResolveStorage     func(*site.SiteConfig) (storage.Backend, error)
 	queuedJobsMu       sync.Mutex
 	queuedJobs         map[string]bool
 	PlatformDBType     string
@@ -44,7 +45,6 @@ type ConsoleHandler struct {
 	PlatformDBUser     string
 	PlatformDBPassword string
 	PlatformDB         *sql.DB // Existing platform DB connection (for LibSQL reuse)
-	DefaultStorage     storage.Backend
 }
 
 // NewConsoleHandler creates a console API handler.
@@ -61,7 +61,6 @@ func NewConsoleHandler(guard *auth.SystemGuard, sr *net.SiteRouter, dbType, dbHo
 		PlatformDBUser:     dbUser,
 		PlatformDBPassword: dbPassword,
 		PlatformDB:         platformDB,
-		DefaultStorage:     nil,
 		SiteStorages:       nil,
 	}
 }
@@ -372,10 +371,18 @@ func (h *ConsoleHandler) HandleCreateSite(c *gin.Context) {
 		DB:       result.DB,
 		Registry: result.Registry,
 	}
-	h.SiteRouter.AddSite(loaded)
-	if h.SiteStorages != nil && h.DefaultStorage != nil {
-		h.SiteStorages[req.Hostname] = h.DefaultStorage
+	if h.ResolveStorage != nil {
+		st, err := h.ResolveStorage(result.Config)
+		if err != nil {
+			slog.Error("provisioning storage failed", "hostname", req.Hostname, "error", err)
+			writeError(c, http.StatusInternalServerError, "storage.provision_failed", "Site created, but storage provisioning failed", nil)
+			return
+		}
+		if h.SiteStorages != nil {
+			h.SiteStorages[req.Hostname] = st
+		}
 	}
+	h.SiteRouter.AddSite(loaded)
 
 	slog.Info("site created via console", "hostname", req.Hostname, "db_name", result.Config.DBName)
 	c.JSON(http.StatusCreated, Response{Data: consoleSiteCreateResponse{
@@ -644,10 +651,23 @@ func (h *ConsoleHandler) processOnboardJob(job site.OnboardingJob, req onboardRe
 		DB:       result.DB,
 		Registry: result.Registry,
 	}
-	h.SiteRouter.AddSite(loaded)
-	if h.SiteStorages != nil && h.DefaultStorage != nil {
-		h.SiteStorages[req.Hostname] = h.DefaultStorage
+	if h.ResolveStorage != nil {
+		st, err := h.ResolveStorage(result.Config)
+		if err != nil {
+			slog.Error("provisioning storage failed", "hostname", req.Hostname, "error", err)
+			job.State = site.OnboardingFailed
+			job.LastError = err.Error()
+			job.UpdatedAt = time.Now().UTC()
+			if h.ProvisioningStore != nil {
+				_ = h.ProvisioningStore.UpsertJob(job)
+			}
+			return
+		}
+		if h.SiteStorages != nil {
+			h.SiteStorages[req.Hostname] = st
+		}
 	}
+	h.SiteRouter.AddSite(loaded)
 
 	job.State = site.OnboardingActive
 	job.UpdatedAt = time.Now().UTC()

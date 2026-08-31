@@ -576,6 +576,7 @@ func (d *PostgresDialect) SystemTableSQL() []string {
 			"db_password" TEXT,
 			"db_password_encrypted" SMALLINT NOT NULL DEFAULT 0,
 			"file_storage" VARCHAR(20) NOT NULL DEFAULT 'local',
+			"storage_bucket" VARCHAR(63) NOT NULL DEFAULT '',
 			"domains_json" JSONB,
 			"status" VARCHAR(20) NOT NULL DEFAULT 'active',
 			"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -588,6 +589,7 @@ func (d *PostgresDialect) SystemTableSQL() []string {
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "created_at" TIMESTAMP NOT NULL DEFAULT NOW()`,
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()`,
 		`ALTER TABLE "_kora_site_registry" ADD COLUMN "file_storage" VARCHAR(20) NOT NULL DEFAULT 'local'`,
+		`ALTER TABLE "_kora_site_registry" ADD COLUMN "storage_bucket" VARCHAR(63) NOT NULL DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS "idx_site_registry_status" ON "_kora_site_registry" ("status")`,
 
 		// _kora_user
