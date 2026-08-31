@@ -1,11 +1,15 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"log/slog"
 	"math"
@@ -1598,12 +1602,26 @@ func (h *Handler) HandleUpload(c *gin.Context) {
 		}
 	}
 
-	// Rewind and hand off to the backend.
+	// Rewind, read the bytes once, and give image uploads a post-upload
+	// optimization pass. This keeps the same URL but reduces payload size.
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		internalError(c, "reading file", err)
 		return
 	}
-	meta, err := backend.Put(c.Request.Context(), filepath.ToSlash(key), file, header.Size, storage.FileMeta{
+	raw, err := io.ReadAll(file)
+	if err != nil {
+		internalError(c, "reading upload", err)
+		return
+	}
+
+	optimized, optimizedMime, optimizedOk := optimizeUploadedImage(raw, filename, mimeType)
+	if optimizedOk {
+		raw = optimized
+		mimeType = optimizedMime
+		header.Size = int64(len(raw))
+	}
+
+	meta, err := backend.Put(c.Request.Context(), filepath.ToSlash(key), bytes.NewReader(raw), int64(len(raw)), storage.FileMeta{
 		Filename:   filename,
 		MIMEType:   mimeType,
 		UploadedBy: c.GetString("user"),
@@ -1624,6 +1642,69 @@ func (h *Handler) HandleUpload(c *gin.Context) {
 			"checksum":  meta.Checksum,
 		},
 	})
+}
+
+// optimizeUploadedImage tries to reduce upload size for browser-rendered images
+// without changing the public path. It returns the original bytes when no
+// improvement is possible or when the file is not a raster image.
+func optimizeUploadedImage(raw []byte, filename, mimeType string) ([]byte, string, bool) {
+	if len(raw) < 32*1024 {
+		return raw, mimeType, false
+	}
+
+	if strings.EqualFold(filepath.Ext(filename), ".svg") || mimeType == "image/svg+xml" {
+		return raw, mimeType, false
+	}
+
+	img, format, err := image.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return raw, mimeType, false
+	}
+
+	var buf bytes.Buffer
+	switch strings.ToLower(format) {
+	case "jpeg", "jpg":
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 88}); err != nil {
+			return raw, mimeType, false
+		}
+		if buf.Len() >= len(raw) {
+			return raw, mimeType, false
+		}
+		return buf.Bytes(), "image/jpeg", true
+	case "png":
+		if hasAlphaChannel(img) {
+			enc := png.Encoder{CompressionLevel: png.BestCompression}
+			if err := enc.Encode(&buf, img); err != nil {
+				return raw, mimeType, false
+			}
+			if buf.Len() >= len(raw) {
+				return raw, mimeType, false
+			}
+			return buf.Bytes(), "image/png", true
+		}
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 88}); err != nil {
+			return raw, mimeType, false
+		}
+		if buf.Len() >= len(raw) {
+			return raw, mimeType, false
+		}
+		return buf.Bytes(), "image/jpeg", true
+	default:
+		return raw, mimeType, false
+	}
+}
+
+func hasAlphaChannel(img image.Image) bool {
+	bounds := img.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			_, _, _, a := img.At(x, y).RGBA()
+			if a != 0xffff {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // HandleFileServe serves an uploaded attachment with HTTP Range support so browsers
