@@ -33,6 +33,9 @@ var ErrNotFound = errors.New("storage: object not found")
 type Backend interface {
 	// Put stores r (of the given size) at key and returns the resulting metadata.
 	Put(ctx context.Context, key string, r io.Reader, size int64, meta FileMeta) (*FileMeta, error)
+	// EnsureBucket makes any backend-specific storage prerequisites available.
+	// Local backends can no-op; S3-compatible backends should create missing buckets.
+	EnsureBucket(ctx context.Context) error
 	// Head returns metadata for key without transferring the body.
 	Head(ctx context.Context, key string) (*FileMeta, error)
 	// Open returns a reader for bytes [offset, offset+length). length < 0 means to EOF.

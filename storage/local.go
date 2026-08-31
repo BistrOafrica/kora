@@ -65,6 +65,10 @@ func (b *localBackend) Put(_ context.Context, key string, r io.Reader, _ int64, 
 	return &meta, nil
 }
 
+func (b *localBackend) EnsureBucket(context.Context) error {
+	return nil
+}
+
 func (b *localBackend) Head(_ context.Context, key string) (*FileMeta, error) {
 	full := b.fullPath(key)
 	st, err := os.Stat(full)

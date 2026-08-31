@@ -70,6 +70,16 @@ func newS3Backend(cfg Config) (*s3Backend, error) {
 	}, nil
 }
 
+// bucketRequest builds a path-style bucket request: /{bucket}.
+func (b *s3Backend) bucketRequest(ctx context.Context, method string) (*http.Request, error) {
+	u, err := url.Parse(b.endpoint)
+	if err != nil {
+		return nil, err
+	}
+	u.Path = "/" + b.bucket
+	return http.NewRequestWithContext(ctx, method, u.String(), nil)
+}
+
 // newRequest builds a path-style S3 request: /{bucket}/{key}.
 func (b *s3Backend) newRequest(ctx context.Context, method, key string, body io.Reader) (*http.Request, error) {
 	u, err := url.Parse(b.endpoint)
@@ -78,6 +88,55 @@ func (b *s3Backend) newRequest(ctx context.Context, method, key string, body io.
 	}
 	u.Path = "/" + b.bucket + "/" + key
 	return http.NewRequestWithContext(ctx, method, u.String(), body)
+}
+
+func (b *s3Backend) EnsureBucket(ctx context.Context) error {
+	req, err := b.bucketRequest(ctx, http.MethodHead)
+	if err != nil {
+		return err
+	}
+	signV4(req, emptySHA256, b.creds, time.Now())
+
+	resp, err := b.client.Do(req)
+	if err == nil {
+		defer resp.Body.Close()
+		switch resp.StatusCode {
+		case http.StatusOK, http.StatusNoContent:
+			return nil
+		case http.StatusNotFound:
+			// Create the bucket below.
+		case http.StatusForbidden:
+			return fmt.Errorf("s3 head bucket forbidden: %s", resp.Status)
+		default:
+			if resp.StatusCode < 400 {
+				return nil
+			}
+			return fmt.Errorf("s3 head bucket failed: %s", resp.Status)
+		}
+	} else {
+		return err
+	}
+
+	req, err = b.bucketRequest(ctx, http.MethodPut)
+	if err != nil {
+		return err
+	}
+	signV4(req, emptySHA256, b.creds, time.Now())
+
+	resp, err = b.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusCreated, http.StatusNoContent, http.StatusConflict:
+		return nil
+	default:
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return nil
+		}
+		return fmt.Errorf("s3 create bucket failed: %s", resp.Status)
+	}
 }
 
 func (b *s3Backend) Put(ctx context.Context, key string, r io.Reader, size int64, meta FileMeta) (*FileMeta, error) {

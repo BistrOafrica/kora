@@ -42,22 +42,44 @@ import (
 // Version is set at build time via -ldflags "-X github.com/asenawritescode/kora/cli.Version=...".
 var Version = "dev"
 
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func firstEnvBool(def bool, names ...string) bool {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v != "false" && v != "0"
+		}
+	}
+	return def
+}
+
 // resolveStorage builds the storage backend (local or S3-compatible) for a site.
 // Per-site FileStorage from the registry overrides the global KORA_STORAGE_BACKEND.
 func resolveStorage(siteCfg *site.SiteConfig) (storage.Backend, error) {
+	backend := firstEnv("KORA_STORAGE_BACKEND")
 	cfg := storage.Config{
-		Backend:         os.Getenv("KORA_STORAGE_BACKEND"),
+		Backend:         backend,
 		LocalPath:       os.Getenv("KORA_STORAGE_LOCAL_PATH"),
-		S3Endpoint:      os.Getenv("KORA_STORAGE_S3_ENDPOINT"),
-		S3Region:        os.Getenv("KORA_STORAGE_S3_REGION"),
-		S3Bucket:        os.Getenv("KORA_STORAGE_S3_BUCKET"),
-		S3AccessKey:     os.Getenv("KORA_STORAGE_S3_ACCESS_KEY"),
-		S3SecretKey:     os.Getenv("KORA_STORAGE_S3_SECRET_KEY"),
-		S3UseSSL:        os.Getenv("KORA_STORAGE_S3_USE_SSL") != "false",
-		S3PublicBaseURL: os.Getenv("KORA_STORAGE_S3_PUBLIC_URL"),
+		S3Endpoint:      firstEnv("KORA_STORAGE_S3_ENDPOINT"),
+		S3Region:        firstEnv("KORA_STORAGE_S3_REGION"),
+		S3Bucket:        firstEnv("KORA_STORAGE_S3_BUCKET"),
+		S3AccessKey:     firstEnv("KORA_STORAGE_S3_ACCESS_KEY"),
+		S3SecretKey:     firstEnv("KORA_STORAGE_S3_SECRET_KEY"),
+		S3UseSSL:        firstEnvBool(true, "KORA_STORAGE_S3_USE_SSL"),
+		S3PublicBaseURL: firstEnv("KORA_STORAGE_S3_PUBLIC_URL"),
 	}
 	if siteCfg != nil && siteCfg.FileStorage != "" {
 		cfg.Backend = siteCfg.FileStorage
+	}
+	if cfg.Backend == "" && (cfg.S3Endpoint != "" || cfg.S3Bucket != "" || cfg.S3AccessKey != "" || cfg.S3SecretKey != "") {
+		cfg.Backend = "s3"
 	}
 	if cfg.Backend == "" {
 		cfg.Backend = "local"
@@ -65,7 +87,14 @@ func resolveStorage(siteCfg *site.SiteConfig) (storage.Backend, error) {
 	if cfg.LocalPath == "" {
 		cfg.LocalPath = "."
 	}
-	return storage.New(cfg)
+	backendImpl, err := storage.New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := backendImpl.EnsureBucket(context.Background()); err != nil {
+		return nil, err
+	}
+	return backendImpl, nil
 }
 
 var (
@@ -135,6 +164,10 @@ func runServe() error {
 	// Discover sites from the database (single source of truth).
 	var dbSites []site.DBSiteInfo
 	var err error
+	defaultStorage, err := resolveStorage(nil)
+	if err != nil {
+		return fmt.Errorf("configuring default storage: %w", err)
+	}
 	if serveSiteFlag == "" && platformDB != nil {
 		dbSites, err = site.DiscoverSitesFromDB(platformDB)
 		if err != nil {
@@ -528,6 +561,8 @@ func runServe() error {
 		// Console API (React SPA-driven, Bearer token auth).
 		// The /console frontend is served by the SPA via NoRoute handler.
 		ch := api.NewConsoleHandler(systemGuard, siteRouter, common.DBType, common.DBHost, common.DBUser, common.DBPassword, 3306, platformDB, sc.AllowConsoleOnboarding)
+		ch.SiteStorages = siteStorages
+		ch.DefaultStorage = defaultStorage
 		ch.Start()
 		router.POST("/api/console/login", ch.HandleLogin)
 		router.POST("/api/console/change-password", ch.HandleChangePassword)

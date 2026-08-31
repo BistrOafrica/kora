@@ -421,6 +421,7 @@ Key environment variables for extensibility and analytics:
 - `KORA_STORAGE_S3_ENDPOINT` / `_REGION` / `_BUCKET` / `_ACCESS_KEY` / `_SECRET_KEY` — S3-compatible backend config
 - `KORA_STORAGE_S3_USE_SSL` — TLS to S3 endpoint (default: `true`)
 - `KORA_STORAGE_S3_PUBLIC_URL` — Optional public base URL (else presigned URLs are used)
+- On startup, S3-compatible backends are checked and the bucket is created idempotently when missing.
 - `KORA_MAX_UPLOAD_MB` — Per-file upload cap (default: `50`)
 
 ## Release Workflow

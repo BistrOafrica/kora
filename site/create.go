@@ -138,6 +138,16 @@ func mysqlHostPort(addr string) (string, int) {
 	return host, port
 }
 
+func defaultFileStorageFromEnv() string {
+	if v := os.Getenv("KORA_STORAGE_BACKEND"); v != "" {
+		return v
+	}
+	if os.Getenv("KORA_STORAGE_S3_ENDPOINT") != "" {
+		return "s3"
+	}
+	return "local"
+}
+
 // CreateSiteResult holds the result of a successful site creation.
 type CreateSiteResult struct {
 	Config   *SiteConfig
@@ -194,7 +204,7 @@ func CreateSite(input CreateSiteInput) (*CreateSiteResult, error) {
 		DBUser:      input.DBUser,
 		DBPassword:  input.DBPassword,
 		Hostname:    input.Hostname,
-		FileStorage: "local",
+		FileStorage: defaultFileStorageFromEnv(),
 		FilesPath:   fmt.Sprintf("sites/%s/files", input.Hostname),
 		Apps:        []string{"core"},
 		DomainsList: domains,

@@ -19,6 +19,7 @@ import (
 	sqlDialect "github.com/asenawritescode/kora/db"
 	"github.com/asenawritescode/kora/net"
 	"github.com/asenawritescode/kora/site"
+	"github.com/asenawritescode/kora/storage"
 )
 
 // onboardRateLimiter tracks IP → count for self-service site creation.
@@ -34,6 +35,7 @@ type ConsoleHandler struct {
 	SiteRouter         *net.SiteRouter
 	ProvisioningStore  *site.OnboardingStore
 	AllowOnboarding    bool
+	SiteStorages       map[string]storage.Backend
 	queuedJobsMu       sync.Mutex
 	queuedJobs         map[string]bool
 	PlatformDBType     string
@@ -42,6 +44,7 @@ type ConsoleHandler struct {
 	PlatformDBUser     string
 	PlatformDBPassword string
 	PlatformDB         *sql.DB // Existing platform DB connection (for LibSQL reuse)
+	DefaultStorage     storage.Backend
 }
 
 // NewConsoleHandler creates a console API handler.
@@ -58,6 +61,8 @@ func NewConsoleHandler(guard *auth.SystemGuard, sr *net.SiteRouter, dbType, dbHo
 		PlatformDBUser:     dbUser,
 		PlatformDBPassword: dbPassword,
 		PlatformDB:         platformDB,
+		DefaultStorage:     nil,
+		SiteStorages:       nil,
 	}
 }
 
@@ -368,6 +373,9 @@ func (h *ConsoleHandler) HandleCreateSite(c *gin.Context) {
 		Registry: result.Registry,
 	}
 	h.SiteRouter.AddSite(loaded)
+	if h.SiteStorages != nil && h.DefaultStorage != nil {
+		h.SiteStorages[req.Hostname] = h.DefaultStorage
+	}
 
 	slog.Info("site created via console", "hostname", req.Hostname, "db_name", result.Config.DBName)
 	c.JSON(http.StatusCreated, Response{Data: consoleSiteCreateResponse{
@@ -637,6 +645,9 @@ func (h *ConsoleHandler) processOnboardJob(job site.OnboardingJob, req onboardRe
 		Registry: result.Registry,
 	}
 	h.SiteRouter.AddSite(loaded)
+	if h.SiteStorages != nil && h.DefaultStorage != nil {
+		h.SiteStorages[req.Hostname] = h.DefaultStorage
+	}
 
 	job.State = site.OnboardingActive
 	job.UpdatedAt = time.Now().UTC()

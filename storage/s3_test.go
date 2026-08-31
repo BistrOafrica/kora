@@ -96,6 +96,61 @@ func TestS3BackendRoundTrip(t *testing.T) {
 	}
 }
 
+func TestS3EnsureBucket(t *testing.T) {
+	bucketExists := false
+	createCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead:
+			if r.URL.Path == "/bucket" {
+				if bucketExists {
+					w.WriteHeader(http.StatusOK)
+				} else {
+					w.WriteHeader(http.StatusNotFound)
+				}
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		case http.MethodPut:
+			if r.URL.Path == "/bucket" {
+				createCalls++
+				bucketExists = true
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer srv.Close()
+
+	b, err := New(Config{
+		Backend:     "s3",
+		S3Endpoint:  srv.URL,
+		S3Bucket:    "bucket",
+		S3AccessKey: "access",
+		S3SecretKey: "secret",
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := b.EnsureBucket(context.Background()); err != nil {
+		t.Fatalf("EnsureBucket: %v", err)
+	}
+	if createCalls != 1 {
+		t.Fatalf("createCalls = %d, want 1", createCalls)
+	}
+
+	if err := b.EnsureBucket(context.Background()); err != nil {
+		t.Fatalf("EnsureBucket second call: %v", err)
+	}
+	if createCalls != 1 {
+		t.Fatalf("createCalls after second call = %d, want 1", createCalls)
+	}
+}
+
 func TestS3PresignURL(t *testing.T) {
 	b := &s3Backend{
 		endpoint:   "https://minio.example.com",
