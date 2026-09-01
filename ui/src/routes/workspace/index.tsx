@@ -100,22 +100,22 @@ export default function DashboardPage() {
           Welcome{user?.full_name ? `, ${user.full_name}` : ''}
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Pick a task or open a module. Your routes stay the same; the workspace is organized by work area.
+          Start with one task, one record, or one workflow. Kora keeps your work in one place so the team can move faster.
         </p>
       </div>
 
       <Card className="border-dashed bg-card/60" data-manifest-section="search">
         <CardContent className="flex flex-col gap-4 py-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Workspace search</p>
-            <p className="text-sm text-muted-foreground">Find modules and document types quickly.</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Find work fast</p>
+            <p className="text-sm text-muted-foreground">Search modules, records, and forms in a few keystrokes.</p>
           </div>
           <div className="relative w-full md:max-w-md">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search modules or doctypes..."
+              placeholder="Search a module, record, or form..."
               className="pl-9"
             />
           </div>
@@ -130,7 +130,7 @@ export default function DashboardPage() {
               Start with the next useful task
             </CardTitle>
             <CardDescription>
-              Use modules for everyday work, then drill into the document type only when needed.
+              Open the record or workflow you need now. Kora keeps the rest ready when you need it.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
@@ -145,7 +145,7 @@ export default function DashboardPage() {
                 Open {firstDoctype.label}
               </Link>
             ) : (
-              <span className="text-sm text-muted-foreground">Import or create a module to begin.</span>
+              <span className="text-sm text-muted-foreground">Add your first module to start tracking real work.</span>
             )}
             <a
               href="/api/v1/swagger-ui"
@@ -162,7 +162,7 @@ export default function DashboardPage() {
         <Card data-manifest-section="resume">
           <CardHeader>
             <CardTitle>Resume work</CardTitle>
-            <CardDescription>Favorites, recent document types, and drafts stay one click away.</CardDescription>
+            <CardDescription>Favorites, recent records, and drafts stay one click away.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <QuickList items={favorites} icon={Star} title="Favorites" />
@@ -170,7 +170,7 @@ export default function DashboardPage() {
             <DraftList items={drafts} />
             {favorites.length === 0 && recent.length === 0 && drafts.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                Star document types from the sidebar or open a module to build your shortcuts.
+                Star records from the sidebar or open a module to build your shortcuts.
               </p>
             )}
           </CardContent>
@@ -227,7 +227,7 @@ export default function DashboardPage() {
                     {mod.doctypes.length}
                   </span>
                 </CardTitle>
-                <CardDescription>Open a task area in this module.</CardDescription>
+                <CardDescription>Open the records and workflows inside this area.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 {mod.doctypes.slice(0, 5).map((dt) => (

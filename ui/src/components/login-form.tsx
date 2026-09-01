@@ -88,7 +88,7 @@ export function LoginForm({ siteLabel, onSuccess, className }: LoginFormProps) {
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold text-card-foreground">Sign in to {siteLabel}</h1>
           <p className="text-sm text-balance text-muted-foreground">
-            Sign in to manage your work securely.
+            Keep records, requests, and workflows in one place.
           </p>
         </div>
 
@@ -232,7 +232,7 @@ export function LoginForm({ siteLabel, onSuccess, className }: LoginFormProps) {
       </FieldGroup>
 
       <FieldDescription className="text-center text-xs">
-        Need a passwordless sign-in? Choose Magic Link above.
+        Need passwordless access? Choose Magic Link above.
       </FieldDescription>
 
       <div className="mt-4 text-center text-sm">

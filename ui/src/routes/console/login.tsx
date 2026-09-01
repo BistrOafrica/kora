@@ -67,7 +67,7 @@ export default function ConsoleLoginPage() {
             <LogoMark size={36} />
           </div>
           <CardTitle className="text-2xl">Kora Console</CardTitle>
-          <CardDescription>System administration</CardDescription>
+          <CardDescription>Launch and manage your Kora sites</CardDescription>
 
           {/* Tabs */}
           <div className="flex border-b border-border mt-4">
@@ -85,7 +85,7 @@ export default function ConsoleLoginPage() {
                 tab === 'onboard' ? 'border-[#FF6B35] text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              Create your site
+              Create a site
             </button>
           </div>
         </CardHeader>
@@ -123,7 +123,7 @@ export default function ConsoleLoginPage() {
           ) : onboardSuccess ? (
             <div className="text-center py-4 space-y-4">
               <CheckCircle className="h-10 w-10 text-green-600 mx-auto" />
-              <p className="text-sm font-medium">Your application is ready.</p>
+              <p className="text-sm font-medium">Your site is ready.</p>
               <a href={onboardSuccess} className="inline-block w-full bg-[#FF6B35] hover:bg-[#E55B25] text-white text-sm font-medium px-6 py-2.5 rounded-md transition-colors">
                 Open your workspace →
               </a>
@@ -131,7 +131,7 @@ export default function ConsoleLoginPage() {
           ) : (
             <form onSubmit={handleOnboard} className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                Create a site with your own database, admin UI, and API — instantly.
+                Create a site with your own database, admin UI, and API.
               </p>
               <div className="space-y-2">
                 <Label htmlFor="hostname">Site name</Label>
@@ -169,7 +169,7 @@ export default function ConsoleLoginPage() {
                 Create my application
               </Button>
               <p className="text-[10px] text-muted-foreground text-center">
-                Your data lives in your own database. No vendor lock-in.
+                Your data stays in your own database.
               </p>
             </form>
           )}

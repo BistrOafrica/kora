@@ -106,16 +106,16 @@ export default function LoginPage() {
           </div>
           <div className="space-y-6">
             <div className="space-y-0.5">
-              <p className="text-5xl font-semibold tracking-tight text-white">One place for<br />all your work.</p>
+              <p className="text-5xl font-semibold tracking-tight text-white">Keep records,<br />requests, and workflows together.</p>
             </div>
             <div className="space-y-4">
               <div className="flex items-center gap-3 text-sm text-slate-300">
                 <svg className="h-5 w-5 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-                <span>No spreadsheets. No paper. Just what you need.</span>
+                <span>Start with one task and keep the full record with you.</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-slate-300">
                 <svg className="h-5 w-5 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-                <span>Your whole team sees the same numbers. No confusion.</span>
+                <span>Your team sees the same status, approvals, and next steps.</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-slate-300">
                 <svg className="h-5 w-5 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
