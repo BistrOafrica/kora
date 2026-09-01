@@ -64,6 +64,10 @@ func firstEnvBool(def bool, names ...string) bool {
 // Per-site FileStorage from the registry overrides the global KORA_STORAGE_BACKEND.
 func resolveStorage(siteCfg *site.SiteConfig) (storage.Backend, error) {
 	backend := firstEnv("KORA_STORAGE_BACKEND")
+	s3Configured := firstEnv("KORA_STORAGE_S3_ENDPOINT") != "" ||
+		firstEnv("KORA_STORAGE_S3_BUCKET") != "" ||
+		firstEnv("KORA_STORAGE_S3_ACCESS_KEY") != "" ||
+		firstEnv("KORA_STORAGE_S3_SECRET_KEY") != ""
 	cfg := storage.Config{
 		Backend:         backend,
 		LocalPath:       os.Getenv("KORA_STORAGE_LOCAL_PATH"),
@@ -77,6 +81,12 @@ func resolveStorage(siteCfg *site.SiteConfig) (storage.Backend, error) {
 	}
 	if siteCfg != nil && siteCfg.FileStorage != "" {
 		cfg.Backend = siteCfg.FileStorage
+	}
+	if s3Configured {
+		// Prefer S3 whenever the deployment provides S3 credentials/config.
+		// This forces existing sites off container-local storage without requiring
+		// registry edits first.
+		cfg.Backend = "s3"
 	}
 	if siteCfg != nil && cfg.Backend == "s3" {
 		if cfg.S3Bucket == "" {
